@@ -15,6 +15,7 @@ const PACKAGES = [
 	'@pump-fun/pump-sdk',
 	'@pump-fun/pump-swap-sdk',
 	'@pump-fun/agent-payments-sdk',
+	'@pump-fun/shared-contracts',
 ];
 
 async function fetchJson(url, { github = false } = {}) {
