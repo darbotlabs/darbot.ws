@@ -666,6 +666,8 @@ export function mountFeesPanel(container, opts = {}) {
 		const dest = info.fee_destination;
 		const badge = dest === 'sharing_config'
 			? `<span class="fp-badge split">Delegated split</span>`
+			: dest === 'holder_rewards'
+				? `<span class="fp-badge split">Holder rewards</span>`
 			: dest === 'cashback'
 				? `<span class="fp-badge cashback">Trader cashback</span>`
 				: `<span class="fp-badge creator">Creator fees</span>`;
@@ -688,6 +690,9 @@ export function mountFeesPanel(container, opts = {}) {
 	}
 
 	function renderClaim(info) {
+		if (info.is_holder_reward) {
+			return `<div class="fp-note">This is a Pump.fun <b>holder-reward coin</b>. Creator fees accrue to the protocol holder-rewards vault and are distributed to eligible token holders by Pump.fun.</div>`;
+		}
 		if (info.is_cashback_coin) {
 			return `<div class="fp-note">This coin returns trading fees to holders as <b>cashback</b> — there's no creator vault to claim. Traders claim their own cashback from pump.fun.</div>`;
 		}
@@ -713,7 +718,7 @@ export function mountFeesPanel(container, opts = {}) {
 	}
 
 	function renderDelegation(info) {
-		if (info.is_cashback_coin) return '';
+		if (info.is_cashback_coin || info.is_holder_reward) return '';
 
 		// Editing mode — shareholder split editor + GitHub import.
 		if (s.editing) return renderEditor(info);
@@ -803,7 +808,7 @@ export function mountFeesPanel(container, opts = {}) {
 	// Tell the user which wallet is needed when a creator-only action can't be
 	// taken with the current signer.
 	function renderSignerHint(info) {
-		if (info.is_cashback_coin) return '';
+		if (info.is_cashback_coin || info.is_holder_reward) return '';
 		if (isAgentCreator()) {
 			return `<div class="fp-wallet on"><span class="fp-w-dot"></span>Signed by agent wallet <code>${esc(shortAddr(creator))}</code></div>`;
 		}

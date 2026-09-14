@@ -409,6 +409,7 @@ const launchBodySchema = z.object({
 	vanityIgnoreCase: z.boolean().optional(),
 	mintSecretKey: z.array(z.number().int().min(0).max(255)).length(64).optional(),
 	network: z.enum(['mainnet', 'devnet']).default('mainnet'),
+	holderReward: z.boolean().default(false),
 });
 
 async function handleLaunch(req, res, id) {
@@ -492,6 +493,7 @@ async function handleLaunch(req, res, id) {
 			amount: tokenAmount,
 			solAmount: solLamports,
 			mayhemMode: false,
+			holderReward: body.holderReward,
 		});
 	} else {
 		const ix = await sdk.createV2Instruction({
@@ -502,6 +504,7 @@ async function handleLaunch(req, res, id) {
 			creator: keypair.publicKey,
 			user: keypair.publicKey,
 			mayhemMode: false,
+			holderReward: body.holderReward,
 		});
 		instructions = [ix];
 	}
@@ -980,6 +983,9 @@ async function handlePortfolio(req, res, id) {
 							virtualQuoteReserves: swapState.pool.virtualQuoteReserves,
 							baseMintAccount: swapState.baseMintAccount,
 							baseMint: swapState.baseMint,
+							quoteMint: swapState.pool.quoteMint,
+							isMayhemMode: swapState.pool.isMayhemMode,
+							creatorFeeBps: swapState.pool.creatorFeeBps,
 							coinCreator: swapState.pool.coinCreator,
 							creator: swapState.pool.creator,
 							feeConfig: swapState.feeConfig,
@@ -1410,6 +1416,9 @@ async function handleSwap(req, res, id) {
 					virtualQuoteReserves: swapState.pool.virtualQuoteReserves,
 					baseMintAccount: swapState.baseMintAccount,
 					baseMint: swapState.baseMint,
+					quoteMint: swapState.pool.quoteMint,
+					isMayhemMode: swapState.pool.isMayhemMode,
+					creatorFeeBps: swapState.pool.creatorFeeBps,
 					coinCreator: swapState.pool.coinCreator,
 					creator: swapState.pool.creator,
 					feeConfig: swapState.feeConfig,

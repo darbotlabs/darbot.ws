@@ -185,7 +185,7 @@ const LP_CSS = `
 .lp-src button.on .lp-src-sub{color:rgba(164,240,188,.55)}
 
 /* Coin-type selector */
-.lp-coin{display:grid;grid-template-columns:repeat(5,1fr);gap:.3rem;padding:.25rem;
+.lp-coin{display:grid;grid-template-columns:repeat(3,1fr);gap:.3rem;padding:.25rem;
   background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px}
 @media (max-width:360px){.lp-coin{grid-template-columns:repeat(3,1fr)}}
 .lp-coin button{padding:.5rem .35rem;border-radius:7px;cursor:pointer;background:transparent;
@@ -1064,7 +1064,7 @@ export function mountLaunchPanel(container, { getAvatar, getUser, getPreviewView
 	}
 
 	function switchCoinType(next) {
-		if (!['regular', 'mayhem', 'agent', 'usdc', 'reward'].includes(next)) return;
+		if (!['regular', 'mayhem', 'agent', 'usdc', 'holder', 'reward'].includes(next)) return;
 		if (next === s.coinType) return;
 		s.coinType = next;
 		s.errorMsg = '';
@@ -1344,7 +1344,8 @@ export function mountLaunchPanel(container, { getAvatar, getUser, getPreviewView
 				wallet_address: payer,
 				name: nameTrim, symbol: symTrim, uri: s._metaUrl,
 				mint_address: ground.publicKey,
-				coin_type: isUsdc ? 'agent' : s.coinType === 'reward' ? 'regular' : s.coinType,
+				coin_type: isUsdc ? 'agent' : ['reward', 'holder'].includes(s.coinType) ? 'regular' : s.coinType,
+				holder_reward: s.coinType === 'holder',
 				buyback_bps: (isUsdc || s.coinType === 'agent') ? s.buybackBps : 0,
 				...(isUsdc
 					? { usdc_buy_in: buyIn, quote_mint: USDC_MAINNET_MINT }
@@ -1410,7 +1411,8 @@ export function mountLaunchPanel(container, { getAvatar, getUser, getPreviewView
 			name: nameTrim, symbol: symTrim, uri: s._metaUrl,
 			// 'reward' launches as a plain pump.fun coin; the delegated fee split is
 			// configured after graduation in the Fees & rewards panel.
-			coin_type: isUsdc ? 'agent' : s.coinType === 'reward' ? 'regular' : s.coinType,
+			coin_type: isUsdc ? 'agent' : ['reward', 'holder'].includes(s.coinType) ? 'regular' : s.coinType,
+			holder_reward: s.coinType === 'holder',
 			buyback_bps: (isUsdc || s.coinType === 'agent') ? s.buybackBps : 0,
 			...(isUsdc
 				? { usdc_buy_in: buyIn, quote_mint: USDC_MAINNET_MINT }
@@ -1565,6 +1567,7 @@ export function mountLaunchPanel(container, { getAvatar, getUser, getPreviewView
 					<div class="lp-guide-type" title="Agent revenue (SOL from paid endpoints) buys back and burns the token automatically."><b>🤖 Agent</b>SOL revenue auto-buyback &amp; burn.</div>
 					<div class="lp-guide-type" title="USDC-denominated agent payments via agent-payments-sdk. Coming soon."><b>💵 USDC</b>Stablecoin-denominated. Coming soon.</div>
 					<div class="lp-guide-type" title="Open-source reward coin — delegate creator fees to a team or GitHub contributors who each claim their share."><b>🎁 Reward</b>Delegate fees to contributors.</div>
+					<div class="lp-guide-type" title="Pump.fun holder-reward coin - protocol creator fees are paid to token holders."><b>💎 Holders</b>Protocol-native holder rewards.</div>
 				</div>
 
 				<div class="lp-guide-tip">
@@ -1901,6 +1904,9 @@ export function mountLaunchPanel(container, { getAvatar, getUser, getPreviewView
 			<button type="button" role="radio" aria-checked="${ct === 'reward'}" data-coin="reward" class="reward ${ct === 'reward' ? 'on' : ''}" ${busy ? 'disabled' : ''} title="Open-source / GitHub reward coin: creator fees are delegated and split to a team or repo contributors who each claim their share.">
 				<span class="lp-coin-emoji">🎁</span>Reward<span class="lp-coin-sub">Delegated fees</span>
 			</button>
+			<button type="button" role="radio" aria-checked="${ct === 'holder'}" data-coin="holder" class="holder ${ct === 'holder' ? 'on' : ''}" ${busy ? 'disabled' : ''} title="Pump.fun holder-reward coin: creator fees accrue to the protocol holder-rewards vault for token holders.">
+				<span class="lp-coin-emoji">💎</span>Holders<span class="lp-coin-sub">Native rewards</span>
+			</button>
 		</div>`;
 
 		const coinNoteHtml = isNative
@@ -1911,6 +1917,8 @@ export function mountLaunchPanel(container, { getAvatar, getUser, getPreviewView
 				? `<div class="lp-coin-note usdc">USDC-paired agent coin. Bonding curve quotes in USDC instead of SOL — your initial buy and all subsequent trades settle through the wallet's USDC ATA. Buyback share still applies, denominated in USDC.</div>`
 				: ct === 'reward'
 					? `<div class="lp-coin-note reward">Open-source reward coin. Launches as a standard pump.fun coin, then once it graduates you delegate creator fees as a split — import a GitHub repo's contributors or add wallets in <b>Fees &amp; rewards</b>. Each delegated wallet claims its share.</div>`
+					: ct === 'holder'
+						? `<div class="lp-coin-note reward"><b>New in Pump SDK 2.0.</b> Creator fees accrue to Pump.fun's holder-rewards vault and are distributed to token holders. This choice can later be changed only through Pump.fun's CTO authority flow.</div>`
 					: ct === 'regular'
 						? `<div class="lp-coin-note">Standard pump.fun launch — no on-chain buyback. Initial buy still funds bonding curve.</div>`
 						: '';

@@ -55,7 +55,7 @@ describe('pump-launch listing — description sells the use-case + funnel', () =
 	});
 
 	it('names every input and the output shape', () => {
-		for (const field of ['name', 'symbol', 'metadataUri', 'imageUrl', 'creator', 'vanity']) {
+		for (const field of ['name', 'symbol', 'metadataUri', 'imageUrl', 'creator', 'holderReward', 'vanity']) {
 			expect(DESCRIPTION).toMatch(new RegExp(field, 'i'));
 		}
 		expect(DESCRIPTION).toMatch(/mint/i);
@@ -116,6 +116,13 @@ describe('pump-launch listing — input validation rejects bad shapes before lau
 		expect(
 			bodySchema.safeParse({ ...rest, metadataUri: 'https://ipfs.io/ipfs/QmExample' }).success,
 		).toBe(true);
+	});
+
+	it('accepts a holder-reward launch', () => {
+		const parsed = bodySchema.safeParse({ ...valid, holderReward: true });
+		expect(parsed.success).toBe(true);
+		expect(parsed.data.holderReward).toBe(true);
+		expect(INPUT_SCHEMA.properties.holderReward.type).toBe('boolean');
 	});
 
 	it('rejects a missing name', () => {

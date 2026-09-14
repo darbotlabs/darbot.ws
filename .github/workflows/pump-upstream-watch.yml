@@ -1,0 +1,43 @@
+name: Pump.fun upstream watch
+
+on:
+  schedule:
+    - cron: "37 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Compare npm and GitHub upstreams
+        id: watch
+        continue-on-error: true
+        env:
+          PUMP_WATCH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node scripts/pump-upstream-watch.mjs > pump-upstream-report.md
+          status=$?
+          cat pump-upstream-report.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Open or refresh upstream drift issue
+        if: steps.watch.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Pump.fun upstream release needs review"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file pump-upstream-report.md
+          else
+            gh issue create --title "$title" --body-file pump-upstream-report.md --label dependencies
+          fi

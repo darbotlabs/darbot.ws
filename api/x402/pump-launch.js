@@ -118,6 +118,11 @@ export const INPUT_SCHEMA = {
 				'Solana pubkey (base58) to receive pump.fun creator rewards. Defaults to the ' +
 				'launcher when omitted.',
 		},
+		holderReward: {
+			type: 'boolean',
+			description:
+				'Create a Pump.fun holder-reward coin. Creator fees accrue to holders through the protocol holder-rewards PDA. Default false.',
+		},
 		vanityPrefix: {
 			type: 'string',
 			maxLength: 5,
@@ -165,6 +170,7 @@ export const OUTPUT_SCHEMA = {
 		mint: { type: 'string' },
 		signature: { type: 'string' },
 		creator: { type: 'string' },
+		holderReward: { type: 'boolean' },
 		name: { type: 'string' },
 		symbol: { type: 'string' },
 		metadataUri: { type: 'string', format: 'uri' },
@@ -214,6 +220,7 @@ export const bodySchema = z
 		telegram: z.string().max(2048).optional(),
 		website: z.string().max(2048).optional(),
 		creator: z.string().min(32).max(44).optional(),
+		holderReward: z.boolean().default(false),
 		vanityPrefix: z.string().min(1).max(5).regex(BASE58_RE, 'vanityPrefix must be base58').optional(),
 		vanitySuffix: z.string().min(1).max(5).regex(BASE58_RE, 'vanitySuffix must be base58').optional(),
 		vanityIgnoreCase: z.boolean().optional(),
@@ -313,6 +320,7 @@ export default paidEndpoint({
 				symbol: body.symbol,
 				uri: metadataUri,
 				creator: body.creator,
+				holderReward: body.holderReward,
 				vanityPrefix: body.vanityPrefix,
 				vanitySuffix: body.vanitySuffix,
 				vanityIgnoreCase: body.vanityIgnoreCase,
@@ -341,6 +349,7 @@ export default paidEndpoint({
 			mint: launched.mint,
 			signature: launched.signature,
 			creator: launched.creator,
+			holderReward: launched.holderReward,
 			name: body.name,
 			symbol: body.symbol,
 			metadataUri,

@@ -257,6 +257,7 @@ async function pinMetadataViaProviderChain({
  * @param {string}  [opts.vanityPrefix]
  * @param {string}  [opts.vanitySuffix]
  * @param {boolean} [opts.vanityIgnoreCase]
+ * @param {boolean} [opts.holderReward]  - route creator fees to token holders.
  * @param {Keypair} [opts.mintKeypair]     pre-resolved mint (e.g. claimed from
  *                                         inventory) — skips grinding entirely
  *                                         when supplied.
@@ -274,6 +275,7 @@ export async function launchPumpToken({
 	vanityPrefix,
 	vanitySuffix,
 	vanityIgnoreCase = false,
+	holderReward = false,
 	mintKeypair = null,
 	network = 'mainnet',
 }) {
@@ -306,7 +308,7 @@ export async function launchPumpToken({
 		vanitySource = vanityPrefix || vanitySuffix ? 'ground' : null;
 	}
 
-	const { PumpSdk } = await import('@pump-fun/pump-sdk');
+	const { PumpSdk, holderRewardsPda } = await import('@pump-fun/pump-sdk');
 	const sdk = new PumpSdk();
 	const conn = solanaConnection(network);
 
@@ -320,6 +322,7 @@ export async function launchPumpToken({
 			creator: creatorPk,
 			user: launcher.publicKey,
 			mayhemMode: false,
+			holderReward,
 		});
 		instructions = Array.isArray(ix) ? ix : [ix];
 	} catch (err) {
@@ -344,7 +347,8 @@ export async function launchPumpToken({
 	return {
 		mint: mint.publicKey.toBase58(),
 		signature,
-		creator: creatorPk.toBase58(),
+		creator: (holderReward ? holderRewardsPda(mint.publicKey) : creatorPk).toBase58(),
+		holderReward,
 		vanityIterations,
 		vanityDurationMs,
 		vanitySource,

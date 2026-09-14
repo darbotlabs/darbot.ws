@@ -67,6 +67,7 @@ export async function launchWithVanity(args) {
 			uri: args.uri,
 			network: args.network ?? 'mainnet',
 			buyback_bps: args.buybackBps ?? 0,
+			holder_reward: args.holderReward ?? false,
 			sol_buy_in: args.solBuyIn ?? 0,
 			mint_address: mintKeypair.publicKey.toBase58(),
 		}),

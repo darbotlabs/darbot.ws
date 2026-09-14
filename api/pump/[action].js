@@ -834,6 +834,8 @@ async function handleSellPrep(req, res) {
 				baseReserve: swapState.poolBaseAmount, quoteReserve: swapState.poolQuoteAmount,
 				virtualQuoteReserves: swapState.pool.virtualQuoteReserves,
 				baseMintAccount: swapState.baseMintAccount, baseMint: swapState.baseMint,
+				quoteMint: swapState.pool.quoteMint, isMayhemMode: swapState.pool.isMayhemMode,
+				creatorFeeBps: swapState.pool.creatorFeeBps,
 				coinCreator: swapState.pool.coinCreator, creator: swapState.pool.creator,
 				feeConfig: swapState.feeConfig, globalConfig: swapState.globalConfig,
 			});
@@ -1128,6 +1130,7 @@ async function buildLaunchInstructions({
 	usdcBuyIn,
 	quoteMint,
 	isMayhem,
+	holderReward = false,
 }) {
 	const LAMPORTS = 1_000_000_000;
 	const user = signer || creator;
@@ -1165,6 +1168,7 @@ async function buildLaunchInstructions({
 				amount: tokenAmount,
 				mayhemMode: !!isMayhem,
 				quoteMint,
+				holderReward,
 			});
 			return Array.isArray(ixs) ? [...ixs] : [ixs];
 		}
@@ -1177,6 +1181,7 @@ async function buildLaunchInstructions({
 			user,
 			mayhemMode: !!isMayhem,
 			quoteMint,
+			holderReward,
 		});
 		return [ix];
 	}
@@ -1205,6 +1210,7 @@ async function buildLaunchInstructions({
 			solAmount,
 			amount: tokenAmount,
 			mayhemMode: !!isMayhem,
+			holderReward,
 		});
 		return Array.isArray(ixs) ? [...ixs] : [ixs];
 	}
@@ -1217,6 +1223,7 @@ async function buildLaunchInstructions({
 		creator,
 		user,
 		mayhemMode: !!isMayhem,
+		holderReward,
 	});
 	return [ix];
 }
@@ -1264,6 +1271,9 @@ const launchPrepSchema = z
 		//   'regular': plain pump.fun coin, no agent binding
 		//   'mayhem' : pump.fun mayhem-mode coin (V2 instruction set, token-2022)
 		coin_type: z.enum(['regular', 'mayhem', 'agent']).default('agent'),
+		// Pump SDK 2.0 holder-reward launch. Creator fees accrue to the
+		// protocol-derived holder rewards PDA instead of a creator wallet.
+		holder_reward: z.boolean().default(false),
 		// Optional Launch Copilot attach: a market-maker policy to arm on this coin
 		// the moment it's confirmed (the success screen can also attach one after).
 		// Validated + safety-gated by api/_lib/market-maker.js at confirm time.
@@ -1291,6 +1301,10 @@ const launchPrepSchema = z
 	.refine((v) => v.agent_id || v.avatar_id, {
 		message: 'agent_id or avatar_id required',
 		path: ['agent_id'],
+	})
+	.refine((v) => !v.holder_reward || v.coin_type === 'regular', {
+		message: 'holder_reward requires coin_type=regular',
+		path: ['holder_reward'],
 	});
 
 
@@ -1429,7 +1443,11 @@ async function handleLaunchPrep(req, res) {
 		usdcBuyIn: body.usdc_buy_in,
 		quoteMint: launchQuoteMint,
 		isMayhem,
+		holderReward: body.holder_reward,
 	});
+	const onchainCreator = body.holder_reward
+		? (await import('@pump-fun/pump-sdk')).holderRewardsPda(mint)
+		: creator;
 
 	if (isAgent && effBuyback > 0) {
 		const { offline } = await getPumpAgentOffline({ network: body.network, mint });
@@ -1463,13 +1481,14 @@ async function handleLaunchPrep(req, res) {
 				kind: 'pump_launch',
 				agent_id: resolvedAgentId,
 				wallet_address: body.wallet_address, // signer (pays gas, funds initial buy)
-				creator_address: creator.toBase58(), // on-chain creator (royalty recipient)
+				creator_address: onchainCreator.toBase58(), // actual on-chain fee recipient
 				mint: mint.toBase58(),
 				name: body.name,
 				symbol: body.symbol,
 				network: body.network,
 				buyback_bps: effBuyback,
 				coin_type: body.coin_type,
+				holder_reward: body.holder_reward,
 				quote_mint: quote.quoteMint, // null = SOL-paired; else the stable quote mint
 				prep_id: prepId,
 				mm: body.mm || null, // optional Launch Copilot policy to arm on confirm
@@ -1493,6 +1512,7 @@ async function handleLaunchPrep(req, res) {
 		network: body.network,
 		buyback_bps: effBuyback,
 		coin_type: body.coin_type,
+		holder_reward: body.holder_reward,
 		quote_mint: quote.quoteMint,
 		quote_currency: quote.label,
 		expires_at: expiresAt.toISOString(),
@@ -1697,6 +1717,7 @@ const launchAgentSchema = z
 		mint_address: z.string().min(32).max(44).optional(),
 		mint_secret_key_b64: z.string().min(20).optional(),
 		coin_type: z.enum(['regular', 'mayhem', 'agent']).default('agent'),
+		holder_reward: z.boolean().default(false),
 	})
 	.refine((v) => v.agent_id || v.avatar_id, {
 		message: 'agent_id or avatar_id required',
@@ -1705,6 +1726,10 @@ const launchAgentSchema = z
 	.refine((v) => !v.mint_address || v.mint_secret_key_b64, {
 		message: 'mint_secret_key_b64 required when mint_address is supplied',
 		path: ['mint_secret_key_b64'],
+	})
+	.refine((v) => !v.holder_reward || v.coin_type === 'regular', {
+		message: 'holder_reward requires coin_type=regular',
+		path: ['holder_reward'],
 	});
 
 async function handleLaunchAgent(req, res) {
@@ -1868,6 +1893,7 @@ async function handleLaunchAgent(req, res) {
 		usdcBuyIn: body.usdc_buy_in,
 		quoteMint: launchQuoteMint,
 		isMayhem,
+		holderReward: body.holder_reward,
 	});
 
 	if (isAgent && effBuyback > 0) {
@@ -1928,12 +1954,15 @@ async function handleLaunchAgent(req, res) {
 	}
 
 	const mintAddr = mint.toBase58();
+	const onchainCreator = body.holder_reward
+		? (await import('@pump-fun/pump-sdk')).holderRewardsPda(mint)
+		: creator;
 	const [row] = await sql`
 		insert into pump_agent_mints
 			(agent_id, user_id, network, mint, name, symbol, metadata_uri, agent_authority, buyback_bps, quote_mint)
 		values
 			(${resolvedAgentId}, ${user.id}, ${body.network}, ${mintAddr},
-			 ${body.name}, ${body.symbol}, ${body.uri}, ${creator.toBase58()}, ${effBuyback}, ${quote.quoteMint ?? null})
+			 ${body.name}, ${body.symbol}, ${body.uri}, ${onchainCreator.toBase58()}, ${effBuyback}, ${quote.quoteMint ?? null})
 		on conflict (mint, network) do nothing
 		returning id, mint, network, buyback_bps, quote_mint, created_at
 	`;
@@ -1956,6 +1985,7 @@ async function handleLaunchAgent(req, res) {
 		quote_currency: quote.label,
 		buyback_bps: effBuyback,
 		coin_type: body.coin_type,
+		holder_reward: body.holder_reward,
 		source: 'studio_agent_wallet',
 	});
 
@@ -1984,6 +2014,7 @@ async function handleLaunchAgent(req, res) {
 		network: body.network,
 		buyback_bps: effBuyback,
 		coin_type: body.coin_type,
+		holder_reward: body.holder_reward,
 		quote_mint: quote.quoteMint,
 		quote_currency: quote.label,
 		pump_agent_mint: row || null,
@@ -2894,6 +2925,9 @@ async function handleQuote(req, res) {
 					globalConfig,
 					baseMintAccount,
 					baseMint: pool.baseMint,
+					quoteMint: pool.quoteMint,
+					isMayhemMode: pool.isMayhemMode,
+					creatorFeeBps: pool.creatorFeeBps,
 					coinCreator: pool.coinCreator,
 					creator: pool.creator,
 					feeConfig,
@@ -2921,6 +2955,9 @@ async function handleQuote(req, res) {
 				globalConfig,
 				baseMintAccount,
 				baseMint: pool.baseMint,
+				quoteMint: pool.quoteMint,
+				isMayhemMode: pool.isMayhemMode,
+				creatorFeeBps: pool.creatorFeeBps,
 				coinCreator: pool.coinCreator,
 				creator: pool.creator,
 				feeConfig,
@@ -4555,6 +4592,7 @@ async function handleFeeInfo(req, res) {
 		const offlineSdk = new PumpSdk();
 		const bondingCurve = await onlineSdk.fetchBondingCurve(mintPk).catch(() => null);
 		if (!bondingCurve) return error(res, 404, 'not_found', 'no bonding curve for this mint');
+		const isHolderReward = bondingCurve.isHolderReward === true;
 
 		const poolPda = canonicalPumpPoolPda(mintPk);
 		const poolInfo = await connection.getAccountInfo(poolPda);
@@ -4584,7 +4622,7 @@ async function handleFeeInfo(req, res) {
 
 		let hasSharingConfig = false;
 		let sharingConfig = null;
-		if (!isCashbackCoin) {
+		if (!isCashbackCoin && !isHolderReward) {
 			// When a creator migrates to a fee-sharing config, the on-chain creator
 			// field (pool.coinCreator / bondingCurve.creator) becomes the config PDA.
 			const cfgPda = feeSharingConfigPda(mintPk);
@@ -4638,7 +4676,9 @@ async function handleFeeInfo(req, res) {
 			}
 		}
 
-		const feeDestination = isCashbackCoin
+		const feeDestination = isHolderReward
+			? 'holder_rewards'
+			: isCashbackCoin
 			? 'cashback'
 			: hasSharingConfig
 				? 'sharing_config'
@@ -4649,6 +4689,7 @@ async function handleFeeInfo(req, res) {
 			network,
 			is_graduated: isGraduated,
 			is_cashback_coin: isCashbackCoin,
+			is_holder_reward: isHolderReward,
 			has_sharing_config: hasSharingConfig,
 			creator: effectiveCreator.toBase58(),
 			claimable_lamports: claimableLamports.toString(),

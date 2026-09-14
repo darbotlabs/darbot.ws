@@ -146,6 +146,8 @@ export async function quoteTrade({ conn, side, mintPk, mintStr, network, solAmou
 			baseReserve: amm.baseReserve, quoteReserve: amm.quoteReserve,
 			virtualQuoteReserves: amm.virtualQuoteReserves, globalConfig: amm.globalConfig,
 			baseMintAccount: amm.baseMintAccount, baseMint: amm.pool.baseMint,
+			quoteMint: amm.pool.quoteMint, isMayhemMode: amm.pool.isMayhemMode,
+			creatorFeeBps: amm.pool.creatorFeeBps,
 			coinCreator: amm.pool.coinCreator, creator: amm.pool.creator, feeConfig: amm.feeConfig,
 		});
 		const decimals = await resolveMintDecimals(conn, mintPk);
@@ -187,6 +189,8 @@ export async function quoteTrade({ conn, side, mintPk, mintStr, network, solAmou
 		baseReserve: amm.baseReserve, quoteReserve: amm.quoteReserve,
 		virtualQuoteReserves: amm.virtualQuoteReserves, globalConfig: amm.globalConfig,
 		baseMintAccount: amm.baseMintAccount, baseMint: amm.pool.baseMint,
+		quoteMint: amm.pool.quoteMint, isMayhemMode: amm.pool.isMayhemMode,
+		creatorFeeBps: amm.pool.creatorFeeBps,
 		coinCreator: amm.pool.coinCreator, creator: amm.pool.creator, feeConfig: amm.feeConfig,
 	});
 	const lamportsOut = BigInt((r.uiQuote ?? r.minQuote ?? 0).toString());
