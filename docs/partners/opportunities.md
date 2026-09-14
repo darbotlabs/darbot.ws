@@ -7,11 +7,13 @@ does not restate the reference docs:
 - [Partner ecosystem](../partners.md) is what each partnership **is**, and the framing rules.
 - [Listings and distribution](../listings.md) is the descriptive record of every listing.
 - [Publishing program](../publishing-program-2026-09.md) is the content and venue matrix.
+- [OpenAI, IBM, and NVIDIA growth plan](./openai-ibm-nvidia-growth-plan.md) turns the
+  highest-value partner opportunities into a 30-day listing and co-marketing sequence.
 
 This page is the part those three do not answer: **what is actually stuck, on whom, and
 what unblocks it.**
 
-Last reconciled against the source docs on 2026-09-11.
+Last reconciled against the source docs on 2026-09-14.
 
 ---
 
