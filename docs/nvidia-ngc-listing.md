@@ -102,6 +102,12 @@ The build-only Cloud Build configuration is
 and pushes the `ngc-candidate` tag without deploying or changing the production
 Cloud Run service.
 
+```bash
+gcloud builds submit workers/model-trellis \
+  --project aerial-vehicle-466722-p5 \
+  --config workers/model-trellis/cloudbuild.ngc.yaml
+```
+
 ### Gate 3: multi-GPU requirement needs NVIDIA guidance
 
 **Status: open.**

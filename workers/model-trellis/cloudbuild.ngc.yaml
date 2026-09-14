@@ -7,7 +7,7 @@ substitutions:
 steps:
   - id: build-portable-image
     name: gcr.io/cloud-builders/docker
-    dir: workers/model-trellis
+    dir: .
     args:
       - build
       - --build-arg
