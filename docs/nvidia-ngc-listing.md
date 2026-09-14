@@ -97,6 +97,11 @@ The Dockerfile now exposes `TORCH_CUDA_ARCH_LIST` as a build argument and keeps
 existing L4 validation. Pin the final matrix only after those compiled
 extensions pass the real build and inference checks.
 
+The build-only Cloud Build configuration is
+[cloudbuild.ngc.yaml](../workers/model-trellis/cloudbuild.ngc.yaml). It builds
+and pushes the `ngc-candidate` tag without deploying or changing the production
+Cloud Run service.
+
 ### Gate 3: multi-GPU requirement needs NVIDIA guidance
 
 **Status: open.**
