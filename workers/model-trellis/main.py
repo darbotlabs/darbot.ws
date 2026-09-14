@@ -18,8 +18,11 @@ API contract (consumed by the Pipeline Controller):
   so the background stops bleeding into the mesh. Both are additive: with no
   tier and no matte the behaviour is byte-for-byte the historical default.
 
-  GET  /tasks/:id → { task_id, status, result_gcs_url?, tier?, matted_views?,
+  GET  /tasks/:id → { task_id, status, result_gcs_url?, result_url?, tier?, matted_views?,
                       quality?, error? }
+
+  GET  /results/:id.glb
+                   → generated GLB when OUTPUT_DIR local storage is active
 
   GET  /health    → { ok, model, gpu_available, tiers, rembg_matte, load_error,
                       load_attempts }. Answers 503 with ok:false once the model
@@ -38,7 +41,8 @@ Model weights pre-population:
 
 Environment variables (README.md carries the full table):
   API_KEY               shared bearer secret
-  GCS_BUCKET            Cloud Storage bucket for output meshes
+  GCS_BUCKET            optional Cloud Storage bucket for output meshes
+  OUTPUT_DIR            local task and result volume when GCS_BUCKET is unset
   WEIGHTS_DIR           local path to weights (default: /weights/trellis-large)
   WEIGHTS_GCS_URI       optional gs:// tree staged to local disk at startup
   WEIGHTS_LOCAL_DIR     where that staging lands (default: /tmp/trellis-weights)
@@ -80,6 +84,7 @@ from urllib.parse import urlsplit
 
 import torch
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Response
+from fastapi.responses import FileResponse
 from google.api_core.exceptions import NotFound
 from google.cloud import storage
 from PIL import Image
@@ -100,6 +105,7 @@ from worker_security import (
     require_api_key,
     safe_error,
 )
+from storage_backend import LocalStorage
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,7 +114,8 @@ logging.basicConfig(
 log = logging.getLogger("trellis")
 
 API_KEY = os.environ["API_KEY"]
-GCS_BUCKET = os.environ["GCS_BUCKET"]
+GCS_BUCKET = os.environ.get("GCS_BUCKET", "").strip()
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "/output")
 WEIGHTS_DIR = os.environ.get("WEIGHTS_DIR", "/weights/trellis-large")
 MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", "1"))
 # Optional: stage the ~3 GB weight tree from GCS to fast local disk at startup,
@@ -148,6 +155,7 @@ DINOV2_HUB_REPO = "facebookresearch/dinov2"
 
 _pipeline = None
 _bucket: Optional[storage.Bucket] = None
+_local_storage: Optional[LocalStorage] = None
 _sem: Optional[asyncio.Semaphore] = None
 _ready: Optional[asyncio.Event] = None
 _load_error: Optional[str] = None
@@ -298,8 +306,13 @@ async def _load_pipeline_bg():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _bucket, _sem, _ready
-    _bucket = storage.Client().bucket(GCS_BUCKET)
+    global _bucket, _local_storage, _sem, _ready
+    if GCS_BUCKET:
+        _bucket = storage.Client().bucket(GCS_BUCKET)
+        _local_storage = None
+    else:
+        _bucket = None
+        _local_storage = LocalStorage(OUTPUT_DIR)
     _sem = asyncio.Semaphore(MAX_CONCURRENT)
     _ready = asyncio.Event()
     # Load the ~3 GB pipeline in the BACKGROUND and yield immediately. uvicorn
@@ -450,7 +463,20 @@ async def _matte_via_rembg(src: str, model: str) -> tuple[str, bool]:
 
 
 def _task_blob(task_id: str):
+    if _bucket is None:
+        raise RuntimeError("GCS task storage is not active")
     return _bucket.blob(f"tasks/{task_id}.json")
+
+
+def _using_gcs() -> bool:
+    return bool(GCS_BUCKET)
+
+
+def _get_local_storage() -> LocalStorage:
+    global _local_storage
+    if _local_storage is None:
+        _local_storage = LocalStorage(OUTPUT_DIR)
+    return _local_storage
 
 
 async def _update_task(task_id: str, **fields) -> dict:
@@ -460,12 +486,15 @@ async def _update_task(task_id: str, **fields) -> dict:
     task.update(fields)
     task["updated_at"] = time.time()
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None,
-        lambda: _task_blob(task_id).upload_from_string(
-            json.dumps(task), content_type="application/json"
-        ),
-    )
+    if _using_gcs():
+        await loop.run_in_executor(
+            None,
+            lambda: _task_blob(task_id).upload_from_string(
+                json.dumps(task), content_type="application/json"
+            ),
+        )
+    else:
+        await loop.run_in_executor(None, _get_local_storage().write_task, task.copy())
     return task
 
 
@@ -489,8 +518,12 @@ async def _resolve_task(task_id: str) -> dict:
         return task
     loop = asyncio.get_event_loop()
     try:
-        data = await loop.run_in_executor(None, _task_blob(task_id).download_as_bytes)
-    except NotFound:
+        if _using_gcs():
+            data = await loop.run_in_executor(None, _task_blob(task_id).download_as_bytes)
+            task = json.loads(data)
+        else:
+            task = await loop.run_in_executor(None, _get_local_storage().read_task, task_id)
+    except (NotFound, FileNotFoundError, ValueError):
         if task is not None:
             # Local-only record (the initial persist raced or failed) — serve
             # the in-memory view rather than 404ing a task we know exists.
@@ -500,7 +533,6 @@ async def _resolve_task(task_id: str) -> dict:
         raise HTTPException(
             status_code=502, detail=safe_error(exc, context="task lookup")
         ) from exc
-    task = json.loads(data)
     status = task.get("status")
     if status in _TERMINAL_STATUSES:
         _tasks[task_id] = task
@@ -623,19 +655,32 @@ async def _run_inference(
 
             glb_bytes = await loop.run_in_executor(None, _generate)
 
-            blob_name = f"raw-meshes/trellis/{task_id}.glb"
-            blob = _bucket.blob(blob_name)
-            await loop.run_in_executor(
-                None,
-                lambda: blob.upload_from_string(glb_bytes, content_type="model/gltf-binary"),
-            )
-            gcs_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{blob_name}"
+            if _using_gcs():
+                blob_name = f"raw-meshes/trellis/{task_id}.glb"
+                blob = _bucket.blob(blob_name)
+                await loop.run_in_executor(
+                    None,
+                    lambda: blob.upload_from_string(glb_bytes, content_type="model/gltf-binary"),
+                )
+                result_fields = {
+                    "result_gcs_url": f"https://storage.googleapis.com/{GCS_BUCKET}/{blob_name}"
+                }
+                result_label = result_fields["result_gcs_url"]
+            else:
+                result_path = await loop.run_in_executor(
+                    None, _get_local_storage().write_result, task_id, glb_bytes
+                )
+                result_fields = {
+                    "result_url": f"/results/{task_id}.glb",
+                    "result_path": str(result_path),
+                }
+                result_label = str(result_path)
 
             elapsed = time.time() - t0
             await _update_task(
                 task_id,
                 status="done",
-                result_gcs_url=gcs_url,
+                **result_fields,
                 views_used=len(imgs),
                 tier=tier_key or "default",
                 matted_views=matted_count,
@@ -644,7 +689,7 @@ async def _run_inference(
             )
             log.info(
                 "[%s] done in %.1fs (tier=%s matted=%d q=%s) — %d bytes -> %s",
-                task_id, elapsed, tier_key or "default", matted_count, q, len(glb_bytes), gcs_url,
+                task_id, elapsed, tier_key or "default", matted_count, q, len(glb_bytes), result_label,
             )
 
         except ImageSourceError as exc:
@@ -764,6 +809,21 @@ async def get_task(task_id: str, authorization: str = Header(...)) -> dict:
     return await _resolve_task(task_id)
 
 
+@app.get("/results/{task_id}.glb")
+async def get_result(task_id: str, authorization: str = Header(...)):
+    """Download a generated GLB from the mounted local output volume."""
+    _require_api_key(authorization)
+    if _using_gcs():
+        raise HTTPException(status_code=404, detail="local result storage is not active")
+    try:
+        path = _get_local_storage().result_path(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="result not found") from exc
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="result not found")
+    return FileResponse(path, media_type="model/gltf-binary", filename=path.name)
+
+
 @app.get("/")
 async def root() -> dict:
     """Service descriptor, and the answer to the platform's warmth ping.
@@ -781,7 +841,12 @@ async def root() -> dict:
         "service": "model-trellis",
         "model": "trellis-image-large",
         "ready": bool(_ready and _ready.is_set()),
-        "endpoints": ["POST /infer", "GET /tasks/{task_id}", "GET /health"],
+        "endpoints": [
+            "POST /infer",
+            "GET /tasks/{task_id}",
+            "GET /results/{task_id}.glb",
+            "GET /health",
+        ],
     }
 
 
@@ -812,4 +877,6 @@ async def health(response: Response) -> dict:
         "tiers": list(TIER_PRESETS),
         "default_quality": QUALITY_DEFAULTS,
         "rembg_matte": bool(REMBG_SERVICE_URL),
+        "output_backend": "gcs" if _using_gcs() else "local",
+        "output_dir": None if _using_gcs() else str(_get_local_storage().output_dir),
     }

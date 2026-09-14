@@ -6,14 +6,26 @@ Related docs: [nvidia-inception.md](./nvidia-inception.md) (membership overview)
 
 ---
 
-## Status: product record filed, public listing not live (2026-08-14)
+## Status: product record filed, public listing not live (2026-09-14)
 
-The portal shows the product row (`three.ws | Shipping | GPU Accelerated`), but a search for `three.ws` on the public catalog returns 0 results. **Re-verified 2026-09-04:** still 0 results on the public catalog, and the portal record is still the uncorrected one below (Used: cuBLAS, CUDA Python, CUDA Toolkit, cuDNN; Considering: DeepVariant NIM, Riva, TensorRT, Triton, Omniverse Kit, Audio2Face), so neither step 1 nor step 2 has happened yet. That is expected, not a bug: **the portal record and the public catalog are two different systems.**
+The portal shows the product row (`three.ws | Shipping | GPU Accelerated`), but a search for `three.ws` on the public catalog returns 0 results. **Public search re-verified 2026-09-14:** still 0 results. The last authenticated portal check on 2026-09-04 showed the uncorrected record below (Used: cuBLAS, CUDA Python, CUDA Toolkit, cuDNN; Considering: DeepVariant NIM, Riva, TensorRT, Triton, Omniverse Kit, Audio2Face). That is expected, not a bug: **the portal record and the public catalog are two different systems.**
 
 - **Portal > Profile > Products** makes the company benefits-eligible and feeds NVIDIA's internal recommendation engine. The portal's own wording is "we **may** feature it in the personalized recommendations we share with our customers."
 - **The public catalog** ([marketplace.nvidia.com/en-us/enterprise/applications](https://marketplace.nvidia.com/en-us/enterprise/applications/), filtered view for startups at [nvidia.com/en-gb/accelerated-applications/inception](https://www.nvidia.com/en-gb/accelerated-applications/inception/)) is curated and published by NVIDIA. Submissions are reviewed on a rolling basis and approval is subject to availability and fit. Nothing in the portal auto-publishes.
 
 So there are exactly two things to do: make the record obviously worth featuring, then ask for the listing.
+
+### Current intake route
+
+The public [NVIDIA AI Accelerated](https://www.nvidia.com/en-us/ai-data-science/ai-accelerated/)
+page still displays an **Apply Now** action, but on 2026-09-14 that action resolved to
+`mynvidia.force.com/NVPartners/s/nvidiaaiacceleratedprogram` and returned 404. Do not wait
+on or repeatedly retry that dead link. The working route is:
+
+1. correct the product record in the authenticated Inception portal;
+2. keep the catalog request in the existing `inceptionprogram@nvidia.com` thread;
+3. ask for the replacement intake URL in the scheduled 2026-09-25 follow-up if NVIDIA has
+   not replied before then.
 
 ### 1. Correct the portal record (the record understates the stack)
 
@@ -108,7 +120,13 @@ All in the repo, web-ready:
 - Lockups: `public/brand/three-ws-lockup-on-dark.png`, `public/brand/three-ws-lockup-on-light.png`
 - Social/OG image: `public/og-image.png`
 - Full press kit: `public/brand/three-ws-press-kit.zip`
-- Screenshots: capture live from https://three.ws/forge (generation in progress plus result), https://three.ws/agora (3D world), and https://three.ws/character-library (rigged character grid) at 1920x1080
+- NVIDIA product page, 1920x1080: [`marketing/nvidia-inception/assets/three-ws-nvidia-1920x1080.png`](../marketing/nvidia-inception/assets/three-ws-nvidia-1920x1080.png)
+- Audio2Face browser demo, 1920x1080: [`marketing/nvidia-inception/assets/three-ws-audio2face-1920x1080.png`](../marketing/nvidia-inception/assets/three-ws-audio2face-1920x1080.png)
+- Forge product page, 1920x1080: [`marketing/nvidia-inception/assets/three-ws-forge-1920x1080.png`](../marketing/nvidia-inception/assets/three-ws-forge-1920x1080.png)
+
+Use the NVIDIA product page first and the Audio2Face demo second. The Forge screenshot is
+valid product evidence but includes `$THREE` holder controls, so it should not lead an
+NVIDIA catalog submission.
 
 ## Second product record: the `<agent-3d>` digital-human embed
 

@@ -15,7 +15,7 @@ stage is a small number of portal actions, emails, and well-timed follow-ups.
 |---|---|---|---|---|
 | 1 | IBM watsonx Orchestrate Agent Catalog | Request the BYOL `APP_ID`, then submit the Remote MCP listing through Agent Connect | Low | Enterprise discovery inside IBM's governed agent catalog |
 | 2 | OpenAI Developer Showcase | Submit the completed Showcase packet | Low | Public proof, a durable OpenAI-hosted project page, and a stronger app-review story |
-| 3 | NVIDIA AI Accelerated | Correct the Inception product record and use the official **Apply Now** route for validation and catalog consideration | Low | Product validation and visibility in NVIDIA's accelerated application ecosystem |
+| 3 | NVIDIA AI Accelerated | Correct the Inception product record and continue the existing catalog request through the program team | Low | Product validation and visibility in NVIDIA's accelerated application ecosystem |
 | 4 | IBM Partner Plus marketing | Activate My Digital Marketing, obtain the Build-track marketing kit, and reopen the promised IBM page and social support | Low | Campaign assets and IBM-owned distribution without another engineering project |
 | 5 | NVIDIA Inception visibility | Continue the existing catalog/Showcase/co-marketing request; follow up on **2026-09-25** if unanswered | Low | Member spotlight, official assets, technical-team introductions, and event access |
 | 6 | NVIDIA NGC Catalog | Package one useful GPU service as a maintained container and complete publisher onboarding | Medium | A self-contained NVIDIA catalog artifact developers can deploy |
@@ -125,11 +125,14 @@ Full internal audit: [IBM Partner Plus opportunities](./ibm-partner-plus.md).
 
 ## NVIDIA
 
-### 1. Complete the AI Accelerated application path
+### 1. Complete the AI Accelerated portal path
 
 NVIDIA's current AI Accelerated page invites software and solution providers to apply,
 validate performance on NVIDIA platforms, and increase application visibility. This is the
-best public catalog path for the full three.ws product.
+best public catalog target for the full three.ws product. As of 2026-09-14, however, its
+public **Apply Now** link resolves to a retired Salesforce URL and returns 404. Use the
+Inception portal product record and the existing program-team thread until NVIDIA supplies
+a replacement intake URL.
 
 Before applying, correct the Inception portal product record:
 
@@ -139,9 +142,9 @@ Before applying, correct the Inception portal product record:
   they ship;
 - retain the verified CUDA, Kaolin, nvdiffrast, L4, and RTX PRO 6000 Blackwell usage.
 
-Then use the official **Apply Now** route and treat the existing Inception email as the
-human escalation path. The public catalog remains curated even though the program has an
-application form.
+The public catalog remains curated. Treat the corrected portal record as the internal
+application and the existing Inception email as the catalog request. Ask for the current
+intake URL in the scheduled follow-up rather than waiting on the dead public link.
 
 ### 2. Continue the Inception co-marketing request without restarting it
 
@@ -230,7 +233,7 @@ audience and product.
 | Sep 14 to 18 | Submit the OpenAI Showcase packet | Owner | confirmation email or submission ID |
 | Sep 14 to 18 | Request IBM Agent Connect BYOL `APP_ID` | Owner | IBM thread and assigned ID |
 | Sep 14 to 18 | Activate IBM My Digital Marketing and verify Partner Plus Directory profile | Owner | portal screenshots and live profile URL |
-| Sep 14 to 18 | Correct the NVIDIA Inception product record and use the AI Accelerated application route | Owner | saved portal record and application receipt |
+| Sep 14 to 18 | Correct the NVIDIA Inception product record | Owner | saved portal record |
 | Sep 18 to 24 | Publish the prepared OpenAI and NVIDIA technical posts on a measured cadence | Owner | live URLs added to the publishing tracker |
 | Sep 25 | Follow up once with NVIDIA if the September 4 request has no reply | Owner | reply or next checkpoint |
 | By Sep 29 | Decide on IBM TechXchange attendance | Owner | registration or explicit close |
@@ -245,7 +248,7 @@ audience and product.
 - [IBM Partner Plus go-to-market benefits](https://www.ibm.com/partnerplus/marketing)
 - [Selling on IBM Cloud Catalog](https://www.ibm.com/products/cloud/partners/catalog-sell)
 - [IBM Cloud catalog onboarding requirements](https://cloud.ibm.com/docs/sell?topic=sell-selling-clouds)
-- [NVIDIA AI Accelerated](https://www.nvidia.com/en-us/ai-data-science/ai-accelerated/)
+- [NVIDIA AI Accelerated](https://www.nvidia.com/en-us/ai-data-science/ai-accelerated/) (program page; its public application link returned 404 on 2026-09-14)
 - [NVIDIA Developer Program and Inception benefits](https://developer.nvidia.com/developer-program)
 - [NVIDIA GTC for startups and VCs](https://www.nvidia.com/gtc/startups/)
 - [NVIDIA NGC Catalog](https://catalog.ngc.nvidia.com/)

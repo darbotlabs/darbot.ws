@@ -9,16 +9,18 @@
 #   • Attention backend = xformers, NOT flash-attn. flash-attn compiles from
 #     source for 30+ min and routinely OOMs the builder; xformers is an upstream-
 #     supported backend and an L4 (sm_89) runs it well. Set via ATTN_BACKEND.
-#   • TORCH_CUDA_ARCH_LIST=8.9 — build CUDA kernels only for the L4 (Ada). This
-#     cuts compile time massively vs. building every arch.
+#   • TORCH_CUDA_ARCH_LIST defaults to 8.9 for the production L4 image. NGC
+#     builds can pass a wider list without editing this file.
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+ARG TORCH_CUDA_ARCH_LIST="8.9"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     DEBIAN_FRONTEND=noninteractive \
-    # Build kernels only for the L4 (Ada, sm_89) — keeps source compiles fast.
-    TORCH_CUDA_ARCH_LIST="8.9" \
+    # Production defaults to L4 (Ada, sm_89); NGC overrides this build arg.
+    TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" \
     # TRELLIS runtime backends (read at import time in main.py).
     ATTN_BACKEND=xformers \
     SPCONV_ALGO=native \
@@ -116,8 +118,9 @@ RUN git clone https://github.com/facebookresearch/dinov2.git /opt/dinov2 \
 WORKDIR /app
 COPY worker_security.py /app/worker_security.py
 COPY request_policy.py /app/request_policy.py
+COPY storage_backend.py /app/storage_backend.py
 COPY main.py /app/main.py
-COPY test_request_policy.py test_app_contract.py /app/
+COPY test_request_policy.py test_storage_backend.py test_app_contract.py /app/
 
 # Build-time gate, neither half of which needs a GPU:
 #   1. The quality tiers, the clamps that keep a caller value from crashing the
@@ -126,7 +129,7 @@ COPY test_request_policy.py test_app_contract.py /app/
 #   2. The served contract, against the exact dependency set that will run: the
 #      TRELLIS import chain (FlexiCubes submodule included), the auth boundary,
 #      the probe surfaces, request validation, and the SSRF guard.
-RUN python3 -m pytest /app/test_request_policy.py -q \
+RUN python3 -m pytest /app/test_request_policy.py /app/test_storage_backend.py -q \
     && python3 /app/test_app_contract.py
 
 EXPOSE 8080

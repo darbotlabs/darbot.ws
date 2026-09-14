@@ -7,6 +7,9 @@ directory closes.
 | File | What it is |
 | --- | --- |
 | [social-copy.md](social-copy.md) | Paste-ready posts for X, LinkedIn, and Telegram, plus the badge and no-endorsement rules every one of them follows. Owner-gated: drafted, not posted. |
+| [assets/three-ws-nvidia-1920x1080.png](assets/three-ws-nvidia-1920x1080.png) | Lead catalog screenshot: the dedicated NVIDIA product and integration page. |
+| [assets/three-ws-audio2face-1920x1080.png](assets/three-ws-audio2face-1920x1080.png) | Browser-native Audio2Face-3D and Riva demo screenshot. |
+| [assets/three-ws-forge-1920x1080.png](assets/three-ws-forge-1920x1080.png) | Supporting Forge product screenshot; it includes token controls, so do not use it as the lead NVIDIA image. |
 
 Strategy lives in docs, not here:
 

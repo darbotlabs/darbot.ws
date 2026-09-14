@@ -26,13 +26,18 @@ Single image in, textured GLB out, on one L4. It is the strongest of the GPU
 fleet for an outside user because its model is MIT-licensed, its weights are not
 baked into the image, and it collects nothing.
 
-**Three of NVIDIA's four prerequisites are met today. The fourth (the EULA) is
-met by this change.** What actually blocks a submission is not NVIDIA's list, it
-is that the container currently assumes it is running inside our Google Cloud
-project. An NGC user has no `GCS_BUCKET`, so the image as built refuses to start
-for them. That is [gate 1](#gate-1-the-container-must-run-outside-our-cloud-project)
-below, and it is the only substantial piece of work between here and a
-submission.
+**The two portability blockers are now implemented.** The container keeps its
+production GCS backend when `GCS_BUCKET` is set and switches to a mounted local
+output volume when it is not. The CUDA architecture list is also a build
+argument, so the NGC build can target a broader GPU matrix without changing the
+production L4 image.
+
+One published prerequisite still needs resolution: NVIDIA asks for an
+automatically multi-GPU-capable application, while this inference server
+deliberately runs one job on one GPU. The NGC intake should ask whether
+service-per-GPU orchestration satisfies that requirement or whether NVIDIA
+expects in-container model replication. Do not claim this prerequisite as met
+until NVIDIA answers or a multi-GPU implementation is validated.
 
 ## Prerequisite audit
 
@@ -41,7 +46,7 @@ NVIDIA's four published prerequisites, each against the code:
 | NVIDIA prerequisite | Status | Evidence |
 |---|---|---|
 | Containerized using the CUDA 9 or later base container | **Met** | `FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04` in [workers/model-trellis/Dockerfile](../workers/model-trellis/Dockerfile). Eight GPU workers in the tree are built on `nvidia/cuda` 12.1 to 12.8. |
-| GPU accelerated, automatically multi-GPU capable, runs on Pascal or newer | **Partly met** | GPU acceleration is the whole point of the image: TRELLIS with nvdiffrast, diffoctreerast, diff-gaussian-rasterization and NVIDIA Kaolin, all compiled with nvcc at build time. It is single-GPU by design (`MAX_CONCURRENT` defaults to 1, one L4 fits exactly one inference) and its kernels are compiled for `sm_89` only. See [gate 2](#gate-2-the-kernels-are-compiled-for-one-gpu-generation). |
+| GPU accelerated, automatically multi-GPU capable, runs on Pascal or newer | **Partly met** | GPU acceleration is implemented with TRELLIS, nvdiffrast, diffoctreerast, diff-gaussian-rasterization, and NVIDIA Kaolin. The architecture list is now configurable, but the server remains single-GPU by design. See [gate 2](#gate-2-the-kernels-are-compiled-for-one-gpu-generation) and [gate 3](#gate-3-multi-gpu-requirement-needs-nvidia-guidance). |
 | An end-user license agreement for the application | **Met by this change** | [NVIDIA NGC Container EULA](https://three.ws/legal/nvidia-ngc-eula), source at [public/legal/nvidia-ngc-eula.html](../public/legal/nvidia-ngc-eula.html). It covers the Apache-2.0 code, the third-party components, and the fact that the image ships no weights. |
 | Container does not collect personal data or violate GDPR | **Met** | The worker has no analytics, telemetry, or reporting of any kind: a search of [workers/model-trellis](../workers/model-trellis) for `posthog`, `analytics`, `telemetry`, `mixpanel`, and `sentry` returns nothing. The only outbound calls it makes are the ones the caller asks for, and those go through the SSRF guard in [worker_security.py](../workers/model-trellis/worker_security.py). |
 
@@ -61,23 +66,17 @@ container is our serving code plus a CUDA build, and the user brings the model.
 
 ### Gate 1: the container must run outside our cloud project
 
-[main.py](../workers/model-trellis/main.py) reads `GCS_BUCKET = os.environ["GCS_BUCKET"]`
-at import and uploads every finished mesh with `storage.Client()`. On an NGC
-user's machine there is no bucket and no credential, so the process exits before
-it serves a request. Weights are already fine: `WEIGHTS_DIR` defaults to a local
-path and `WEIGHTS_GCS_URI` staging is optional, so a user who downloads the
-TRELLIS weights from Hugging Face and mounts them is served by the existing code
-path.
+**Status: implemented.**
 
-What the listing needs is an output backend selected by configuration:
+[main.py](../workers/model-trellis/main.py) now treats `GCS_BUCKET` as optional.
+When it is set, production behavior remains GCS-backed. When it is unset, the
+worker uses `OUTPUT_DIR` (default `/output`) for atomic task records and GLBs,
+returns `result_url` plus `result_path`, and serves authenticated downloads from
+`GET /results/{task_id}.glb`. `GET /health` reports the active backend.
 
-- Keep the current behaviour byte-for-byte when `GCS_BUCKET` is set, so nothing
-  about the production forge lane changes.
-- When it is unset, write the GLB to `OUTPUT_DIR` (default `/output`, a mounted
-  volume) and return a path plus a `GET /results/{task_id}.glb` download route
-  instead of a `storage.googleapis.com` URL.
-- Report the active backend in `GET /health` so an operator can tell which mode
-  the instance came up in.
+Path and persistence behavior is isolated in
+[storage_backend.py](../workers/model-trellis/storage_backend.py) and covered by
+[test_storage_backend.py](../workers/model-trellis/test_storage_backend.py).
 
 The worker's tests run inside the built image (`docker run --rm model-trellis
 python3 test_app_contract.py`), so this change is verified by a GPU build, not
@@ -85,19 +84,31 @@ from a laptop. Budget one Cloud Build run for it.
 
 ### Gate 2: the kernels are compiled for one GPU generation
 
+**Status: configurable, validation pending.**
+
 The Dockerfile sets `TORCH_CUDA_ARCH_LIST="8.9"`, deliberately, to keep our own
 builds fast on the L4 fleet. An image compiled for `sm_89` alone does not run on
 the Ampere, Hopper, or Blackwell hardware an NGC user is most likely to have,
 and NVIDIA's prerequisite reads "Pascal or newer".
 
-The fix is a build argument and a wider arch list for the published image only,
-but the arch matrix has to be decided by an actual build: the compiled
-extensions (diffoctreerast, diff-gaussian-rasterization, nvdiffrast) are not all
-buildable on every architecture in that range, and a list that fails to compile
-is worse than a narrow one that works. Determine the real matrix in the same
-Cloud Build run as gate 1 and pin what compiles.
+The Dockerfile now exposes `TORCH_CUDA_ARCH_LIST` as a build argument and keeps
+`8.9` as the production default. The first NGC candidate build should use
+`8.0;8.6;8.9;9.0+PTX`, then run on at least one Ampere or Hopper GPU plus the
+existing L4 validation. Pin the final matrix only after those compiled
+extensions pass the real build and inference checks.
 
-### Gate 3: the NGC partner legal agreement
+### Gate 3: multi-GPU requirement needs NVIDIA guidance
+
+**Status: open.**
+
+The current server serializes inference on one GPU because a TRELLIS job fills
+most of an L4. Horizontal replicas provide production concurrency, but the NGC
+FAQ specifically says "automatically multi-GPU capable." Ask NVIDIA whether
+one service replica per GPU is acceptable for this inference workload. If it
+is not, build and validate process-per-GPU model replication before pushing the
+staging image.
+
+### Gate 4: the NGC partner legal agreement
 
 Owner action. It is step 1 of NVIDIA's published process and nothing technical
 depends on it, so it can be signed while gates 1 and 2 are being built.
@@ -147,6 +158,44 @@ which also cuts the published image size.
 - EULA: https://three.ws/legal/nvidia-ngc-eula
 - Upstream model: https://github.com/microsoft/TRELLIS
 
+## NGC partner intake form, paste-ready
+
+The live NVIDIA form asks for these product fields. Identity, job-title, and
+location selections must match the account holder's legal information.
+
+**Organization / University Name:** three.ws
+
+**Industry:** Media and Entertainment
+
+**Product Name:** three.ws TRELLIS Mesh Server
+
+**Link to Product Home Page:** https://three.ws/forge
+
+**What does your product do?**
+
+> three.ws TRELLIS Mesh Server is a containerized GPU inference service that
+> turns one image, or multiple views of the same subject, into a textured GLB
+> 3D asset. It uses Microsoft TRELLIS with NVIDIA CUDA, Kaolin, nvdiffrast, and
+> custom CUDA extensions. The container supports authenticated asynchronous
+> jobs, configurable quality tiers, SSRF-protected image intake, health checks,
+> and local mounted-volume output without requiring a cloud account. Model
+> weights are mounted separately and are not included in the image.
+
+**List NVIDIA GPUs supported by your Product:**
+
+> NVIDIA L4 is the verified production target. RTX PRO 6000 Blackwell has been
+> validated for the heavy image-to-3D lane. The portable NGC architecture
+> matrix for Ampere, Ada, and Hopper will be finalized during NVIDIA staging
+> and validation.
+
+**Question for the NVIDIA contact after submission:**
+
+> This inference service schedules one model replica per GPU and scales through
+> service replicas because one TRELLIS job uses most of an L4. Does NGC's
+> automatically multi-GPU-capable prerequisite accept service-per-GPU
+> orchestration, or should the staging image implement process-per-GPU model
+> replication inside one container?
+
 **Quick start (goes in the listing body, once gate 1 lands)**
 
 ```bash
@@ -162,6 +211,16 @@ curl -X POST http://localhost:8080/infer \
   -d '{"images":["https://three.ws/avatars/thumbs/default.png"],"tier":"standard"}'
 ```
 
+Poll the returned task, then download its local result with the same bearer:
+
+```bash
+curl -H "Authorization: Bearer choose-a-secret" \
+  http://localhost:8080/tasks/TASK_ID
+
+curl -L -H "Authorization: Bearer choose-a-secret" \
+  -o result.glb http://localhost:8080/results/TASK_ID.glb
+```
+
 ## What is owner-gated
 
 Everything that leaves the machine. Submitting the partner form, signing the
@@ -170,7 +229,8 @@ and none of them are an agent's call:
 
 1. Submit **Become an NGC Software Partner** at [nvidia.com/en-us/gpu-cloud/ngc-software-partners](https://www.nvidia.com/en-us/gpu-cloud/ngc-software-partners/). Mention the Inception membership in the form; it is the same company record.
 2. Sign the NGC Partner Legal Agreement when it comes back.
-3. Approve the Cloud Build run that produces the publishable image (gates 1 and 2).
+3. Confirm the multi-GPU interpretation with NVIDIA, then run the portable image
+   build and GPU validation.
 
 ## Verification log
 
@@ -181,8 +241,8 @@ and none of them are an agent's call:
 | Base images are CUDA 12.x | `grep FROM workers/*/Dockerfile` | Eight GPU workers on `nvidia/cuda` 12.1 to 12.8 |
 | The container collects nothing | `grep -rniE "posthog|analytics|telemetry|mixpanel|sentry" workers/model-trellis` | No matches |
 | Weights are not baked into the image | [workers/model-trellis/README.md](../workers/model-trellis/README.md) and the Dockerfile | Weights mount at `/weights`; no `COPY` of any checkpoint |
-| `GCS_BUCKET` is a hard requirement | [main.py](../workers/model-trellis/main.py) | `os.environ["GCS_BUCKET"]` at import, no fallback |
-| Kernels are `sm_89` only | [Dockerfile](../workers/model-trellis/Dockerfile) | `TORCH_CUDA_ARCH_LIST="8.9"`, no PTX |
+| Standalone storage | [main.py](../workers/model-trellis/main.py), [storage_backend.py](../workers/model-trellis/storage_backend.py) | Local mounted-volume mode implemented; GCS remains the production path |
+| CUDA architecture configuration | [Dockerfile](../workers/model-trellis/Dockerfile) | Production defaults to `8.9`; catalog builds can pass a wider list |
 | Upstream licenses | Worker READMEs | TRELLIS MIT, MDM MIT, Hunyuan3D non-commercial |
 
 ## Related

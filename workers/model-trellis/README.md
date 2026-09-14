@@ -11,13 +11,16 @@ first. It runs on one NVIDIA L4 (24 GB) on Cloud Run and is the self-hosted
 TRELLIS mesh backend for the `/forge` image→3D lane.
 
 Work is asynchronous: `POST /infer` returns `202` with a `task_id`, and the
-caller polls `GET /tasks/{id}` until the mesh is written to Cloud Storage. The
-finished GLB lands at `gs://$GCS_BUCKET/raw-meshes/trellis/{task_id}.glb` and is
-served back as an `https://storage.googleapis.com/…` URL.
+caller polls `GET /tasks/{id}` until the mesh is ready. With `GCS_BUCKET` set,
+the finished GLB lands at `gs://$GCS_BUCKET/raw-meshes/trellis/{task_id}.glb`
+and is served back as a `storage.googleapis.com` URL. Without `GCS_BUCKET`, the
+standalone container writes tasks and results atomically under `OUTPUT_DIR` and
+serves the mesh from `GET /results/{task_id}.glb`.
 
 ## Endpoints
 
-`POST /infer` and `GET /tasks/{id}` require `Authorization: Bearer $API_KEY`.
+`POST /infer`, `GET /tasks/{id}`, and `GET /results/{task_id}.glb` require
+`Authorization: Bearer $API_KEY`.
 `GET /health` and `GET /` are unauthenticated: they carry no secrets, and the
 platform reads them to decide whether this lane can take work. Routing
 ([`api/_lib/forge-lane-health.js`](../../api/_lib/forge-lane-health.js),
@@ -121,6 +124,18 @@ or `failed`.
 }
 ```
 
+In standalone local mode, a completed task returns `result_url` and
+`result_path` instead of `result_gcs_url`:
+
+```json
+{
+	"task_id": "3f2c…",
+	"status": "done",
+	"result_url": "/results/3f2c….glb",
+	"result_path": "/output/results/3f2c….glb"
+}
+```
+
 On failure the record carries an `error` string. A bad image source reports the
 actual reason (`image source cdn.example.com unreachable after 3 attempts
 (ReadTimeout); check the URL is publicly readable`) because the fault is in the
@@ -143,7 +158,9 @@ forever behind a dead runner. Unknown ids return `404`.
 	"load_attempts": 1,
 	"tiers": ["draft", "standard", "high", "max"],
 	"default_quality": { "ss_steps": 40, "slat_steps": 40, "ss_cfg": 7.5, "slat_cfg": 3.0, "simplify": 0.75, "texture_size": 4096 },
-	"rembg_matte": true
+	"rembg_matte": true,
+	"output_backend": "gcs",
+	"output_dir": null
 }
 ```
 
@@ -188,7 +205,8 @@ against two real error events, which is how a genuine failure goes unnoticed.
 | Var | Required | Default | Purpose |
 |---|---|---|---|
 | `API_KEY` | yes | — | Shared bearer secret (Secret Manager `avatar-reconstruction-key`) |
-| `GCS_BUCKET` | yes | — | Cloud Storage bucket for output meshes |
+| `GCS_BUCKET` | no | - | Cloud Storage bucket for production task state and output meshes. When unset, local storage is used. |
+| `OUTPUT_DIR` | no | `/output` | Mounted task and result volume used when `GCS_BUCKET` is unset |
 | `WEIGHTS_DIR` | no | `/weights/trellis-large` | Local path to TRELLIS weights (a mounted GCS volume in prod) |
 | `MAX_CONCURRENT` | no | `1` | In-flight inferences; one L4 fits exactly one |
 | `ATTN_BACKEND` | no | `xformers` | TRELLIS attention backend, read at import time |
@@ -226,6 +244,33 @@ huggingface-cli download microsoft/TRELLIS-image-large --local-dir /tmp/trellis-
 gsutil -m cp -r /tmp/trellis-large gs://three-ws-model-weights/trellis-large/
 ```
 
+## Standalone and NGC build
+
+The production image compiles CUDA extensions for L4 (`sm_89`) by default. A
+portable catalog build can supply a wider architecture list without changing
+the Dockerfile:
+
+```bash
+docker build \
+  --build-arg 'TORCH_CUDA_ARCH_LIST=8.0;8.6;8.9;9.0+PTX' \
+  -t three-ws/trellis-mesh-server:latest \
+  workers/model-trellis
+```
+
+Run it with mounted weights and output volumes:
+
+```bash
+docker run --gpus all -p 8080:8080 \
+  -e API_KEY=choose-a-secret \
+  -v /path/to/trellis-image-large:/weights/trellis-large:ro \
+  -v /path/to/output:/output \
+  three-ws/trellis-mesh-server:latest
+```
+
+The local backend persists task JSON under `/output/tasks` and generated GLBs
+under `/output/results`. It does not require Google credentials or make the
+output directory public; downloads retain the worker's bearer authentication.
+
 ## Tests
 
 The request policy (quality tiers, the clamps that stop a caller value from
@@ -236,7 +281,7 @@ so it can be proven anywhere:
 ```bash
 cd workers/model-trellis
 python3 -m pip install pytest httpx
-python3 -m pytest test_request_policy.py -q     # 18 tests
+python3 -m pytest test_request_policy.py test_storage_backend.py -q
 ```
 
 [`test_app_contract.py`](./test_app_contract.py) covers the served surface

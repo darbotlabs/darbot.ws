@@ -188,7 +188,49 @@ None are required; every asset is linked in the body and the links are live. Att
 - Lockups: [three-ws-lockup-on-dark.png](../public/brand/three-ws-lockup-on-dark.png), [three-ws-lockup-on-light.png](../public/brand/three-ws-lockup-on-light.png)
 - Press kit (6.3 MB, may trip attachment limits; the link in the body is safer): [public/brand/three-ws-press-kit.zip](../public/brand/three-ws-press-kit.zip)
 
-Screenshots are deliberately not attached. The email offers them on request, which is a cheaper second touch than guessing the spec now. If they ask, capture 1920x1080 from [/forge](https://three.ws/forge) (generation in progress plus result), [/agora](https://three.ws/agora), and [/character-library](https://three.ws/character-library).
+Screenshots were deliberately not attached to the original email. Catalog-ready 1920x1080
+captures were prepared on 2026-09-14 for the next touch:
+
+- [`marketing/nvidia-inception/assets/three-ws-nvidia-1920x1080.png`](../marketing/nvidia-inception/assets/three-ws-nvidia-1920x1080.png)
+- [`marketing/nvidia-inception/assets/three-ws-audio2face-1920x1080.png`](../marketing/nvidia-inception/assets/three-ws-audio2face-1920x1080.png)
+- [`marketing/nvidia-inception/assets/three-ws-forge-1920x1080.png`](../marketing/nvidia-inception/assets/three-ws-forge-1920x1080.png)
+
+Lead with the NVIDIA product page and Audio2Face images. The Forge capture includes token
+holder controls and is supporting product evidence rather than the lead NVIDIA image.
+
+## September 25 follow-up
+
+Send this as a reply in the existing thread only if NVIDIA has not answered by
+2026-09-25. Attach the NVIDIA product-page and Audio2Face screenshots above.
+
+```text
+Hello,
+
+Following up on the Accelerated Apps Catalog request for three.ws below. Our
+Inception product record identifies the application as Shipping / GPU
+Accelerated, and I have attached current 1920x1080 captures of the NVIDIA stack
+page and the browser-native Audio2Face-3D demo.
+
+The public NVIDIA AI Accelerated page still displays an Apply Now link, but it
+currently resolves to the retired Salesforce path
+mynvidia.force.com/NVPartners/s/nvidiaaiacceleratedprogram and returns 404. Is
+there a replacement intake form, or should the application continue through
+this Inception thread?
+
+The product, demo, technical documentation, and engineering evidence remain
+live at:
+
+- https://three.ws/nvidia
+- https://three.ws/demos/audio2face
+- https://three.ws/docs/nvidia-models
+- https://three.ws/blog/image-to-3d-on-nvidia-l4-and-blackwell
+
+Thank you,
+
+Nicholas
+three.ws
+https://three.ws
+```
 
 ## After you send
 

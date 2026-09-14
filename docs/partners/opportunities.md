@@ -81,7 +81,7 @@ The work is done or nearly done. A human on our side has to act.
 | IBM Agent Connect (BYOL MCP listing) | Fully prepared | `APP_ID` request email, then Concierge | Owner |
 | AWS Marketplace | Integration deployed, listing never created | Create the product in the portal | Owner |
 | NVIDIA NGC Catalog | Prerequisites cleared | One build plus partner legal agreement | Owner + eng |
-| NVIDIA Accelerated Apps Catalog | Portal record filed, copy written | Send the inclusion email | Owner |
+| NVIDIA Accelerated Apps Catalog | Inclusion email sent 2026-09-04; portal record still understates the shipping stack | Correct the portal record, then follow up in the same thread on 2026-09-25 if unanswered | Owner |
 | OpenAI Plugin Directory | Eligible | Submit | Owner |
 | OpenAI Showcase Gallery | Eligible, open web form | Submit | Owner |
 | IBM My Digital Marketing | Entitled, never used | Request access and the Build track marketing kit | Owner |
