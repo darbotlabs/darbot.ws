@@ -1,5 +1,5 @@
 {
-	"generated_at": "2026-09-12T20:49:03.614Z",
+	"generated_at": "2026-09-15T05:45:42.655Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json",
 	"site": {
 		"name": "three.ws",
@@ -1912,6 +1912,16 @@
 					"title": "Wallet Portfolio",
 					"description": "A live portfolio view for any Solana or Ethereum wallet: total value, 24h move with honest coverage, stablecoin/major/token breakdown, top-asset allocation, and every holding priced in real time. Free, keyless, deep-linkable, no account.",
 					"added": "2026-08-06",
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
+					"path": "/atomic",
+					"title": "Atomic - Solana V1 Inspector",
+					"description": "A live Solana Transaction V1 observatory and pre-sign inspector. Paste a mainnet signature or base64 wire transaction to see exact bytes, resource caps, compute use, and sponsor safety.",
+					"added": "2026-09-15",
 					"auth": null,
 					"indexable": true,
 					"tags": [],
@@ -4439,6 +4449,16 @@
 					"showcase": false
 				},
 				{
+					"path": "/docs/x402-vscode",
+					"title": "Docs · x402 for VS Code",
+					"description": "Find, inspect, and pay x402 APIs from VS Code with $THREE or USDC on Solana, including wallet setup, token selection, safety controls, and the $THREE contract address.",
+					"added": "2026-09-13",
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
 					"path": "/docs/premium",
 					"title": "Premium Pass: Monthly Data API Access",
 					"description": "One Solana payment ($THREE at 20% off, SOL, or USDC) buys 30 days of unmetered Data API access with an API key: no per-call x402 payments.",
@@ -6522,6 +6542,16 @@
 					"path": "/docs/solana",
 					"title": "Docs · Solana agents",
 					"description": "Give your agent a real on-chain identity on Solana. Your wallet signs one transaction that mints an NFT representing the agent, which is what lets the identity outlive any single platform.",
+					"added": null,
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
+					"path": "/docs/atomic",
+					"title": "Docs · Atomic Solana V1 inspector",
+					"description": "Inspect legacy, V0, and V1 Solana transactions by signature or raw wire bytes, including the V1 transactionConfig limits that sponsors and indexers must read.",
 					"added": null,
 					"auth": null,
 					"indexable": true,

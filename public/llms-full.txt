@@ -1172,6 +1172,12 @@ URL: https://three.ws/portfolio
 
 A live portfolio view for any Solana or Ethereum wallet: total value, 24h move with honest coverage, stablecoin/major/token breakdown, top-asset allocation, and every holding priced in real time. Free, keyless, deep-linkable, no account.
 
+### Atomic - Solana V1 Inspector
+
+URL: https://three.ws/atomic
+
+A live Solana Transaction V1 observatory and pre-sign inspector. Paste a mainnet signature or base64 wire transaction to see exact bytes, resource caps, compute use, and sponsor safety.
+
 ### Airdrop Checker
 
 URL: https://three.ws/airdrops
@@ -2710,6 +2716,12 @@ URL: https://three.ws/docs/x402
 
 How three.ws implements x402 HTTP 402 paid agent skills: the challenge, verify, and settle mechanics.
 
+### Docs · x402 for VS Code
+
+URL: https://three.ws/docs/x402-vscode
+
+Find, inspect, and pay x402 APIs from VS Code with $THREE or USDC on Solana, including wallet setup, token selection, safety controls, and the $THREE contract address.
+
 ### Premium Pass: Monthly Data API Access
 
 URL: https://three.ws/docs/premium
@@ -3963,6 +3975,12 @@ The three Solidity contracts behind the ERC-8004 identity registry: contract int
 URL: https://three.ws/docs/solana
 
 Give your agent a real on-chain identity on Solana. Your wallet signs one transaction that mints an NFT representing the agent, which is what lets the identity outlive any single platform.
+
+### Docs · Atomic Solana V1 inspector
+
+URL: https://three.ws/docs/atomic
+
+Inspect legacy, V0, and V1 Solana transactions by signature or raw wire bytes, including the V1 transactionConfig limits that sponsors and indexers must read.
 
 ### Docs · Blender MCP
 

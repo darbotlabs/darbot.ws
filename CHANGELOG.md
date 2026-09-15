@@ -4,6 +4,15 @@
 
 Public history for [three.ws](https://three.ws), newest first. New pages come from `added` dates in data/pages.json; everything else is curated in data/changelog.json. Also available as [JSON](https://three.ws/changelog.json) and [RSS](https://three.ws/changelog.xml), live at [three.ws/changelog](https://three.ws/changelog).
 
+## 2026-09-15
+
+- **Atomic - Solana V1 Inspector** (`/atomic`): A live Solana Transaction V1 observatory and pre-sign inspector. Paste a mainnet signature or base64 wire transaction to see exact bytes, resource caps, compute use, and sponsor safety.
+- **three.ws is ready for Solana's new 4 KiB transactions**: Solana V1 transactions are live, with more than three times the wire room and a different place for execution limits. Every three.ws transaction reader now opts into V1, so a payment, registration, receipt, or agent action cannot disappear just because it uses the new format. The new Atomic inspector reads a confirmed signature or raw base64 handoff and shows the exact byte footprint, compute and account-data limits, priority fee, actual compute use, and the warning a fee sponsor needs before co-signing. It never signs or broadcasts anything. (`/atomic`) `[feature, improvement, security]`
+
+## 2026-09-13
+
+- **Docs · x402 for VS Code** (`/docs/x402-vscode`): Find, inspect, and pay x402 APIs from VS Code with $THREE or USDC on Solana, including wallet setup, token selection, safety controls, and the $THREE contract address.
+
 ## 2026-09-12
 
 - **Corrected what the 3D Studio connector declares about checking a pending job**: The tool that collects a finished 3D generation was labelled a read-only status probe. It is not: the first check that finds a job done copies the model into permanent storage, records it, and scores it, and it can route failed work to another provider. Any AI client reading those labels to decide whether a call is safe to repeat was being told the wrong thing. The labels and the documentation now match the behaviour. Nothing about how the tool works changed. (`/docs/mcp-studio`) `[fix, sdk]`

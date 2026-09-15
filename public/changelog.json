@@ -1,11 +1,43 @@
 {
-	"generated_at": "2026-09-12T20:49:03.627Z",
+	"generated_at": "2026-09-15T05:45:42.704Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
 	"entries": [
+		{
+			"date": "2026-09-15",
+			"type": "launch",
+			"title": "Atomic - Solana V1 Inspector",
+			"summary": "A live Solana Transaction V1 observatory and pre-sign inspector. Paste a mainnet signature or base64 wire transaction to see exact bytes, resource caps, compute use, and sponsor safety.",
+			"link": "/atomic",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-15",
+			"type": "update",
+			"title": "three.ws is ready for Solana's new 4 KiB transactions",
+			"summary": "Solana V1 transactions are live, with more than three times the wire room and a different place for execution limits. Every three.ws transaction reader now opts into V1, so a payment, registration, receipt, or agent action cannot disappear just because it uses the new format. The new Atomic inspector reads a confirmed signature or raw base64 handoff and shows the exact byte footprint, compute and account-data limits, priority fee, actual compute use, and the warning a fee sponsor needs before co-signing. It never signs or broadcasts anything.",
+			"link": "/atomic",
+			"tags": [
+				"feature",
+				"improvement",
+				"security"
+			]
+		},
+		{
+			"date": "2026-09-13",
+			"type": "launch",
+			"title": "Docs · x402 for VS Code",
+			"summary": "Find, inspect, and pay x402 APIs from VS Code with $THREE or USDC on Solana, including wallet setup, token selection, safety controls, and the $THREE contract address.",
+			"link": "/docs/x402-vscode",
+			"tags": [
+				"launch"
+			]
+		},
 		{
 			"date": "2026-09-12",
 			"type": "update",

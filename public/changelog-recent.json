@@ -1,14 +1,46 @@
 {
-	"generated_at": "2026-09-12T20:49:03.649Z",
+	"generated_at": "2026-09-15T05:45:42.815Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3675,
+	"total": 3678,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-15",
+			"type": "launch",
+			"title": "Atomic - Solana V1 Inspector",
+			"summary": "A live Solana Transaction V1 observatory and pre-sign inspector. Paste a mainnet signature or base64 wire transaction to see exact bytes, resource caps, compute use, and sponsor safety.",
+			"link": "/atomic",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-15",
+			"type": "update",
+			"title": "three.ws is ready for Solana's new 4 KiB transactions",
+			"summary": "Solana V1 transactions are live, with more than three times the wire room and a different place for execution limits. Every three.ws transaction reader now opts into V1, so a payment, registration, receipt, or agent action cannot disappear just because it uses the new format. The new Atomic inspector reads a confirmed signature or raw base64 handoff and shows the exact byte footprint, compute and account-data limits, priority fee, actual compute use, and the warning a fee sponsor needs before co-signing. It never signs or broadcasts anything.",
+			"link": "/atomic",
+			"tags": [
+				"feature",
+				"improvement",
+				"security"
+			]
+		},
+		{
+			"date": "2026-09-13",
+			"type": "launch",
+			"title": "Docs · x402 for VS Code",
+			"summary": "Find, inspect, and pay x402 APIs from VS Code with $THREE or USDC on Solana, including wallet setup, token selection, safety controls, and the $THREE contract address.",
+			"link": "/docs/x402-vscode",
+			"tags": [
+				"launch"
+			]
+		},
 		{
 			"date": "2026-09-12",
 			"type": "update",
@@ -1587,39 +1619,6 @@
 			"tags": [
 				"fix",
 				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "update",
-			"title": "My Creations: one button that takes you back to everything you made",
-			"summary": "A creator told us the making part was intuitive and the finding part was not: they built an agent, closed the tab, and had no obvious way back to it. There is now a My creations button in the header, and it opens a single page holding everything you have made, newest first: your agents, the 3D avatars saved to your account, and every model you forged, with Open, Edit and Copy link on each one. Signed out it still finds the models forged in this browser, so work made before you had an account is not lost. Filter by type, search by name or prompt, and hover any card to spin it in 3D. The create wizard and the Forge now point here too, so you are told where your work lives at the moment you make it.",
-			"link": "/mine",
-			"tags": [
-				"feature",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "update",
-			"title": "One command makes a 3D model small enough to ship, and shows you all four sides",
-			"summary": "Getting a model down to a size a web page can load used to mean writing a Blender script by hand every time: cut the polygon count, shrink the textures, throw away what nothing uses, compress the result. That is now a single request with a budget, and it answers with an honest before and after, so you can see what the size actually cost you in detail. On a test model it went from 1.3 MB to 282 KB. Previews can also orbit the model now: ask for four angles and you get four pictures from one pass, which is what tells you whether the back of a model was ever finished, or whether a texture only looks right from the front.",
-			"link": null,
-			"tags": [
-				"feature",
-				"sdk"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "update",
-			"title": "Point an AI agent at the Blender on your own machine",
-			"summary": "A new MCP server drives the Blender you already have installed, with no GUI open and no add-on to install first. An assistant can now read a 3D file and tell you what is actually in it (objects, triangle counts, materials, bones, animations, real-world size), convert between GLB, glTF, FBX, OBJ, STL, PLY, Collada, Alembic, USD and .blend in either direction, render a preview image of a bare asset file that arrives with no camera or lighting of its own, and run a Blender Python script to do the things no single tool covers, like halving a mesh's triangle count and exporting the result in one step. It also reaches back into three.ws: describe something in a sentence and the free text-to-3D lane generates it and opens it in Blender. Blender runs in the background, one process per request, so it works the same on a laptop, a server, or in CI.",
-			"link": null,
-			"tags": [
-				"feature",
-				"sdk"
 			]
 		}
 	]
