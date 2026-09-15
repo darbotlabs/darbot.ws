@@ -43,7 +43,7 @@ async function fetchTransaction(signature, network) {
 		jsonrpc: '2.0',
 		id: 1,
 		method: 'getTransaction',
-		params: [signature, { maxSupportedTransactionVersion: 0, encoding: 'jsonParsed', commitment: 'confirmed' }],
+		params: [signature, { maxSupportedTransactionVersion: 1, encoding: 'jsonParsed', commitment: 'confirmed' }],
 	};
 	let lastErr = null;
 	for (const url of rpcEndpoints(network)) {

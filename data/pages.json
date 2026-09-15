@@ -1586,6 +1586,14 @@
 					"added": "2026-08-06"
 				},
 				{
+					"path": "/atomic",
+					"title": "Atomic - Solana V1 Inspector",
+					"description": "A live Solana Transaction V1 observatory and pre-sign inspector. Paste a mainnet signature or base64 wire transaction to see exact bytes, resource caps, compute use, and sponsor safety.",
+					"priority": 0.8,
+					"changefreq": "always",
+					"added": "2026-09-15"
+				},
+				{
 					"path": "/airdrops",
 					"title": "Airdrop Checker",
 					"description": "Check any Solana or Ethereum wallet against tracked airdrop criteria: a real on-chain activity scan, a 0-100 eligibility score per program, exactly what is missing with next steps, and the manual protocol actions a scan cannot see. Free, keyless, deep-linkable.",
@@ -5085,6 +5093,13 @@
 					"path": "/docs/solana",
 					"title": "Docs · Solana agents",
 					"description": "Give your agent a real on-chain identity on Solana. Your wallet signs one transaction that mints an NFT representing the agent, which is what lets the identity outlive any single platform.",
+					"priority": 0.6,
+					"changefreq": "monthly"
+				},
+				{
+					"path": "/docs/atomic",
+					"title": "Docs · Atomic Solana V1 inspector",
+					"description": "Inspect legacy, V0, and V1 Solana transactions by signature or raw wire bytes, including the V1 transactionConfig limits that sponsors and indexers must read.",
 					"priority": 0.6,
 					"changefreq": "monthly"
 				},

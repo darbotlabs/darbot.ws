@@ -1026,7 +1026,7 @@ export const PROVIDERS = [
 				body: (q) =>
 					rpcBody('getTransaction', [
 						required(q.signature, 'signature'),
-						{ encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 },
+						{ encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 },
 					]),
 				// Verified live 2026-07-08 (real $THREE transfer signature): { result: {
 				// slot, blockTime, transaction: { message: { accountKeys: [{ pubkey,

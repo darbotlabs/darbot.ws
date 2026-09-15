@@ -182,7 +182,7 @@ async function findReferencedTransferAmount(txSignature, recipient, splTokenMint
 	const tx = await rpc().withFallback((conn) =>
 		conn.getParsedTransaction(txSignature, {
 			commitment: 'confirmed',
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 		}),
 	);
 	if (!tx || tx.meta?.err) return null;
@@ -223,7 +223,7 @@ async function feeLegSatisfied(txSignature, feeWallet, splTokenMint, minAtomics)
 	const tx = await rpc().withFallback((conn) =>
 		conn.getParsedTransaction(txSignature, {
 			commitment: 'confirmed',
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 		}),
 	);
 	if (!tx || tx.meta?.err) return false;

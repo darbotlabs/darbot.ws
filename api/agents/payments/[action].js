@@ -199,7 +199,7 @@ async function handleCreateConfirm(req, res) {
 	let tx;
 	while (Date.now() < deadline) {
 		tx = await conn.getParsedTransaction(body.tx_signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (tx) break;
@@ -414,7 +414,7 @@ async function handlePayConfirm(req, res) {
 	let tx;
 	while (Date.now() < deadline) {
 		tx = await conn.getParsedTransaction(body.tx_signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (tx) break;
@@ -574,7 +574,7 @@ async function handleDistributeConfirm(req, res) {
 	const deadline = Date.now() + 20_000;
 	while (Date.now() < deadline) {
 		tx = await conn.getParsedTransaction(body.tx_signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (tx) break;
@@ -653,7 +653,7 @@ async function handleWithdrawConfirm(req, res) {
 	const deadline = Date.now() + 20_000;
 	while (Date.now() < deadline) {
 		tx = await conn.getParsedTransaction(body.tx_signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (tx) break;

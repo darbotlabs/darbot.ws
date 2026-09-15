@@ -1099,6 +1099,10 @@
 			"dest": "/portfolio.html"
 		},
 		{
+			"src": "/atomic/?",
+			"dest": "/atomic.html"
+		},
+		{
 			"src": "/airdrops/?",
 			"dest": "/airdrops.html"
 		},

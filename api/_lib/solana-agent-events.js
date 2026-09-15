@@ -409,7 +409,7 @@ export async function crawlAgentEvents({ agentRef, network = 'mainnet', limit = 
 	const txs = ok.length
 		? await conn.getParsedTransactions(
 				ok.map((s) => s.signature),
-				{ maxSupportedTransactionVersion: 0 },
+				{ maxSupportedTransactionVersion: 1 },
 			)
 		: [];
 

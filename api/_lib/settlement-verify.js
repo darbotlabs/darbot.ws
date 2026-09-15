@@ -53,7 +53,7 @@ async function verifySolana({ signature, mint, amountAtomic, recipients, network
 	let tx;
 	try {
 		tx = await solanaConnection(cluster).getParsedTransaction(signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 	} catch {

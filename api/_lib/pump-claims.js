@@ -110,7 +110,7 @@ async function _fetchFromRpc(lookbackTs, maxItems) {
 		const settled = await Promise.allSettled(
 			toFetch.map((s) =>
 				connection.getParsedTransaction(s.signature, {
-					maxSupportedTransactionVersion: 0,
+					maxSupportedTransactionVersion: 1,
 					commitment: 'confirmed',
 				}),
 			),

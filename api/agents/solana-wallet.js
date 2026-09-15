@@ -231,7 +231,7 @@ async function handleActivity(req, res, id) {
 			primaryConn,
 			fallbackConn,
 			(c) => c.getParsedTransactions(sigs.map((s) => s.signature), {
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 				commitment: 'confirmed',
 			}),
 			'getParsedTransactions',
@@ -2011,7 +2011,7 @@ async function handleTip(req, res, id) {
 	const conn = solanaConnection(network);
 	let tx;
 	try {
-		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 	} catch {
 		tx = null;
 	}
@@ -2253,7 +2253,7 @@ async function handleStreamRecord(req, res, id) {
 	const conn = solanaConnection(network);
 	let tx;
 	try {
-		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 	} catch {
 		tx = null;
 	}

@@ -45,7 +45,7 @@ export async function verifyStudFeePayment({ signature, recipientOwners, feeThre
 	const conn = solanaConnection(network === 'devnet' ? 'devnet' : 'mainnet');
 	let tx;
 	try {
-		tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+		tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 	} catch {
 		return { ok: false, reason: 'could not fetch the stud-fee transaction from the chain' };
 	}

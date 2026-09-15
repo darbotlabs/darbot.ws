@@ -139,12 +139,12 @@ async function scanOne(conn, PublicKey, wallet, name, allowed, runId) {
 	for (let i = 0; i < signatures.length; i += PARSED_BATCH) {
 		const chunk = signatures.slice(i, i + PARSED_BATCH);
 		try {
-			const got = await conn.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+			const got = await conn.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 			parsed.push(...got);
 		} catch {
 			for (const s of chunk) {
 				try {
-					parsed.push(await conn.getParsedTransaction(s, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }));
+					parsed.push(await conn.getParsedTransaction(s, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' }));
 				} catch {
 					parsed.push(null); // unreadable — skipped below, retried next run
 				}

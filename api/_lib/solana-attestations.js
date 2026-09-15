@@ -131,7 +131,7 @@ export async function crawlAgentAttestations({ agentAsset, network, ownerWallet,
 
 	const txs = await conn.getTransactions(
 		sigs.filter((s) => !s.err).map((s) => s.signature),
-		{ maxSupportedTransactionVersion: 0 },
+		{ maxSupportedTransactionVersion: 1 },
 	);
 
 	let inserted = 0, skipped = 0;

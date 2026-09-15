@@ -166,7 +166,7 @@ export default wrap(async (req, res) => {
 			try {
 				const conn = solanaConnection({ network: 'mainnet' });
 				parsed = await conn.getParsedTransaction(sig, {
-					maxSupportedTransactionVersion: 0,
+					maxSupportedTransactionVersion: 1,
 					commitment: 'confirmed',
 				});
 			} catch (err) {

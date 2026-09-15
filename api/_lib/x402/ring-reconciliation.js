@@ -448,7 +448,7 @@ export async function run(ctx = {}) {
 		parsedBudget -= 1;
 		summary.parsed_tx_used += 1;
 		try {
-			const tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+			const tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 			return { budgetExhausted: false, tx };
 		} catch {
 			return { budgetExhausted: false, tx: null };

@@ -169,7 +169,7 @@ async function handleConfirm(req, res) {
 	const connection = solanaConnection({ url: rpcUrl, commitment: 'finalized' });
 	const usdcMint = network === 'devnet' ? '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' : SOLANA_USDC_MINT;
 	let tx;
-	try { tx = await connection.getParsedTransaction(tx_signature, { maxSupportedTransactionVersion: 0, commitment: 'finalized' }); }
+	try { tx = await connection.getParsedTransaction(tx_signature, { maxSupportedTransactionVersion: 1, commitment: 'finalized' }); }
 	catch { return error(res, 422, 'tx_not_found', 'transaction not found — may need more confirmations'); }
 	if (!tx) return error(res, 422, 'tx_not_found', 'transaction not found');
 	if (tx.meta?.err) return error(res, 422, 'tx_failed', 'transaction failed on-chain');

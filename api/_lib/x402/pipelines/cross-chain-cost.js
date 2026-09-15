@@ -160,7 +160,7 @@ async function readSolanaFee(conn, txSig, log) {
 	for (let attempt = 0; attempt < 5; attempt++) {
 		try {
 			const tx = await conn.getParsedTransaction(txSig, {
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 				commitment: 'confirmed',
 			});
 			const fee = tx?.meta?.fee;

@@ -69,7 +69,7 @@ export async function listRecentClaims({ creator, limit = 20, network = 'mainnet
 		let tx;
 		try {
 			tx = await conn.getParsedTransaction(signature, {
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 				commitment: 'confirmed',
 			});
 		} catch {

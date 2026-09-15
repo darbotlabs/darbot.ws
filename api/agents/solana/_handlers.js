@@ -704,7 +704,7 @@ export const handleRegisterConfirm = wrap(async (req, res) => {
 
 	const connection = solanaConnection({ url: rpcEndpoint, commitment: 'confirmed' });
 	let tx;
-	try { tx = await connection.getParsedTransaction(tx_signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }); }
+	try { tx = await connection.getParsedTransaction(tx_signature, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' }); }
 	catch { return error(res, 422, 'tx_not_found', 'transaction not found — try again after a few seconds'); }
 	if (!tx) return error(res, 422, 'tx_not_found', 'transaction not found');
 	if (tx.meta?.err) return error(res, 422, 'tx_failed', 'transaction failed on-chain');

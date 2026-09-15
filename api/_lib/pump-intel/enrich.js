@@ -139,7 +139,7 @@ export async function resolveFunder(address, { endpoint }) {
 
 	const tx = await rpc(endpoint, 'getTransaction', [
 		earliest.signature,
-		{ encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' },
+		{ encoding: 'jsonParsed', maxSupportedTransactionVersion: 1, commitment: 'confirmed' },
 	]);
 	const parsed = parseFunderFromTransaction(tx, address);
 	return {

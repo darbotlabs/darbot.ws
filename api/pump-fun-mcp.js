@@ -415,7 +415,7 @@ async function _fetchClaimsFromChain({ creator, limit = 20, network = 'mainnet',
 		let tx;
 		try {
 			tx = await conn.getParsedTransaction(signature, {
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 				commitment: 'confirmed',
 			});
 		} catch {
@@ -807,7 +807,7 @@ async function readTradesFromChain({ mint, limit, network }) {
 	for (let off = 0; off < signatures.length && trades.length < want; off += CHUNK) {
 		const slice = signatures.slice(off, off + CHUNK);
 		const txs = await connection.getTransactions(slice, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		for (let i = 0; i < txs.length && trades.length < want; i++) {

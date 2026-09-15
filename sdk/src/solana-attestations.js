@@ -278,7 +278,7 @@ export async function listAttestations({
 	const results = [];
 	for (const s of sigs) {
 		if (s.err) continue;
-		const tx = await conn.getTransaction(s.signature, { maxSupportedTransactionVersion: 0 });
+		const tx = await conn.getTransaction(s.signature, { maxSupportedTransactionVersion: 1 });
 		if (!tx) continue;
 		const memoLog = (tx.meta?.logMessages || []).find((l) => l.includes('Program log: Memo'));
 		const jsonMatch = memoLog?.match(/"(\{.*\})"/);

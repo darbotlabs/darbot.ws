@@ -293,7 +293,7 @@ export async function verifyPassPayment(quote, txSignature) {
 		tx = await rpc().withFallback((conn) =>
 			conn.getParsedTransaction(txSignature, {
 				commitment: 'confirmed',
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 			}),
 		);
 	} catch (e) {

@@ -171,7 +171,7 @@ async function fetchClaimEvents(creator, network) {
 		url,
 		toFetch.map((s) => ({
 			method: 'getTransaction',
-			params: [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
+			params: [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }],
 		})),
 	);
 

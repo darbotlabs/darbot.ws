@@ -95,7 +95,7 @@ export default wrap(async (req, res) => {
 	const [parsed, price] = await Promise.all([
 		connection.getParsedTransactions(
 			ok.map((s) => s.signature),
-			{ maxSupportedTransactionVersion: 0 },
+			{ maxSupportedTransactionVersion: 1 },
 		),
 		solUsdPrice().catch(() => null),
 	]);

@@ -288,7 +288,7 @@ export async function confirmFunding({ drop, signature, refundAddress = null }) 
 
 	let tx = null;
 	try {
-		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 	} catch { tx = null; }
 	if (!tx) {
 		// Not visible yet — let the client poll instead of failing hard.

@@ -196,7 +196,7 @@ describe('per-lane JSON-RPC batch caps', () => {
 				jsonrpc: '2.0',
 				id: i + 1,
 				method: 'getTransaction',
-				params: [`sig${i}`, { maxSupportedTransactionVersion: 0 }],
+				params: [`sig${i}`, { maxSupportedTransactionVersion: 1 }],
 			})),
 		);
 

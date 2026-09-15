@@ -125,7 +125,7 @@ export class ExactFacilitator {
     }
 
     const tx = await this.connection.getParsedTransaction(signature, {
-      maxSupportedTransactionVersion: 0,
+      maxSupportedTransactionVersion: 1,
       commitment: "confirmed",
     });
 

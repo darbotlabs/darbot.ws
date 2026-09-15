@@ -69,7 +69,7 @@ async function verifyOnChain(signature, wallet) {
 	const conn = getConnection(wallet.rpcUrl);
 	let tx;
 	try {
-		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0 });
+		tx = await conn.getParsedTransaction(signature, { maxSupportedTransactionVersion: 1 });
 	} catch (e) {
 		return {
 			signature,

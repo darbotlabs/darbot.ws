@@ -217,7 +217,7 @@ export async function verifyOnChain({ signature, network, expectSubject = null, 
 	let tx;
 	try {
 		tx = await withTimeout(
-			conn.getTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }),
+			conn.getTransaction(signature, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' }),
 			RPC_TIMEOUT_MS,
 			'getTransaction',
 		);

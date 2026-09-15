@@ -480,7 +480,7 @@ async function verifySolana({ cluster, txSig, expectedAsset, expectedOwner }) {
 	let tx;
 	while (Date.now() < deadline) {
 		tx = await conn.getParsedTransaction(txSig, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (tx) break;

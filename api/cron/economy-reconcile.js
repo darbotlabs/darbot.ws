@@ -201,7 +201,7 @@ async function reconcileMaster(conn, masterPubkey, runId) {
 		if (info.err) continue; // a failed tx moved nothing
 		let tx = null;
 		try {
-			tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 });
+			tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 1 });
 		} catch {
 			/* unreadable — skip; a later run retries */
 		}

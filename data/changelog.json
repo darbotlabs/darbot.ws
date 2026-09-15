@@ -2,6 +2,17 @@
 	"$comment": "Curated changelog entries for three.ws, the editorial layer of the public changelog. New PAGE launches are tracked automatically via the `added` field in data/pages.json; this file is for everything else holders care about: improvements, fixes, SDK releases, trading/payments capabilities, security work. scripts/build-page-index.mjs merges both sources into CHANGELOG.md, public/changelog.json, and public/changelog.xml. Newest first. Allowed tags: feature, improvement, fix, sdk, infra, docs, security. `link` is optional and must be a live three.ws path.",
 	"entries": [
 		{
+			"date": "2026-09-15",
+			"title": "three.ws is ready for Solana's new 4 KiB transactions",
+			"summary": "Solana V1 transactions are live, with more than three times the wire room and a different place for execution limits. Every three.ws transaction reader now opts into V1, so a payment, registration, receipt, or agent action cannot disappear just because it uses the new format. The new Atomic inspector reads a confirmed signature or raw base64 handoff and shows the exact byte footprint, compute and account-data limits, priority fee, actual compute use, and the warning a fee sponsor needs before co-signing. It never signs or broadcasts anything.",
+			"tags": [
+				"feature",
+				"improvement",
+				"security"
+			],
+			"link": "/atomic"
+		},
+		{
 			"date": "2026-09-11",
 			"title": "Your selfie avatar now survives a storage outage instead of vanishing at the last step",
 			"summary": "For part of today, a selfie could finish building and then be thrown away. The 3D model was generated correctly, but the step that files it into your library could not reach our object storage, so the page said the avatar finished and could not be saved, and trying again hit the same wall. The avatar was never actually lost: a complete copy sits with the service that built it. The last step now recognises a storage outage for what it is and keeps your avatar, serving it from that copy and flagging it to be filed away properly once storage is back, so a problem on our side costs a housekeeping step instead of the model you waited for. Anything that is not a storage outage still fails loudly rather than quietly papering over a real bug. The image API for agents also now answers with a clear temporarily unavailable instead of a generic failure, so it no longer reads as a bad prompt when nothing was wrong with the prompt.",

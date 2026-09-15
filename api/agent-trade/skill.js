@@ -78,7 +78,7 @@ async function verifyPayment(connection, sig, { sellerAddress, priceLamports, bu
 		try {
 			tx = await connection.getTransaction(sig, {
 				commitment: 'confirmed',
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 			});
 		} catch (e) {
 			lastErr = e;

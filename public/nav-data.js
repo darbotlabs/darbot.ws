@@ -381,6 +381,13 @@ export const NAV_GROUPS = [
 						desc: 'Live portfolio for any Solana or Ethereum wallet: total value, 24h move, allocation & every holding priced',
 					},
 					{
+						title: 'Atomic',
+						href: '/atomic',
+						badge: 'New',
+						badgeTone: 'new',
+						desc: 'Inspect Solana V1 wire size, transaction resource caps, compute use & sponsor safety before co-signing',
+					},
+					{
 						title: 'Airdrop Checker',
 						href: '/airdrops',
 						badge: 'New',

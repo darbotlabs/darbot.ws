@@ -370,12 +370,12 @@ export async function scanWallet(conn, PublicKey, wallet, { allowed, usdcMint, r
 	for (let i = 0; i < signatures.length; i += PARSED_BATCH) {
 		const batch = signatures.slice(i, i + PARSED_BATCH);
 		try {
-			const got = await conn.getParsedTransactions(batch, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+			const got = await conn.getParsedTransactions(batch, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 			parsed.push(...got);
 		} catch {
 			// Fall back to per-sig on a batch failure so one bad sig can't blind the run.
 			for (const s of batch) {
-				try { parsed.push(await conn.getParsedTransaction(s, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' })); }
+				try { parsed.push(await conn.getParsedTransaction(s, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' })); }
 				catch { parsed.push(null); }
 			}
 		}

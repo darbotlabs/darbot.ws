@@ -223,7 +223,7 @@ describe('solana/transaction', () => {
 			jsonrpc: '2.0',
 			id: 1,
 			method: 'getTransaction',
-			params: [sig, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
+			params: [sig, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }],
 		});
 	});
 

@@ -195,7 +195,7 @@ export async function verifySignature({ network, signature }) {
 	let tx;
 	try {
 		tx = await connection.getParsedTransaction(signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 	} catch {

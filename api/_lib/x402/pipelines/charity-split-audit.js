@@ -309,7 +309,7 @@ async function verifyOnChain(conn, sig, { charityAta, payToAta, expectedSplit, b
 	for (let attempt = 0; attempt < 4; attempt++) {
 		let tx = null;
 		try {
-			tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+			tx = await conn.getParsedTransaction(sig, { maxSupportedTransactionVersion: 1, commitment: 'confirmed' });
 		} catch { /* transient — retry */ }
 		if (tx) {
 			const legs = collectTokenTransfers(tx);

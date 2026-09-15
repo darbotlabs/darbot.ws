@@ -187,7 +187,7 @@ export async function verifyStakeTx({ signature, network, env = process.env }) {
 	}
 
 	const conn = connectionFor(net);
-	const tx = await conn.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+	const tx = await conn.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 1 });
 	if (!tx) throw new MarketError('tx_not_found', `Transaction ${signature} is not confirmed on ${net}.`, 404);
 	if (tx.meta?.err) throw new MarketError('not_a_market_stake', 'That transaction failed on-chain.', 400);
 
@@ -245,7 +245,7 @@ export async function readActionHistoryFromChain({ agentAsset, network, limit = 
 	const parsed = [];
 	for (const s of sigs) {
 		if (s.err) continue;
-		const tx = await conn.getTransaction(s.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+		const tx = await conn.getTransaction(s.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 1 });
 		if (!tx) continue;
 		const payload = extractMemoPayload(tx);
 		if (!payload || payload.agent !== agentAsset || !validatePayload(payload)) continue;

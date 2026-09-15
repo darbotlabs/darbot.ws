@@ -817,7 +817,7 @@ export async function settleRingPayment({ paymentPayload, requirement, conn, fee
 	let feeLamports = estFeeLamports;
 	try {
 		const parsed = await connection.getParsedTransaction(signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (parsed?.meta?.fee != null) {

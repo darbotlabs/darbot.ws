@@ -820,7 +820,7 @@ async function handleLaunchConfirm(req, res) {
 	let tx;
 	while (Date.now() < deadline) {
 		tx = await conn.getParsedTransaction(body.tx_signature, {
-			maxSupportedTransactionVersion: 0,
+			maxSupportedTransactionVersion: 1,
 			commitment: 'confirmed',
 		});
 		if (tx) break;

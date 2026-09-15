@@ -69,7 +69,7 @@ export default wrap(async (req, res) => {
 		const fallback = solanaPublicConnection(network);
 		const result = await withFallback(primary, fallback, (c) =>
 			c.getParsedTransactions(sigs.map((s) => s.signature), {
-				maxSupportedTransactionVersion: 0,
+				maxSupportedTransactionVersion: 1,
 				commitment: 'confirmed',
 			}),
 		);
