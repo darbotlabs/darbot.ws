@@ -69,12 +69,12 @@ The **Agent Wallet Hub** lives at `/agent/:id/wallet`. Owners see all 23 section
 
 Key endpoints:
 
-- `GET /api/agents/:id/solana` — address, live balance, and `deposits_enabled`
+- `GET /api/agents/:id/solana`: address, live balance, and `deposits_enabled`
   safety verdict (public). Funding UIs must require `deposits_enabled === true`;
   a missing, false, or unreadable verdict is not safe to fund.
-- `GET /api/agents/:id/solana/activity` — parsed transaction feed (owner only)
-- `GET`/`PUT /api/agents/:id/solana/limits` — read and set the spend policy
-- `POST /api/agents/:id/solana/withdraw` — sweep an asset out
+- `GET /api/agents/:id/solana/activity`: parsed transaction feed (owner only)
+- `GET`/`PUT /api/agents/:id/solana/limits`: read and set the spend policy
+- `POST /api/agents/:id/solana/withdraw`: sweep an asset out
 - `GET /api/agents/:id/solana/guard` — anomaly guard state and flagged activity
 
 Full request/response shapes are in the [REST API reference](api-reference.md).
