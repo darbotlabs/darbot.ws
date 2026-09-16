@@ -3,5 +3,10 @@
     "meshy",
     "3d-agent-local",
     "atelier"
-  ]
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(git diff *)"
+    ]
+  }
 }
