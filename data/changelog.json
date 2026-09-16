@@ -4,7 +4,7 @@
 		{
 			"date": "2026-09-16",
 			"title": "Deploy your agent on-chain with Solana's new transaction v1",
-			"summary": "Minting an agent to Solana now uses the new transaction v1 format whenever your wallet supports it, from both the agent deploy button and the registration wizard, including agents with a custom vanity address. Each deploy spells out its compute, account data, and priority fee limits instead of relying on defaults, and three.ws checks that the transaction that landed on-chain is the exact version it prepared before recording your agent. Wallets that have not added v1 yet keep working exactly as before, and a deployed agent now shows which transaction format it used.",
+			"summary": "Minting an agent to Solana now uses the new transaction v1 format whenever your wallet supports it, from the agent deploy button, the registration wizard (vanity addresses included), and /deploy-onchain. On /deploy-onchain that turns a Genesis-shape deploy from two wallet transactions into one: the asset is created and registered in the Metaplex Agent Registry atomically, so there is no half-finished deploy if something fails in between. Each deploy spells out its compute, account data, and priority fee limits instead of relying on defaults, and three.ws checks that the transaction that landed on-chain is the exact version it prepared before recording your agent. Wallets that have not added v1 yet keep working exactly as before, and a deployed agent now shows which transaction format it used.",
 			"tags": [
 				"feature",
 				"security"

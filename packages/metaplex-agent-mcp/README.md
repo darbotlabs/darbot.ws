@@ -160,7 +160,7 @@ const mint = buildAgentMint(umi, {
 const { signatures, atomic } = await sendAgentMint(umi, mint, { toBase58Signature });
 ```
 
-The registration and metadata builders are also importable on their own (dependency-free, browser-safe) from `@three-ws/metaplex-agent-mcp/lib/registration`, and the transaction builders from `@three-ws/metaplex-agent-mcp/lib/mint`. The three.ws `/deploy-onchain` page runs on exactly these.
+The registration and metadata builders are also importable on their own (dependency-free, browser-safe) from `@three-ws/metaplex-agent-mcp/lib/registration`, and the transaction builders from `@three-ws/metaplex-agent-mcp/lib/mint`. The three.ws `/deploy-onchain` page runs on exactly these. When `atomic` is `false`, `combinedBuilder` still holds the whole mint: compiled as a Solana transaction v1 (4,096-byte limit) it lands create + register in one atomic transaction, which is what `/deploy-onchain` does for any wallet that advertises v1 signing.
 
 ## Requirements
 
