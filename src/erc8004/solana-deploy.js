@@ -4,6 +4,8 @@
  * Mirrors the EVM register flow in deploy-button.js but for Solana:
  *   1. POST /api/agents/solana-register-prep    — server builds an unsigned
  *      Metaplex Core createV1 transaction (base64) for `wallet_address`.
+ *      The tx is Solana transaction v1 when the connected wallet advertises v1
+ *      through Wallet Standard, otherwise v0.
  *   2. Phantom (or any compatible Solana wallet) signs and submits the tx.
  *   3. POST /api/agents/solana-register-confirm — server verifies the tx and
  *      upserts the agent_identity row with chain_type='solana'.
@@ -13,7 +15,9 @@
  */
 
 import { Connection, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { getWallets } from '@wallet-standard/app';
 import { grindVanity } from '../solana/vanity/grinder.js';
+import { findV1WalletStandardSigner } from '../onchain/adapters/solana.js';
 
 /** Detect an injected Solana wallet (Phantom / Backpack / Solflare / Seeker). */
 export function detectSolanaWallet() {
@@ -50,10 +54,16 @@ export function solanaTxExplorerUrl(network, sig) {
 }
 
 /** @param {string} b64 */
-function decodeBase64Tx(b64) {
+function base64ToBytes(b64) {
 	const bin = atob(b64);
 	const bytes = new Uint8Array(bin.length);
 	for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+	return bytes;
+}
+
+/** @param {string} b64 */
+function decodeBase64Tx(b64) {
+	const bytes = base64ToBytes(b64);
 	// Server uses Umi's buildAndSign which produces a versioned tx.
 	try {
 		return VersionedTransaction.deserialize(bytes);
@@ -84,6 +94,22 @@ async function waitForSolanaConfirmation(conn, signature, timeoutMs) {
 		await new Promise((r) => setTimeout(r, 1500));
 	}
 	throw new Error('Timed out waiting for Solana transaction confirmation.');
+}
+
+/**
+ * Fill a browser-held signer's slot (the vanity asset key) in a v1 wire
+ * transaction. @solana/web3.js cannot parse v1, so this uses @solana/kit, loaded
+ * only on this path. Kit refuses a key that is not a required signer.
+ * @param {Uint8Array} wireBytes
+ * @param {Uint8Array} secretKey 64-byte ed25519 secret key
+ * @returns {Promise<Uint8Array>}
+ */
+export async function cosignV1Transaction(wireBytes, secretKey) {
+	const { createKeyPairFromBytes, getTransactionDecoder, getTransactionEncoder, partiallySignTransaction } =
+		await import('@solana/kit');
+	const keyPair = await createKeyPairFromBytes(secretKey);
+	const signed = await partiallySignTransaction([keyPair], getTransactionDecoder().decode(wireBytes));
+	return new Uint8Array(getTransactionEncoder().encode(signed));
 }
 
 /**
@@ -132,6 +158,50 @@ export function tagStep(e, step) {
 	return err;
 }
 
+/** Sign a v0/legacy prep with the injected provider. */
+async function signV0({ prep, wallet, vanityKeypair }) {
+	const tx = decodeBase64Tx(prep.tx_base64);
+	// If we used a vanity keypair, the server built the tx with a noop signer
+	// for the asset slot, so fill it in before the wallet signs.
+	// VersionedTransaction.sign() only modifies signatures whose pubkey matches
+	// a provided signer, so the wallet sig slot is preserved as zero for Phantom.
+	if (vanityKeypair && tx instanceof VersionedTransaction) {
+		tx.sign([vanityKeypair]);
+	} else if (vanityKeypair && tx instanceof Transaction) {
+		tx.partialSign(vanityKeypair);
+	}
+	const signed = await withWalletRetry('sign', () => wallet.signTransaction(tx));
+	return signed.serialize();
+}
+
+/** Sign a v1 prep: vanity co-signature first, then the wallet over raw bytes. */
+async function signV1({ prep, v1Signer, vanityKeypair }) {
+	if (!v1Signer) {
+		const err = new Error('This wallet does not advertise Solana transaction v1 signing.');
+		err.code = 'TX_VERSION_UNSUPPORTED';
+		throw tagStep(err, 'sign');
+	}
+	let bytes = base64ToBytes(prep.tx_base64);
+	if (vanityKeypair) {
+		try {
+			bytes = await cosignV1Transaction(bytes, vanityKeypair.secretKey);
+		} catch (e) {
+			throw tagStep(e, 'sign');
+		}
+	}
+	const [result] = await withWalletRetry('sign', () =>
+		v1Signer.feature.signTransaction({
+			account: v1Signer.account,
+			transaction: bytes,
+			options: { preflightCommitment: 'confirmed' },
+		}),
+	);
+	if (!result?.signedTransaction) {
+		throw tagStep(new Error('Wallet returned no signed v1 transaction.'), 'sign');
+	}
+	return result.signedTransaction;
+}
+
 /**
  * Run the Solana deploy flow end-to-end.
  *
@@ -146,7 +216,7 @@ export function tagStep(e, step) {
  *   (e.g. nirholas/solana-wallet-toolkit). When present, the in-browser grinder
  *   is skipped and this keypair is used directly. The caller is responsible for
  *   verifying the public key matches `vanity.prefix`.
- * @returns {Promise<{ assetPubkey: string, txSignature: string, network: string, agent: object, vanityPrefix?: string }>}
+ * @returns {Promise<{ assetPubkey: string, txSignature: string, network: string, agent: object, transactionVersion: 0|1, vanityPrefix?: string }>}
  */
 export async function runSolanaDeploy({ agent, network, vanity }) {
 	const wallet = detectSolanaWallet();
@@ -159,6 +229,7 @@ export async function runSolanaDeploy({ agent, network, vanity }) {
 	const conn = await withWalletRetry('connect', () => wallet.connect());
 	const walletAddress = (conn?.publicKey || wallet.publicKey)?.toString();
 	if (!walletAddress) throw new Error('Could not read Solana wallet address.');
+	const v1Signer = findV1WalletStandardSigner(getWallets().get(), walletAddress);
 
 	// Optional: grind a vanity asset keypair before asking the server to build the tx.
 	// Or accept a pre-ground keypair from a CLI grinder (faster for prefixes >=5 chars).
@@ -187,6 +258,7 @@ export async function runSolanaDeploy({ agent, network, vanity }) {
 			avatar_id: agent.avatarId || agent.avatar_id,
 			wallet_address: walletAddress,
 			network,
+			transaction_version: v1Signer ? 1 : 0,
 			...(vanityKeypair ? {
 				asset_pubkey: vanityKeypair.publicKey.toBase58(),
 				vanity_prefix: vanity.prefix,
@@ -203,25 +275,15 @@ export async function runSolanaDeploy({ agent, network, vanity }) {
 		throw err;
 	}
 	const prep = await prepResp.json();
-	const tx = decodeBase64Tx(prep.tx_base64);
-
-	// If we used a vanity keypair, the server built the tx with a noop signer
-	// for the asset slot — we must fill it in here before the wallet signs.
-	// VersionedTransaction.sign() only modifies signatures whose pubkey matches
-	// a provided signer, so the wallet sig slot is preserved as zero for Phantom.
-	if (vanityKeypair && tx instanceof VersionedTransaction) {
-		tx.sign([vanityKeypair]);
-	} else if (vanityKeypair && tx instanceof Transaction) {
-		tx.partialSign(vanityKeypair);
-	}
 
 	// Always sign locally and submit via our Helius-backed proxy. Wallet
 	// `signAndSendTransaction` routes through the wallet's own RPC, which
 	// returns 403 "Access forbidden" intermittently on mainnet.
 	const endpoint = RPC[network] || RPC.mainnet;
-	const signed = await withWalletRetry('sign', () => wallet.signTransaction(tx));
+	const raw = prep.transaction_version === 1
+		? await signV1({ prep, v1Signer, vanityKeypair })
+		: await signV0({ prep, wallet, vanityKeypair });
 	const conn2 = new Connection(endpoint, 'confirmed');
-	const raw = signed.serialize();
 	let signature;
 	try {
 		signature = await conn2.sendRawTransaction(raw, {
@@ -267,6 +329,7 @@ export async function runSolanaDeploy({ agent, network, vanity }) {
 		txSignature: signature,
 		network,
 		agent: confirmed.agent,
+		transactionVersion: prep.transaction_version === 1 ? 1 : 0,
 		...(vanity?.prefix ? { vanityPrefix: vanity.prefix } : {}),
 	};
 }

@@ -2426,7 +2426,7 @@ export class RegisterUI {
 			if (grindRow) grindRow.hidden = true;
 			setPhase('confirm');
 			say(`Minted asset ${result.assetPubkey}`);
-			say(`Tx ${result.txSignature}`);
+			say(`Tx ${result.txSignature} (Solana transaction v${result.transactionVersion})`);
 			setPhase('done');
 			this._vanityPrefix = '';
 			this._preGroundSecretKey = null;

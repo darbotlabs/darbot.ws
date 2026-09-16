@@ -146,10 +146,11 @@ const prep = await fetch('/api/agents/solana-register-prep', {
     metadata_uri: 'https://...',      // optional — else server synthesizes one
     asset_pubkey: vanityPubkey,       // optional: client-supplied asset keypair pubkey
     vanity_prefix: '3ws',             // optional: asserts asset_pubkey starts with it
+    transaction_version: 1,           // optional: 1 for a v1-capable wallet, default 0
   }),
 }).then(r => r.json());
 
-// → { prep_id, asset_pubkey, tx_base64, network, metadata_uri, expires_at }
+// → { prep_id, asset_pubkey, tx_base64, transaction_version, network, metadata_uri, expires_at }
 ```
 
 The server:
@@ -159,7 +160,42 @@ The server:
 - Writes an on-chain Attributes plugin (the three.ws brand block) and an enforced Royalties plugin into the asset, and mints into the three.ws Agents collection when one is configured for the network.
 - Stores a 30-minute pending record so step 4 can resolve `name` / `description` / `avatar_id` from the prep payload.
 
-The returned `tx_base64` is a fully built transaction missing only the user's signature.
+The returned `tx_base64` is a fully built transaction missing only the user's signature (and the asset signature, when the client supplied its own `asset_pubkey`).
+
+#### Transaction v1
+
+Solana transaction v1 raises the wire limit from 1,232 to 4,096 bytes and moves execution limits out of ComputeBudget instructions into the message itself. Send `transaction_version: 1` only when the signing wallet advertises it: the Wallet Standard `solana:signTransaction` feature lists `1` in `supportedTransactionVersions`. The three.ws deploy flows ([src/erc8004/solana-deploy.js](../src/erc8004/solana-deploy.js) and [src/onchain/adapters/solana.js](../src/onchain/adapters/solana.js)) negotiate this automatically and fall back to v0 for every other wallet.
+
+A v1 prep is compiled with `@solana/kit` ([api/_lib/solana/transaction-v1.js](../api/_lib/solana/transaction-v1.js)) and carries explicit caps, because v1 compute and loaded-account-data limits resolve to zero when omitted: 500,000 compute units, 8 MiB of loaded account data, and a 5,000-lamport priority fee. The collection authority co-signs on the server. A client-supplied vanity asset key is never signed on the server; its slot is left empty for the browser.
+
+`@solana/web3.js` can read v1 but cannot build or sign it, so sign the raw bytes instead of a `VersionedTransaction`:
+
+```js
+import { getWallets } from '@wallet-standard/app';
+import { createKeyPairFromBytes, getTransactionDecoder, getTransactionEncoder, partiallySignTransaction } from '@solana/kit';
+
+let bytes = Uint8Array.from(atob(prep.tx_base64), c => c.charCodeAt(0));
+
+// Only when you supplied asset_pubkey: fill the asset signature first.
+if (vanitySecretKey) {
+  const keyPair = await createKeyPairFromBytes(vanitySecretKey);
+  const signedByAsset = await partiallySignTransaction([keyPair], getTransactionDecoder().decode(bytes));
+  bytes = new Uint8Array(getTransactionEncoder().encode(signedByAsset));
+}
+
+const wallet = getWallets().get().find(w =>
+  w.features['solana:signTransaction']?.supportedTransactionVersions?.includes(1)
+  && w.accounts.some(a => a.address === walletPubkey));
+const account = wallet.accounts.find(a => a.address === walletPubkey);
+const [{ signedTransaction }] = await wallet.features['solana:signTransaction'].signTransaction({
+  account,
+  transaction: bytes,
+});
+
+const sig = await conn.sendRawTransaction(signedTransaction);
+```
+
+The confirm step rejects a transaction whose on-chain version differs from the prepared one (`422 tx_wrong_version`) and records the version as `meta.onchain.transaction_version`.
 
 ### 3. Sign and submit with the wallet
 
@@ -210,7 +246,9 @@ const result = await fetch('/api/agents/solana-register-confirm', {
 
 The server re-fetches the parsed transaction from the cluster, asserts:
 - the tx exists and did not error,
-- `asset_pubkey` appears in the transaction's account keys,
+- `asset_pubkey` appears in the transaction's account keys and the linked wallet signed it,
+- the asset exists on-chain as a Metaplex Core asset owned by that wallet,
+- the transaction version matches the prep (while the prep is still live),
 - no agent has already been registered for this mint,
 
 then inserts the `agent_identities` row and clears the pending record. If the agent has an avatar GLB, the server also records a best-effort on-chain glTF/schema validation attestation (`threews.validation.v1`, signed by the platform validator; see [api/_lib/solana-validation-attest.js](../api/_lib/solana-validation-attest.js)); a failure there never fails the registration.
@@ -231,6 +269,9 @@ Returned as `{ error, error_description }` from the prep / confirm endpoints.
 | 422 | `tx_not_found` | RPC has not seen the signature yet — retry after a few seconds |
 | 422 | `tx_failed` | Transaction landed on-chain but reverted |
 | 422 | `asset_not_in_tx` | `asset_pubkey` is not among the transaction's account keys |
+| 422 | `not_signer` | The linked wallet did not sign the transaction |
+| 422 | `asset_not_found` / `not_core_asset` / `not_asset_owner` | The asset account is missing, is not a Metaplex Core asset, or is owned by another wallet |
+| 422 | `tx_wrong_version` | The landed transaction's version differs from the prepared `transaction_version` |
 | 409 | `conflict` | An agent is already registered for this mint |
 | 429 | `rate_limited` | Per-IP auth limiter tripped |
 | 503 | `rpc_unavailable` | Every RPC endpoint in the failover chain failed while building the tx |

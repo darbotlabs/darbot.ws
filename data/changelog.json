@@ -3,6 +3,16 @@
 	"entries": [
 		{
 			"date": "2026-09-16",
+			"title": "Deploy your agent on-chain with Solana's new transaction v1",
+			"summary": "Minting an agent to Solana now uses the new transaction v1 format whenever your wallet supports it, from both the agent deploy button and the registration wizard, including agents with a custom vanity address. Each deploy spells out its compute, account data, and priority fee limits instead of relying on defaults, and three.ws checks that the transaction that landed on-chain is the exact version it prepared before recording your agent. Wallets that have not added v1 yet keep working exactly as before, and a deployed agent now shows which transaction format it used.",
+			"tags": [
+				"feature",
+				"security"
+			],
+			"link": "/deploy-onchain"
+		},
+		{
+			"date": "2026-09-16",
 			"title": "$THREE pages now show the real buyback ledger instead of a burn estimate",
 			"summary": "The $THREE live page and the token dashboard used to show a \"$THREE burned\" total that was estimated from the number of agents on the platform, not read from the blockchain. The platform does not burn $THREE, so that number is gone. Both pages now show what the protocol actually commits to: the share of revenue set aside to buy $THREE on the open market, how much has been bought, and whether the buyback engine is running. The AWS page also no longer says Marketplace usage is billed to your AWS invoice; the subscription is free and usage is paid per call.",
 			"tags": [

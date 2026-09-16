@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-16T16:58:37.768Z",
+	"generated_at": "2026-09-16T19:36:18.607Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3685,
+	"total": 3686,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -39,6 +39,17 @@
 				"feature",
 				"improvement",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-16",
+			"type": "update",
+			"title": "GitHub fee claims now say what they actually prove",
+			"summary": "A GitHub fee claim on pump.fun proves that a GitHub account collected creator fees routed to it. It does not prove that person built the coin, owns the linked repository, or backs the project. Claim cards on /pumpfun used to read as a developer endorsing a coin even when the account was a lookalike name, the coin had no GitHub link at all, or one fee account was shared by several coins and the card simply picked the biggest one. Every claim now carries one of five labels: verified repository, verified creator wallet, identity mismatch, unverified, or unresolved pooled withdrawal. Only the two verified labels get trade buttons or count toward a coin's reputation score, mismatches are flagged in red, and the Telegram claims channel follows the same rules.",
+			"link": "/pumpfun",
+			"tags": [
+				"fix",
+				"improvement"
 			]
 		},
 		{
@@ -1605,17 +1616,6 @@
 			"link": "/markets/robinhood/portfolios",
 			"tags": [
 				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "update",
-			"title": "3D generation and the whole site keep working when our asset storage does not",
-			"summary": "Early on 2026-09-07 our object storage stopped accepting the platform's credential, and because every generation parks its reference image there, 3D generation stopped on the website and in ChatGPT at the same time, agent registration could not store its manifest, and images loaded through our CDN stopped resolving. Three things changed so that a storage fault is never again a blank page. Avatars, thumbnails and models now fall back to the bucket's public domain automatically, so the site keeps rendering. When generation genuinely cannot run you get a plain message saying storage is recovering and to try again shortly, instead of a raw error from the storage vendor. And our own health checks now watch the storage credential directly and treat a silent forge as an outage rather than a quiet hour, so we hear about this class of failure before you do.",
-			"link": null,
-			"tags": [
-				"fix",
-				"infra"
 			]
 		}
 	]

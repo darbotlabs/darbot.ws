@@ -82,6 +82,8 @@ export function toKitInstruction(instruction) {
  * @param {string} input.feePayer Owner wallet; deliberately not server-signed.
  * @param {{blockhash: string, lastValidBlockHeight: number|bigint}} input.lifetime
  * @param {object} [input.config]
+ * @param {string[]} [input.clientSigners] Signer addresses whose keys live in the
+ *   browser (e.g. a vanity asset keypair). Their slots stay empty for the client.
  */
 export async function buildPartiallySignedV1Transaction({
 	instructions,
@@ -89,6 +91,7 @@ export async function buildPartiallySignedV1Transaction({
 	feePayer,
 	lifetime,
 	config = AGENT_DEPLOY_V1_CONFIG,
+	clientSigners = [],
 }) {
 	const message = pipe(
 		createTransactionMessage({ version: SOLANA_TRANSACTION_V1 }),
@@ -107,12 +110,18 @@ export async function buildPartiallySignedV1Transaction({
 
 	const transaction = compileTransaction(message);
 	const signatures = { ...transaction.signatures };
+	const leaveEmpty = new Set([String(feePayer), ...clientSigners.map(String)]);
 	for (const signer of signers) {
 		const signerAddress = String(signer.publicKey);
-		// The wallet fee payer is represented by Umi's noop signer. Keep its
-		// signature null so the browser wallet can fill it.
-		if (signerAddress === feePayer || signatures[signerAddress] === undefined) continue;
-		signatures[signerAddress] = await signer.signMessage(transaction.messageBytes);
+		// The wallet fee payer and any browser-held key are represented by Umi
+		// noop signers, whose signMessage echoes the message back. Keep those
+		// slots null so the client fills them with real signatures.
+		if (leaveEmpty.has(signerAddress) || signatures[signerAddress] === undefined) continue;
+		const signature = await signer.signMessage(transaction.messageBytes);
+		if (!(signature instanceof Uint8Array) || signature.length !== 64) {
+			throw new Error(`signer ${signerAddress} did not return a 64-byte ed25519 signature`);
+		}
+		signatures[signerAddress] = signature;
 	}
 
 	const partiallySigned = Object.freeze({

@@ -508,6 +508,7 @@ import { generateSigner, publicKey as umiPublicKey, signerIdentity, createNoopSi
 import bs58 from 'bs58';
 import { limits as _limits } from '../../_lib/rate-limit.js';
 import { mplAgentIdentity, getAgentIdentityV2AccountDataSerializer, findAgentIdentityV1Pda } from '@metaplex-foundation/mpl-agent-registry';
+import { buildPartiallySignedV1Transaction, SOLANA_TRANSACTION_V1 } from '../../_lib/solana/transaction-v1.js';
 
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]+$/;
 const VANITY_FREE_THRESHOLD = 5;
@@ -521,6 +522,9 @@ const registerPrepSchema = z.object({
 	network:        z.enum(['mainnet', 'devnet']).default('mainnet'),
 	asset_pubkey:   z.string().min(32).max(44).optional(),
 	vanity_prefix:  z.string().min(1).max(6).optional(),
+	// 1 only when the signing wallet advertises Wallet Standard v1 support;
+	// every other wallet keeps the v0 envelope.
+	transaction_version: z.union([z.literal(0), z.literal(1)]).default(0),
 });
 
 export const handleRegisterPrep = wrap(async (req, res) => {
@@ -534,7 +538,7 @@ export const handleRegisterPrep = wrap(async (req, res) => {
 	if (!rl.success) return rateLimited(res, rl);
 
 	const body = parse(registerPrepSchema, await readJson(req));
-	const { name, description, avatar_id, wallet_address, network, asset_pubkey, vanity_prefix } = body;
+	const { name, description, avatar_id, wallet_address, network, asset_pubkey, vanity_prefix, transaction_version } = body;
 
 	const [walletRow] = await sql`select id from user_wallets where user_id = ${user.id} and address = ${wallet_address} and chain_type = 'solana' limit 1`;
 	if (!walletRow) return error(res, 403, 'forbidden', 'wallet not linked to your account');
@@ -640,6 +644,15 @@ export const handleRegisterPrep = wrap(async (req, res) => {
 			createArgs.authority = collectionAuthoritySigner(umi);
 		}
 		const builder = create(umi, createArgs);
+		if (transaction_version === SOLANA_TRANSACTION_V1) {
+			return buildPartiallySignedV1Transaction({
+				instructions: builder.getInstructions(),
+				signers: builder.getSigners(umi),
+				feePayer: wallet_address,
+				lifetime: await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' }),
+				clientSigners: asset_pubkey ? [asset_pubkey] : [],
+			});
+		}
 		const tx = await builder.buildAndSign(umi);
 		return umi.transactions.serialize(tx);
 	};
@@ -657,12 +670,13 @@ export const handleRegisterPrep = wrap(async (req, res) => {
 	const prepId = await randomToken(24);
 	const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
-	await sql`insert into agent_registrations_pending (user_id, cid, metadata_uri, payload, expires_at) values (${user.id}, ${assetSigner.publicKey}, ${metadataUri}, ${JSON.stringify({ name, description, avatar_id, wallet_address, asset_pubkey: assetSigner.publicKey, network, prep_id: prepId, vanity_prefix: vanity_prefix || null, collection: collectionAddr || null })}::jsonb, ${expiresAt})`;
+	await sql`insert into agent_registrations_pending (user_id, cid, metadata_uri, payload, expires_at) values (${user.id}, ${assetSigner.publicKey}, ${metadataUri}, ${JSON.stringify({ name, description, avatar_id, wallet_address, asset_pubkey: assetSigner.publicKey, network, prep_id: prepId, vanity_prefix: vanity_prefix || null, collection: collectionAddr || null, transaction_version })}::jsonb, ${expiresAt})`;
 
 	return json(res, 201, {
 		prep_id: prepId,
 		asset_pubkey: assetSigner.publicKey,
 		tx_base64: txBase64,
+		transaction_version,
 		network,
 		metadata_uri: metadataUri,
 		expires_at: expiresAt.toISOString(),
@@ -747,6 +761,11 @@ export const handleRegisterConfirm = wrap(async (req, res) => {
 
 	const [pending] = await sql`select payload from agent_registrations_pending where user_id=${user.id} and payload->>'asset_pubkey'=${asset_pubkey} and expires_at > now() order by created_at desc limit 1`;
 	const payload = pending?.payload || {};
+	// A live prep pins the envelope the server built. A different version on
+	// chain means the wallet re-encoded or replaced the prepared transaction.
+	if (pending && tx.version !== (payload.transaction_version ?? 0)) {
+		return error(res, 422, 'tx_wrong_version', `transaction version ${String(tx.version)} does not match the prepared v${payload.transaction_version ?? 0}`);
+	}
 	const name = body.name || payload.name || `Agent ${asset_pubkey.slice(0, 6)}`;
 	const description = body.description || payload.description || '';
 	const avatar_id = body.avatar_id || payload.avatar_id || null;
@@ -763,6 +782,7 @@ export const handleRegisterConfirm = wrap(async (req, res) => {
 		wallet: wallet_address,
 		metadata_uri: payload.metadata_uri || null,
 		confirmed_at: new Date().toISOString(),
+		transaction_version: tx.version,
 	};
 	const [agent] = await sql`insert into agent_identities (user_id, name, description, avatar_id, wallet_address, meta) values (${user.id}, ${name}, ${description}, ${avatar_id}, ${wallet_address}, ${JSON.stringify({ chain_type: 'solana', network, sol_mint_address: asset_pubkey, tx_signature, onchain: onchainBlock, ...(payload.vanity_prefix ? { vanity_prefix: payload.vanity_prefix } : {}), ...(payload.collection ? { collection: payload.collection, update_authority: 'threews' } : {}) })}::jsonb) returning id, name, description, wallet_address, meta, created_at`;
 

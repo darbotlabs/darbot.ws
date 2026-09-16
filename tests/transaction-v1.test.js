@@ -9,6 +9,8 @@ import {
 	decodeFeatureActivationSlot,
 	inspectWireTransaction,
 } from '../api/_lib/solana/transaction-v1.js';
+import { cosignV1Transaction } from '../src/erc8004/solana-deploy.js';
+import { getTransactionDecoder } from '@solana/kit';
 
 function signedLegacyTransfer() {
 	const payer = Keypair.generate();
@@ -23,6 +25,32 @@ function signedLegacyTransfer() {
 	}));
 	tx.sign(payer);
 	return tx.serialize().toString('base64');
+}
+
+function createAccountInput(owner, asset) {
+	const instruction = SystemProgram.createAccount({
+		fromPubkey: owner.publicKey,
+		newAccountPubkey: asset.publicKey,
+		lamports: 1,
+		space: 0,
+		programId: SystemProgram.programId,
+	});
+	return {
+		feePayer: owner.publicKey.toBase58(),
+		lifetime: {
+			blockhash: Keypair.generate().publicKey.toBase58(),
+			lastValidBlockHeight: 123n,
+		},
+		instructions: [{
+			programId: instruction.programId.toBase58(),
+			keys: instruction.keys.map((key) => ({
+				pubkey: key.pubkey.toBase58(),
+				isSigner: key.isSigner,
+				isWritable: key.isWritable,
+			})),
+			data: instruction.data,
+		}],
+	};
 }
 
 describe('Solana transaction V1 inspector', () => {
@@ -86,6 +114,36 @@ describe('Solana transaction V1 inspector', () => {
 			priorityFeeLamports: Number(AGENT_DEPLOY_V1_CONFIG.priorityFeeLamports),
 		});
 		expect(inspected.sponsor).toMatchObject({ verdict: 'caps-explicit', safeToCosign: true });
+	});
+
+	it('leaves a browser-held vanity key slot empty, then the client co-signs it', async () => {
+		const owner = Keypair.generate();
+		const vanity = Keypair.generate();
+		const input = createAccountInput(owner, vanity);
+		const echoSigner = {
+			publicKey: vanity.publicKey.toBase58(),
+			signMessage: async (message) => message,
+		};
+
+		await expect(buildPartiallySignedV1Transaction({ ...input, signers: [echoSigner] }))
+			.rejects.toThrow(/64-byte ed25519 signature/);
+
+		const wire = await buildPartiallySignedV1Transaction({
+			...input,
+			signers: [echoSigner],
+			clientSigners: [vanity.publicKey.toBase58()],
+		});
+		const vanityAddress = vanity.publicKey.toBase58();
+		expect(getTransactionDecoder().decode(wire).signatures[vanityAddress]).toBeNull();
+
+		const cosigned = await cosignV1Transaction(wire, vanity.secretKey);
+		expect(cosigned[0]).toBe(0x81);
+		const decoded = getTransactionDecoder().decode(cosigned);
+		const signature = decoded.signatures[vanityAddress];
+		expect(nacl.sign.detached.verify(decoded.messageBytes, signature, vanity.publicKey.toBytes())).toBe(true);
+		expect(decoded.signatures[owner.publicKey.toBase58()]).toBeNull();
+
+		await expect(cosignV1Transaction(wire, Keypair.generate().secretKey)).rejects.toThrow();
 	});
 
 	it('rejects malformed wire input without contacting an RPC', () => {
