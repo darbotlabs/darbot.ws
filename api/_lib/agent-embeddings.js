@@ -1,5 +1,5 @@
-// agent-embeddings — a durable cache of IBM Granite embedding vectors for agent
-// identities, the data layer behind the Agent Galaxy.
+// agent-embeddings: a durable cache of embedding vectors for agent identities,
+// the data layer behind the Agent Galaxy.
 //
 // Embedding every agent on every page load would be slow and wasteful, so each
 // agent's vector is persisted in Postgres keyed by a content hash of the exact
@@ -8,17 +8,90 @@
 // cache. The same stored vectors power semantic search (query vector vs. agent
 // vectors) without a second embedding pass.
 //
-// There is no mock path: vectors come from a real watsonx.ai embeddings call.
-// When watsonx is unconfigured the caller checks watsonxConfig().configured and
-// reports the feature unavailable rather than inventing data.
+// IBM Granite on watsonx.ai is the preferred embedder. When watsonx is not
+// configured, or fails, the platform's tagged embedding lanes (NVIDIA NIM,
+// Vertex AI, OpenAI; see ./embeddings.js) serve instead. Every stored row
+// records the exact model or lane tag that produced it, and reads always filter
+// by that tag, so vectors from different spaces are never compared. There is no
+// mock path: when no embedder is configured the caller reports the feature
+// unavailable rather than inventing data.
 
 import { createHash } from 'node:crypto';
 import { sql } from './db.js';
 import { watsonxEmbed } from './watsonx.js';
+import {
+	NIM_EMBED_TAG,
+	VERTEX_EMBED_TAG,
+	OPENAI_EMBED_TAG,
+	embedderConfigured,
+	embedPassages,
+	embedQuery,
+} from './embeddings.js';
 
 // watsonx accepts many inputs per embeddings call; keep request bodies modest so
 // a large galaxy rebuild splits into a handful of calls instead of one giant one.
-const EMBED_CHUNK = 96;
+const WATSONX_EMBED_CHUNK = 96;
+// Vertex caps a request at 20k input tokens and NIM at 512 tokens per input, so
+// the platform lanes take smaller batches of the (up to 2000 char) agent texts.
+const PLATFORM_EMBED_CHUNK = 16;
+
+// Platform lanes in the same free-first order embeddings.js ingests with.
+const PLATFORM_EMBED_TAGS = [NIM_EMBED_TAG, VERTEX_EMBED_TAG, OPENAI_EMBED_TAG];
+
+function watsonxEmbedder(cfg, model = cfg.embedModel) {
+	return {
+		provider: 'watsonx',
+		model,
+		chunk: WATSONX_EMBED_CHUNK,
+		async embed(inputs) {
+			const { vectors } = await watsonxEmbed(cfg, { inputs, model });
+			return vectors;
+		},
+		async embedQuery(text) {
+			const { vectors } = await watsonxEmbed(cfg, { inputs: [text], model });
+			return vectors[0] || null;
+		},
+	};
+}
+
+function platformEmbedder(tag) {
+	return {
+		provider: 'platform',
+		model: tag,
+		chunk: PLATFORM_EMBED_CHUNK,
+		async embed(inputs) {
+			// Float64Array serializes to an object in JSON, so store plain arrays.
+			return (await embedPassages(tag, inputs)).map((v) => Array.from(v));
+		},
+		async embedQuery(text) {
+			const vec = await embedQuery(tag, text);
+			return vec ? Array.from(vec) : null;
+		},
+	};
+}
+
+/**
+ * Every embedder able to serve right now, in preference order: watsonx Granite
+ * first when configured, then each configured platform lane. Empty when none is.
+ * `cfg` is a watsonxConfig() result.
+ */
+export function agentEmbedders(cfg) {
+	const out = [];
+	if (cfg?.configured) out.push(watsonxEmbedder(cfg));
+	for (const tag of PLATFORM_EMBED_TAGS) {
+		if (embedderConfigured(tag)) out.push(platformEmbedder(tag));
+	}
+	return out;
+}
+
+// Accept either an embedder from agentEmbedders() or a bare watsonxConfig()
+// result (optionally with a Granite model override), which callers that only
+// ever use Granite still pass.
+function toEmbedder(cfgOrEmbedder, model) {
+	return typeof cfgOrEmbedder?.embed === 'function'
+		? cfgOrEmbedder
+		: watsonxEmbedder(cfgOrEmbedder, model || cfgOrEmbedder.embedModel);
+}
 
 let _ready = null;
 
@@ -56,15 +129,17 @@ function contentHash(text, model) {
 	return createHash('sha256').update(`${model}\n${text}`).digest('hex');
 }
 
-// Ensure every agent in `agents` has a current Granite embedding, re-embedding
-// only those whose text changed since last time. Returns { vectors, model,
-// dims, embedded } where `vectors` is aligned 1:1 with the input `agents`
-// (agents with empty embeddable text are skipped — see `usable`).
+// Ensure every agent in `agents` has a current embedding, re-embedding only
+// those whose text changed since last time. Returns { vectors, model, dims,
+// embedded } where `vectors` is aligned 1:1 with the input `agents` (agents with
+// empty embeddable text are skipped, see `usable`).
 //
-// `cfg` is a watsonxConfig() result; the caller guarantees cfg.configured.
-export async function ensureAgentEmbeddings(cfg, agents, { model } = {}) {
+// `cfgOrEmbedder` is an embedder from agentEmbedders(), or a watsonxConfig()
+// result the caller guarantees is configured.
+export async function ensureAgentEmbeddings(cfgOrEmbedder, agents, { model } = {}) {
 	await ensureTable();
-	const embedModel = model || cfg.embedModel;
+	const embedder = toEmbedder(cfgOrEmbedder, model);
+	const embedModel = embedder.model;
 
 	// Build the embed text + hash for each agent up front.
 	const prepared = agents.map((a) => {
@@ -96,13 +171,10 @@ export async function ensureAgentEmbeddings(cfg, agents, { model } = {}) {
 	for (const c of cached.values()) if (c.vector?.length) dims = c.vector.length;
 
 	// Re-embed stale agents in chunks, then upsert and merge into the cache map.
-	for (let i = 0; i < stale.length; i += EMBED_CHUNK) {
-		const batch = stale.slice(i, i + EMBED_CHUNK);
-		const { vectors, dimensions } = await watsonxEmbed(cfg, {
-			inputs: batch.map((p) => p.text),
-			model: embedModel,
-		});
-		dims = dimensions || dims;
+	for (let i = 0; i < stale.length; i += embedder.chunk) {
+		const batch = stale.slice(i, i + embedder.chunk);
+		const vectors = await embedder.embed(batch.map((p) => p.text));
+		dims = vectors[0]?.length || dims;
 		const recs = [];
 		for (let j = 0; j < batch.length; j++) {
 			const vec = vectors[j];

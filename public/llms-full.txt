@@ -986,7 +986,7 @@ Global leaderboard for the walking avatar: distance walked, sites visited, and t
 
 URL: https://three.ws/galaxy
 
-Every public agent embedded by IBM Granite on watsonx.ai into a navigable 3D constellation with natural-language semantic search.
+Every public agent embedded by meaning (IBM Granite on watsonx.ai, with NIM and Vertex AI fallbacks) into a navigable 3D constellation with natural-language semantic search.
 
 ### Agent Symphony
 

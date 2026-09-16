@@ -10,7 +10,7 @@
  * State coverage:
  *   - populated galaxy   -> stars render, legend + stats fill in
  *   - no agents          -> empty overlay, with a way to create one
- *   - watsonx 503        -> unretryable error overlay, with a way onward
+ *   - embedder 503       -> unretryable error overlay, with a way onward
  *   - transport failure  -> retryable error overlay, retry recovers
  *
  * Interaction coverage:
@@ -91,7 +91,7 @@ async function routeGalaxy(page, mode = 'success') {
 	await page.route('**/api/galaxy', async (route) => {
 		if (route.request().method() === 'POST') {
 			if (mode === 'unavailable') {
-				return route.fulfill({ status: 503, json: watsonx503() });
+				return route.fulfill({ status: 503, json: embedder503() });
 			}
 			return route.fulfill({ json: fx.searchFor(0) });
 		}
@@ -103,7 +103,7 @@ async function routeGalaxy(page, mode = 'success') {
 				json: { count: 0, dims: 0, model: null, clusters: [], agents: [], cached: false },
 			});
 		}
-		if (mode === 'unavailable') return route.fulfill({ status: 503, json: watsonx503() });
+		if (mode === 'unavailable') return route.fulfill({ status: 503, json: embedder503() });
 		if (mode === 'down') return route.abort('failed');
 		return route.fallback();
 	});
@@ -113,12 +113,12 @@ async function routeGalaxy(page, mode = 'success') {
 	await page.route('**/api/genome/edges**', (r) => r.fulfill({ json: { edges: [] } }));
 }
 
-function watsonx503() {
+function embedder503() {
 	return {
-		error: 'watsonx_unavailable',
+		error: 'embeddings_unavailable',
 		error_description:
-			'The Agent Galaxy is positioned by IBM Granite embeddings on watsonx.ai. ' +
-			'Set WATSONX_API_KEY and WATSONX_PROJECT_ID (or WATSONX_SPACE_ID) to build it.',
+			'The Agent Galaxy needs an embedding provider. Configure watsonx.ai ' +
+			'(WATSONX_API_KEY and WATSONX_PROJECT_ID), NVIDIA_API_KEY, or GOOGLE_CLOUD_PROJECT.',
 	};
 }
 
@@ -219,13 +219,13 @@ test.describe('Agent Galaxy', () => {
 	test('an unconfigured embedder is a dead end for nobody', async ({ page }) => {
 		await gotoGalaxy(page, 'unavailable');
 		await expect(page.locator('#gxError')).toBeVisible();
-		await expect(page.locator('#gxErrorTitle')).toContainText('Granite');
-		await expect(page.locator('#gxErrorSub')).toContainText('watsonx');
+		await expect(page.locator('#gxErrorTitle')).toContainText('embedding provider');
+		await expect(page.locator('#gxErrorSub')).toContainText('embedding provider');
 		// Retrying a configuration gap just fails again, so the retry is hidden and
 		// two real onward paths take its place.
 		await expect(page.locator('#gxRetry')).toBeHidden();
 		await expect(page.locator('#gxErrorBrowse')).toBeVisible();
-		await expect(page.locator('#gxError a[href="/docs/ibm"]')).toBeVisible();
+		await expect(page.locator('#gxError a[href="/docs/galaxy"]')).toBeVisible();
 
 		// Nothing behind the overlay stays reachable by keyboard.
 		const reachable = await page.evaluate(() =>

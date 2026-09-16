@@ -1,13 +1,14 @@
 // Agent Galaxy — the interactive 3D star-map.
 //
 // Fetches the constellation snapshot from /api/galaxy (agents positioned by IBM
-// Granite embeddings on watsonx.ai), renders it as a glowing point cloud with
+// Granite embeddings on watsonx.ai, or the platform embedding lanes when watsonx is
+// unavailable), renders it as a glowing point cloud with
 // Three.js, and wires the exploration UI: hover tooltips, click-to-inspect, a
-// Granite-powered semantic search that lights up matching stars, and a legend that
+// semantic search that lights up matching stars, and a legend that
 // flies the camera to each named constellation.
 //
 // All data is real (no mock path). When the backend can't build the galaxy — most
-// often because watsonx isn't configured — the viewer explains rather than faking a
+// often because no embedding provider is configured — the viewer explains rather than faking a
 // universe.
 
 import * as THREE from 'three';
@@ -131,11 +132,11 @@ async function loadGalaxy(refresh) {
 		const body = await res.json().catch(() => ({}));
 
 		if (!res.ok) {
-			if (res.status === 503 && body.error === 'watsonx_unavailable') {
+			if (res.status === 503 && body.error === 'embeddings_unavailable') {
 				return showError(
-					'IBM Granite isn’t connected',
-					'The galaxy is positioned by IBM Granite embeddings on watsonx.ai. ' +
-						'Once watsonx credentials are configured, the universe lights up here.',
+					'No embedding provider is connected',
+					'The galaxy positions agents by semantic embeddings. ' +
+						'Once an embedding provider is configured, the universe lights up here.',
 					false,
 				);
 			}
@@ -403,7 +404,7 @@ function toggleClusterFocus(clusterId) {
 	if (c) flyToTarget(new THREE.Vector3(...c.centroid), 220);
 }
 
-// ── Semantic search (Granite) ───────────────────────────────────────────────
+// ── Semantic search ───────────────────────────────────────────────────────────
 let searchSeq = 0;
 // The search button's resting label is translated copy, so it is read off the
 // button rather than hardcoded. `SEARCH_BUSY` marks the in-flight state and is

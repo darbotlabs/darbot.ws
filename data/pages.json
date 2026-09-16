@@ -1328,7 +1328,7 @@
 				{
 					"path": "/galaxy",
 					"title": "Agent Galaxy",
-					"description": "Every public agent embedded by IBM Granite on watsonx.ai into a navigable 3D constellation with natural-language semantic search.",
+					"description": "Every public agent embedded by meaning (IBM Granite on watsonx.ai, with NIM and Vertex AI fallbacks) into a navigable 3D constellation with natural-language semantic search.",
 					"priority": 0.6,
 					"changefreq": "weekly"
 				},
