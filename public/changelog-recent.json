@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-16T19:49:26.980Z",
+	"generated_at": "2026-09-16T20:04:22.550Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3686,
+	"total": 3687,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -51,6 +51,17 @@
 			"tags": [
 				"fix",
 				"improvement"
+			]
+		},
+		{
+			"date": "2026-09-16",
+			"type": "update",
+			"title": "pump.fun agent skills now launch holder-reward coins",
+			"summary": "The pump.fun launch, swap and fee skills that agents use on three.ws now run on version 2 of the pump.fun SDK. Launching a coin can now turn on holder rewards, which sends every creator fee to the coin's holders instead of the launcher, permanently. Cashback launches were retired by pump.fun, so the skill now refuses them up front with a clear message instead of handing back a transaction that would fail after you sign it. The fee skill also recognizes holder-reward coins and explains where their fees go rather than trying to collect them.",
+			"link": null,
+			"tags": [
+				"improvement",
+				"fix"
 			]
 		},
 		{
@@ -1605,16 +1616,6 @@
 			"title": "Portfolio universe",
 			"summary": "Every asset a Robinhood Chain portfolio may hold, priced live: tokenized equities, crypto majors and chain-native tokens with on-chain liquidity, 24h volume, price change and the NAV premium against each equity's Chainlink feed. Sortable and filterable by asset class.",
 			"link": "/markets/robinhood/portfolios/universe",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Robinhood Portfolios",
-			"summary": "Describe a portfolio in a sentence and get a real basket of Robinhood Chain assets: tokenized equities, crypto majors and chain-native tokens in one index. A screen ranks the whole 700-asset universe against the prompt, the weights are committed on-chain as a signed immutable manifest, and a vault holds the basket in kind and rebalances it back to target on a published schedule.",
-			"link": "/markets/robinhood/portfolios",
 			"tags": [
 				"launch"
 			]

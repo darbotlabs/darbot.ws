@@ -39,6 +39,14 @@
 			<description>A GitHub fee claim on pump.fun proves that a GitHub account collected creator fees routed to it. It does not prove that person built the coin, owns the linked repository, or backs the project. Claim cards on /pumpfun used to read as a developer endorsing a coin even when the account was a lookalike name, the coin had no GitHub link at all, or one fee account was shared by several coins and the card simply picked the biggest one. Every claim now carries one of five labels: verified repository, verified creator wallet, identity mismatch, unverified, or unresolved pooled withdrawal. Only the two verified labels get trade buttons or count toward a coin's reputation score, mismatches are flagged in red, and the Telegram claims channel follows the same rules.</description>
 		</item>
 		<item>
+			<title>pump.fun agent skills now launch holder-reward coins</title>
+			<link>https://three.ws/changelog</link>
+			<guid isPermaLink="false">2026-09-16:pump.fun agent skills now launch holder-reward coins</guid>
+			<pubDate>Wed, 16 Sep 2026 12:00:00 GMT</pubDate>
+			<category>improvement</category>
+			<description>The pump.fun launch, swap and fee skills that agents use on three.ws now run on version 2 of the pump.fun SDK. Launching a coin can now turn on holder rewards, which sends every creator fee to the coin's holders instead of the launcher, permanently. Cashback launches were retired by pump.fun, so the skill now refuses them up front with a clear message instead of handing back a transaction that would fail after you sign it. The fee skill also recognizes holder-reward coins and explains where their fees go rather than trying to collect them.</description>
+		</item>
+		<item>
 			<title>Atomic - Solana V1 Inspector</title>
 			<link>https://three.ws/atomic</link>
 			<guid isPermaLink="false">2026-09-15:Atomic - Solana V1 Inspector</guid>
