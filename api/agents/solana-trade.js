@@ -44,6 +44,7 @@ import { getBuyQuote, getSellQuote } from '../_lib/solana/sdk-bridge.js';
 import { getAmmPoolState } from '../_lib/pump.js';
 import { assessTradeSafety, recordFirewallDecision } from '../_lib/trade-firewall.js';
 import { submitProtected } from '../_lib/execution-engine.js';
+import { buildAgentTradeFee } from '../_lib/pump-platform-fee.js';
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -437,9 +438,16 @@ export async function handleTrade(req, res, id) {
 		try { walletLamports = BigInt(await solanaPublicConnection(network).getBalance(ownerPk, 'confirmed')); }
 		catch { walletLamports = null; }
 	}
+	let feeBps = 0;
+	try {
+		const feeLib = await import('../_lib/pump-platform-fee.js');
+		feeBps = (await feeLib.isPlatformOwnedUser(auth.userId)) ? 0 : await feeLib.effectivePumpFeeBps();
+	} catch { feeBps = 0; }
+
 	let fundsWarning = null;
 	if (walletLamports != null) {
-		const spendLamports = side === 'buy' ? BigInt(quote.inAtomics) : 0n;
+		// A buy also pays the three.ws trade fee out of the same wallet.
+		const spendLamports = side === 'buy' ? BigInt(quote.inAtomics) + (BigInt(quote.inAtomics) * BigInt(feeBps)) / 10_000n : 0n;
 		const head = checkSolHeadroom(walletLamports, spendLamports, SOL_FEE_HEADROOM_LAMPORTS);
 		if (head) {
 			const needed = spendLamports + SOL_FEE_HEADROOM_LAMPORTS;
@@ -452,9 +460,6 @@ export async function handleTrade(req, res, id) {
 			};
 		}
 	}
-
-	let feeBps = 0;
-	try { feeBps = await (await import('../_lib/pump-platform-fee.js')).effectivePumpFeeBps(); } catch { feeBps = 0; }
 
 	const quotePayload = {
 		side, mint: mintStr, network, venue: quote.venue, graduated: quote.graduated,
@@ -547,7 +552,7 @@ export async function handleTrade(req, res, id) {
 
 	let instructions;
 	try {
-		instructions = await buildTradeInstructions({ side, conn: readConn, network, mintPk, ownerPk: keypair.publicKey, quote, slippageBps, solAmount, tokenAmountRaw });
+		instructions = await buildTradeInstructions({ userId: auth.userId, side, conn: readConn, network, mintPk, ownerPk: keypair.publicKey, quote, slippageBps, solAmount, tokenAmountRaw });
 	} catch (e) {
 		await updateCustodyEvent(claimId, { status: 'failed', meta: { error: 'build_failed', message: (e?.message || '').slice(0, 200) } }).catch(() => {});
 		if (e?.status) return error(res, e.status, e.code, e.message);
@@ -614,10 +619,24 @@ export async function handleTrade(req, res, id) {
 	});
 }
 
-// Build the on-chain instructions for the resolved venue + side. Curve trades use
-// the pump-sdk v2 builders; graduated trades use the pump-swap AMM SDK. Mirrors
-// api/agents/pumpfun/[action].js so there is one instruction-building convention.
-export async function buildTradeInstructions({ side, conn, network, mintPk, ownerPk, quote, slippageBps, solAmount, tokenAmountRaw }) {
+// Build the on-chain instructions for the resolved venue + side, with the
+// three.ws trade fee appended for customer-owned agents. Every server-signed
+// caller (the trade endpoint, strategies, mirror trading) builds here, so the
+// fee cannot be skipped by picking a different entry point. `userId` is the
+// agent owner; platform-owned accounts are never billed.
+export async function buildTradeInstructions({ userId = null, ...args }) {
+	const swap = await buildSwapInstructions(args);
+	const instructions = Array.isArray(swap) ? [...swap] : [swap];
+	const lamports = args.side === 'buy' ? args.quote.inAtomics : args.quote.minOutAtomics;
+	const fee = await buildAgentTradeFee({ network: args.network, payer: args.ownerPk, userId, side: args.side, lamports });
+	if (fee) instructions.push(...fee.instructions);
+	return instructions;
+}
+
+// Curve trades use the pump-sdk v2 builders; graduated trades use the pump-swap
+// AMM SDK. Mirrors api/agents/pumpfun/[action].js so there is one
+// instruction-building convention.
+async function buildSwapInstructions({ side, conn, network, mintPk, ownerPk, quote, slippageBps, solAmount, tokenAmountRaw }) {
 	const BNmod = (await import('bn.js')).default;
 
 	if (quote.venue === 'bonding_curve') {

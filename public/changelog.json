@@ -1,5 +1,5 @@
 {
-	"generated_at": "2026-09-16T20:04:22.004Z",
+	"generated_at": "2026-09-16T21:09:38.669Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
@@ -26,6 +26,16 @@
 				"feature",
 				"improvement",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-16",
+			"type": "update",
+			"title": "A flat 1% fee on trades made through three.ws",
+			"summary": "Trades that three.ws builds or runs for you now carry a 1% fee, paid in the same transaction as the trade: buys and sells in the coin trade window, trades from your agent's wallet, and trades your agents make through strategies, mirror trading, orders, market making and sniping. The fee is shown before you confirm, both in the trade window and in the agent wallet's trade tab. Trades you make on other apps are not affected, and three.ws's own agents are never charged.",
+			"link": "/legal/tos",
+			"tags": [
+				"improvement"
 			]
 		},
 		{

@@ -39,7 +39,9 @@ reaches the browser, so the wallet adds exactly one signature.
 | three.ws launch fee | platform treasury | 1% of the dev buy (`PUMP_LAUNCH_FEE_BPS`) |
 
 The launch fee rides in the same transaction and is shown in the cost panel before you sign. No dev
-buy, no fee. Details and env vars: [pump-platform-fee.md](./pump-platform-fee.md#launch-fee-on-by-default).
+buy, no fee. After launch, every trade of the coin made through three.ws (the trade modal, agent
+wallets, strategies, snipers) carries the same 1% trade fee. Trades made on pump.fun or elsewhere
+do not. Details and env vars: [pump-platform-fee.md](./pump-platform-fee.md).
 
 ## Transaction formats
 

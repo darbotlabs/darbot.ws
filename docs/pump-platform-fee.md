@@ -1,57 +1,54 @@
 # Pump.fun platform trade fee
 
-three.ws can charge a platform fee on every pump.fun buy/sell routed through the
-trade modal (`src/game/coin-buy.js` → `/api/pump/buy-prep` · `/api/pump/sell-prep`).
-The fee matches pump.fun's own trade-fee rate and is a **real on-chain transfer
-added to the same transaction the user signs** — native SOL for SOL-paired
-trades, USDC for USDC-paired trades — sent to the platform fee wallet. One
-signature, no custody.
+three.ws charges **1% of trading volume on every customer trade it builds or signs**. The fee is a
+**real on-chain transfer inside the same transaction as the trade** (native SOL for SOL-paired
+coins, USDC for USDC-paired coins) to the platform treasury. One transaction, no custody, no second
+signature.
 
-## Status: OFF by default
+## Where it applies
 
-The fee ships **inert**. It activates only when BOTH are configured:
+| Surface | Path | Fee basis |
+|---|---|---|
+| Trade modal (your wallet signs) | `src/game/coin-buy.js` → `/api/pump/buy-prep` · `/api/pump/sell-prep` | quote spent (buy) / expected proceeds (sell) |
+| Agent wallet trade tab + `/api/agents/:id/solana/trade` | `api/agents/solana-trade.js` `buildTradeInstructions` | SOL spent / minimum SOL out |
+| Agent strategies and mirror trading | same builder (`agent-strategy-runtime.js`, `agent-mirror.js`) | SOL spent / minimum SOL out |
+| `/api/agents/:id/trade`, the market-maker (`workers/agent-mm`), programmable orders (`workers/agent-orders`) | `api/agents/agent-trade.js` `executeAgentTrade` | SOL spent / minimum SOL out |
+| Sniper buys and sells (`workers/agent-sniper/executor.js`) | appended before broadcast; included in the position's cost basis and P&L | SOL spent / slippage-floor proceeds |
+| Agent pump.fun buy, sell, AMM swap (`/api/agents/:id/pumpfun/*`) | `api/agents/pumpfun/[action].js` | quote spent / slippage-floor proceeds |
+| Coin launches | the dev buy, see [Launch fee](#launch-fee-on-by-default) | dev buy |
+
+Server-signed sells are billed on the **minimum** proceeds the slippage setting guarantees, so a
+sell that fills at its floor always covers its own fee.
+
+**Not billed:**
+- **Platform-owned agents** (owner account `three-ws@users.three.ws.local` or `@agents.three.ws`,
+  `isPlatformOwnedAgent`): the $THREE circulation desk, house sniper fleets and other three.ws
+  money movements (`isPlatformOwnedUser` in `api/_lib/pump-platform-fee.js`).
+- **Trades made outside three.ws.** A trade on pump.fun, a terminal or another app never touches
+  our transaction builders, and the pump.fun program has no third-party fee hook, so there is
+  nothing to attach a fee to.
+- The embeddable agent-skills SDK's direct client-built trades (`src/agent-skills-pumpfun.js`
+  without `serverFlow`): that library signs with the site visitor's own wallet on third-party
+  pages. Its `serverFlow` mode goes through `buy-prep`/`sell-prep` and is billed.
+
+## Configuration
 
 | Env var | Effect |
 |---|---|
-| `PUMP_PLATFORM_FEE_BPS` | Rate in basis points. **Default `0` (off).** Set `100` for 1% (pump.fun's rate). Hard-capped at 500 (5%). |
-| `PUMP_PLATFORM_FEE_WALLET` | Recipient Solana address. Falls back to the platform treasury keypair (`PLATFORM_TREASURY_KEYPAIR` / `TREASURY_KEYPAIR`) pubkey if unset. |
+| `PUMP_PLATFORM_FEE_BPS` | Trade fee in basis points. **Default `100` (1%).** `0` turns it off. Hard-capped at 500 (5%). |
+| `PUMP_PLATFORM_FEE_WALLET` | Recipient Solana address. Falls back to the platform treasury keypair (`PLATFORM_TREASURY_KEYPAIR` / `TREASURY_KEYPAIR`) pubkey. |
 
-With either knob missing/zero, `buildPlatformFeeInstructions` returns `null`, no
-fee instruction is added, and the quote/UI report `platform_fee_bps: 0` (no fee
-line shown). This is why local/preview and a fresh deploy charge nothing — and
-why turning it on is a deliberate one-line env change after trading is verified.
+With no recipient resolvable, `buildPlatformFeeInstructions` returns `null`, no fee instruction is
+added and quotes report `platform_fee_bps: 0`, so a local environment without the treasury bills
+nothing.
 
-## How it's computed
+## Disclosure
 
-- **Buy:** fee = `bps × quote spent`, charged on top (you pay trade + fee).
-- **Sell:** fee = `bps × expected proceeds`, taken from the proceeds. AMM-sell
-  proceeds are quoted via the pump-swap SDK's `sellBaseInput` (`uiQuote`); if
-  that quote can't be derived the fee is skipped, never the sell.
-
-All four routes are covered: bonding-curve buy/sell and PumpSwap AMM buy/sell,
-for both SOL- and USDC-paired coins (`api/_lib/pump-platform-fee.js`).
-
-## Disclosure (required before enabling)
-
-The fee is **never** charged silently. When `platform_fee_bps > 0`:
-
-1. The trade modal shows a live fee line ("Platform fee 1% · ~0.01 SOL") and the
-   exact amount at the wallet-approval step (`coin-buy.js#_renderFee` / `_feeNote`).
-2. **Before flipping the rate on in production, add a fees clause to the Terms**
-   stating that three.ws charges a trading fee at pump.fun's rate on trades
-   routed through the platform, and add a public changelog entry. Disclosure in
-   the UI is already wired; the Terms + changelog are the remaining steps and
-   must land in the same change that enables the fee.
-
-## Enable checklist
-
-1. Verify SOL + USDC buy/sell end-to-end with the fee at 0.
-2. Set `PUMP_PLATFORM_FEE_WALLET` (or confirm the treasury keypair pubkey is the
-   intended recipient).
-3. Add the Terms fees clause + a changelog entry.
-4. Set `PUMP_PLATFORM_FEE_BPS=100`.
-5. Confirm the modal shows the fee line and a test trade routes the fee to the
-   wallet.
+- The trade modal shows a fee line and the exact amount at the wallet-approval step.
+- The agent wallet trade tab shows a "three.ws fee" row with the SOL amount before the trade.
+- Agent trade previews and results carry `platform_fee` (`bps`, `asset`, `amount`, `recipient`, `basis`),
+  and the custody ledger row records it.
+- Section 8 of the [Terms](https://three.ws/legal/tos) discloses platform fees on Real-Funds Features.
 
 ## Launch fee (on by default)
 

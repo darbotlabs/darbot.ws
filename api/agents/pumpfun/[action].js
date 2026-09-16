@@ -28,6 +28,7 @@ import { limits, clientIp } from '../../_lib/rate-limit.js';
 import { isUuid } from '../../_lib/validate.js';
 import { loadAgentForSigning, solanaConnection } from '../../_lib/agent-pumpfun.js';
 import { submitProtected } from '../../_lib/execution-engine.js';
+import { buildAgentTradeFee } from '../../_lib/pump-platform-fee.js';
 import { reserveSpend, finalizeSpend, releaseSpend } from '../../_lib/agent-spend-policy.js';
 import { grindMintKeypair } from '../../_lib/pump-vanity.js';
 import { isRpcOutageError } from '../../_lib/rpc-degrade.js';
@@ -291,6 +292,14 @@ async function handleBuy(req, res, id) {
 		return respondError(res, err.status || 422, err.code || 'build_failed', err);
 	}
 
+	// three.ws trade fee on the quote spent, in the same transaction.
+	const tradeFee = await buildAgentTradeFee({
+		network: body.network, payer: keypair.publicKey, userId: auth.userId, side: 'buy',
+		lamports: quoteAtomics.toString(), isUsdc: quote.isUsdc, quoteMint: quote.quoteMint,
+	});
+	if (tradeFee) instructions = [...instructions, ...tradeFee.instructions];
+	const feeSol = tradeFee && tradeFee.disclosure.asset === 'SOL' ? Number(tradeFee.disclosure.amount) / 1e9 : 0;
+
 	// Reserve against the daily SOL cap for SOL spends only — atomically, BEFORE
 	// sending, so two concurrent buys on a stolen session can't both slip past
 	// the limit. USDC buys move USDC, not SOL, so they are gated by the up-front
@@ -301,7 +310,7 @@ async function handleBuy(req, res, id) {
 			agentId: id,
 			meta,
 			mint: body.mint,
-			solAmount: body.solAmount,
+			solAmount: body.solAmount + feeSol,
 			type: 'pumpfun.buy',
 			payload: { slippageBps: body.slippageBps, network: body.network },
 		});
@@ -1170,6 +1179,15 @@ async function handleSell(req, res, id) {
 		return respondError(res, err.status || 422, err.code || 'build_failed', err);
 	}
 
+	// three.ws trade fee on the slippage-floor proceeds, in the same transaction.
+	const sellSlippageBps = Number.isFinite(body.slippageBps) ? body.slippageBps : 500;
+	const tradeFee = await buildAgentTradeFee({
+		network: body.network, payer: keypair.publicKey, userId: auth.userId, side: 'sell',
+		lamports: (BigInt(expectedQuoteStr) * BigInt(Math.max(0, 10_000 - sellSlippageBps))) / 10_000n,
+		isUsdc: quote.isUsdc, quoteMint: quote.quoteMint,
+	});
+	if (tradeFee) instructions = [...instructions, ...tradeFee.instructions];
+
 	let signature;
 	try {
 		// Protected send: priority fee + CU estimate, rebroadcast with blockhash
@@ -1352,6 +1370,7 @@ async function handleSwap(req, res, id) {
 
 	let instructions;
 	let quotedAmount;
+	let feeBasis = null; // quote atomics the trade fee is charged on
 	try {
 		if (body.side === 'buy') {
 			// Spend the pool's quote asset: USDC atomics (6dp) or SOL lamports.
@@ -1396,6 +1415,7 @@ async function handleSwap(req, res, id) {
 			}
 
 			instructions = await amm.buyQuoteInput(swapState, quoteIn, slippage);
+			feeBasis = BigInt(quoteIn.toString());
 			quotedAmount = quote.isUsdc
 				? { quote_usdc_atomics: quoteIn.toString() }
 				: { quote_lamports: quoteIn.toString() };
@@ -1426,6 +1446,8 @@ async function handleSwap(req, res, id) {
 				});
 				const expected = r?.uiQuote ?? r?.minQuote ?? null;
 				if (expected != null) {
+					const swapSlippageBps = Number.isFinite(body.slippageBps) ? body.slippageBps : 500;
+					feeBasis = (BigInt(expected.toString()) * BigInt(Math.max(0, 10_000 - swapSlippageBps))) / 10_000n;
 					quotedAmount[quote.isUsdc ? 'expectedUsdcAtomics' : 'expectedSolLamports'] =
 						expected.toString();
 				}
@@ -1438,6 +1460,15 @@ async function handleSwap(req, res, id) {
 		return error(res, 422, 'build_failed', err.message || 'could not build swap ix');
 	}
 
+	// three.ws trade fee in the same transaction. A sell whose proceeds could not
+	// be quoted has no basis to bill and goes through without it.
+	const tradeFee = feeBasis == null ? null : await buildAgentTradeFee({
+		network: body.network, payer: keypair.publicKey, userId: auth.userId, side: body.side,
+		lamports: feeBasis, isUsdc: quote.isUsdc, quoteMint: quote.quoteMint,
+	});
+	if (tradeFee) instructions = [...instructions, ...tradeFee.instructions];
+	const feeSol = tradeFee && tradeFee.disclosure.asset === 'SOL' ? Number(tradeFee.disclosure.amount) / 1e9 : 0;
+
 	// A SOL swap-buy is a SOL outflow — reserve it against the daily cap atomically
 	// before sending (closes the concurrent-spend TOCTOU). USDC buys move USDC, not
 	// SOL (gated by the balance check above); sells are inflows. Neither reserves.
@@ -1447,7 +1478,7 @@ async function handleSwap(req, res, id) {
 			agentId: id,
 			meta,
 			mint: body.mint,
-			solAmount: body.solAmount,
+			solAmount: body.solAmount + feeSol,
 			type: 'pumpfun.swap.buy',
 			payload: { slippageBps: body.slippageBps, network: body.network, venue: 'amm' },
 		});

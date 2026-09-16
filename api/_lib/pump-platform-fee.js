@@ -27,16 +27,16 @@ const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 const MAX_FEE_BPS = 500; // 5%
 
 /**
- * The platform trade-fee rate in basis points. Defaults to 0 (OFF) so the fee
- * ships inert and never activates on deploy by surprise — set
- * PUMP_PLATFORM_FEE_BPS=100 to charge 1% (matching pump.fun's trade fee) once
- * trading has been verified. Clamped to [0, MAX_FEE_BPS]. The fee also requires
- * a configured recipient (pumpFeeRecipient), so both knobs must be set to bill.
+ * The platform trade-fee rate in basis points: 1% (100) of every customer trade
+ * three.ws builds or signs, the rate the owner set on 2026-09-16.
+ * PUMP_PLATFORM_FEE_BPS overrides it (0 turns it off). Clamped to
+ * [0, MAX_FEE_BPS]. The fee also requires a resolvable recipient
+ * (pumpFeeRecipient), so an environment with no treasury bills nothing.
  * @returns {number}
  */
 export function pumpPlatformFeeBps() {
 	const raw = process.env.PUMP_PLATFORM_FEE_BPS;
-	const n = raw == null || String(raw).trim() === '' ? 0 : parseInt(raw, 10);
+	const n = raw == null || String(raw).trim() === '' ? 100 : parseInt(raw, 10);
 	if (!Number.isFinite(n) || n < 0) return 0;
 	return Math.min(n, MAX_FEE_BPS);
 }
@@ -226,6 +226,57 @@ export function txPaidPlatformFee(tx, fee, quoteMint) {
 			.filter((b) => b.owner === fee.recipient && (!quoteMint || b.mint === quoteMint))
 			.reduce((acc, b) => acc + BigInt(b.uiTokenAmount?.amount || '0'), 0n);
 	return sum(meta.postTokenBalances) - sum(meta.preTokenBalances) >= want;
+}
+
+const platformOwnerCache = new Map(); // userId -> { at, owned }
+const PLATFORM_OWNER_TTL_MS = 10 * 60_000;
+
+/**
+ * True when the account is one of the platform's own agent owners. Their trades
+ * (the $THREE circulation desk, house fleets, buybacks run through agent
+ * wallets) are three.ws moving its own money, so they are never billed.
+ * @param {string|null|undefined} userId
+ */
+export async function isPlatformOwnedUser(userId) {
+	if (!userId) return false;
+	const hit = platformOwnerCache.get(userId);
+	if (hit && Date.now() - hit.at < PLATFORM_OWNER_TTL_MS) return hit.owned;
+	const [{ sql }, { isPlatformOwnedAgent }] = await Promise.all([
+		import('./db.js'),
+		import('./custodial-key-health.js'),
+	]);
+	const [row] = await sql`select email from users where id = ${userId} limit 1`;
+	const owned = isPlatformOwnedAgent(row?.email);
+	platformOwnerCache.set(userId, { at: Date.now(), owned });
+	return owned;
+}
+
+/**
+ * The trade fee for a server-signed agent trade: 1% of the quote spent on a
+ * buy, or of the guaranteed minimum quote out on a sell (the minimum, so a sell
+ * that fills at the slippage floor still covers its own fee). Returns null for
+ * a platform-owned account or when no fee applies.
+ *
+ * @param {object} o
+ * @param {'mainnet'|'devnet'} o.network
+ * @param {PublicKey|string} o.payer       the agent wallet that signs
+ * @param {string|null} o.userId           the agent owner's account id
+ * @param {'buy'|'sell'} o.side
+ * @param {bigint|number|string} o.lamports quote atomics in (buy) or minimum out (sell):
+ *                                          lamports for SOL, USDC base units for USDC
+ * @param {boolean} [o.isUsdc]              the coin is USDC-quoted
+ * @param {string} [o.quoteMint]            the USDC mint for a USDC-quoted coin
+ */
+export async function buildAgentTradeFee({ network, payer, userId, side, lamports, isUsdc = false, quoteMint }) {
+	if (await isPlatformOwnedUser(userId)) return null;
+	return buildPlatformFeeInstructions({
+		network,
+		payer,
+		isUsdc,
+		...(isUsdc && quoteMint ? { quoteMintPk: quoteMint } : {}),
+		grossAtomics: lamports,
+		basis: side === 'buy' ? 'agent_buy' : 'agent_sell',
+	});
 }
 
 export { WSOL_MINT, MAX_FEE_BPS };

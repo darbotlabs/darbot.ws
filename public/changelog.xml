@@ -23,6 +23,14 @@
 			<description>three.ws/launch is rebuilt around one flow: pick one of your 3D agents, name the coin, and launch it on pump.fun from your wallet or from the agent's own wallet. The coin's metadata links your agent's page and 3D body, a live preview and cost panel show exactly what you will pay (including a 1% three.ws fee on the dev buy), and a new My coins tab shows unclaimed creator rewards and claims them in one click, no pump.fun app needed. Launches now fit in a single transaction thanks to pump.fun's lookup table, and larger ones, like USDC-paired coins with a dev buy, use Solana transaction v1 automatically when your wallet supports it. This also fixes launches that were failing because an on-chain buyback program stopped accepting new agents.</description>
 		</item>
 		<item>
+			<title>A flat 1% fee on trades made through three.ws</title>
+			<link>https://three.ws/legal/tos</link>
+			<guid isPermaLink="false">2026-09-16:A flat 1% fee on trades made through three.ws</guid>
+			<pubDate>Wed, 16 Sep 2026 12:00:00 GMT</pubDate>
+			<category>improvement</category>
+			<description>Trades that three.ws builds or runs for you now carry a 1% fee, paid in the same transaction as the trade: buys and sells in the coin trade window, trades from your agent's wallet, and trades your agents make through strategies, mirror trading, orders, market making and sniping. The fee is shown before you confirm, both in the trade window and in the agent wallet's trade tab. Trades you make on other apps are not affected, and three.ws's own agents are never charged.</description>
+		</item>
+		<item>
 			<title>Deploy your agent on-chain with Solana's new transaction v1</title>
 			<link>https://three.ws/deploy-onchain</link>
 			<guid isPermaLink="false">2026-09-16:Deploy your agent on-chain with Solana's new transaction v1</guid>

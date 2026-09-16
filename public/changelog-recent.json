@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-16T20:04:22.550Z",
+	"generated_at": "2026-09-16T21:09:38.691Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3687,
+	"total": 3688,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -29,6 +29,16 @@
 				"feature",
 				"improvement",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-16",
+			"type": "update",
+			"title": "A flat 1% fee on trades made through three.ws",
+			"summary": "Trades that three.ws builds or runs for you now carry a 1% fee, paid in the same transaction as the trade: buys and sells in the coin trade window, trades from your agent's wallet, and trades your agents make through strategies, mirror trading, orders, market making and sniping. The fee is shown before you confirm, both in the trade window and in the agent wallet's trade tab. Trades you make on other apps are not affected, and three.ws's own agents are never charged.",
+			"link": "/legal/tos",
+			"tags": [
+				"improvement"
 			]
 		},
 		{
@@ -1606,16 +1616,6 @@
 			"title": "My Creations",
 			"summary": "Everything you have made on three.ws in one newest-first grid: the agents you built, the 3D avatars you saved, and every model you forged, including models forged in this browser before you had an account. Open, edit, or copy a link to any of them in one click.",
 			"link": "/mine",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Portfolio universe",
-			"summary": "Every asset a Robinhood Chain portfolio may hold, priced live: tokenized equities, crypto majors and chain-native tokens with on-chain liquidity, 24h volume, price change and the NAV premium against each equity's Chainlink feed. Sortable and filterable by asset class.",
-			"link": "/markets/robinhood/portfolios/universe",
 			"tags": [
 				"launch"
 			]

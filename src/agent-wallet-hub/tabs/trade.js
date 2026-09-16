@@ -611,11 +611,19 @@ registerWalletTab({
 				<div class="awh-tr-qrow"><dt>Minimum received</dt><dd>${esc(minStr)}</dd></div>
 				<div class="awh-tr-qrow"><dt>Price impact</dt><dd class="${impactCls}">${impact.toFixed(2)}%</dd></div>
 				<div class="awh-tr-qrow"><dt>Max slippage</dt><dd>${(state.slippageBps / 100).toFixed(state.slippageBps % 100 ? 1 : 0)}%</dd></div>
-				<div class="awh-tr-qrow"><dt>Route</dt><dd>${q.venue === 'amm' ? 'AMM pool' : 'Bonding curve'}${feeBps > 0 ? ` · ${(feeBps / 100).toFixed(2)}% fee` : ''}</dd></div>
+				<div class="awh-tr-qrow"><dt>Route</dt><dd>${q.venue === 'amm' ? 'AMM pool' : 'Bonding curve'}</dd></div>
+				${feeBps > 0 ? `<div class="awh-tr-qrow"><dt>three.ws fee · ${feeBps / 100}%</dt><dd>${esc(feeLine(q, feeBps))}</dd></div>` : ''}
 				${impact >= IMPACT_WARN ? `<div class="awh-tr-quote-note is-warn">⚠ High price impact (${impact.toFixed(1)}%). You may receive significantly less than the market rate.</div>` : ''}
 				${guard ? `<div class="awh-tr-quote-note is-err">⚠ ${esc(guard.message)}</div>` : ''}
 				${funds ? `<div class="awh-tr-quote-note is-err">⚠ ${esc(funds.message)}</div>` : ''}
 			</dl>`;
+		}
+
+		// The fee is charged on the SOL spent (buy) or the minimum SOL received (sell),
+		// the same basis the server bills, so this is the exact amount at most.
+		function feeLine(q, feeBps) {
+			const basis = Number(state.side === 'buy' ? q.in?.amount : q.min_received?.amount);
+			return Number.isFinite(basis) && basis > 0 ? `◎${formatSol((basis * feeBps) / 10_000)}` : `${feeBps / 100}% of the trade`;
 		}
 
 		function actionsInnerHtml() {

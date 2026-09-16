@@ -27,6 +27,7 @@ import { getWalletBaseBalance, reconcileVanishedBag } from './reconcile.js';
 import { assessTradeSafety, recordFirewallDecision, criticalFirewallReason } from '../../api/_lib/trade-firewall.js';
 import { recordDecision } from '../../api/_lib/reasoning-ledger.js';
 import { screenPush } from './screen-push.js';
+import { buildAgentTradeFee } from '../../api/_lib/pump-platform-fee.js';
 
 // Self-rated conviction for a snipe entry, 0..1. Lower price impact and a clean
 // firewall verdict raise it; a warned verdict and heavy impact lower it. This is
@@ -538,6 +539,13 @@ export async function executeBuy({ cfg, strat, mint, throttle }) {
 			const baseAmount = BigInt(built.expectedBaseTokens.toString());
 			if (baseAmount <= 0n) return await fail(posId, tag, 'zero_tokens');
 
+			// The three.ws trade fee rides in the buy transaction for customer agents
+			// and is part of the position's cost basis, so paper and live P&L both
+			// net it out. Platform-owned fleets pay nothing.
+			const buyFee = await buildAgentTradeFee({ network: cfg.network, payer: keypair.publicKey, userId: strat.user_id, side: 'buy', lamports: perTrade });
+			if (buyFee) built = { ...built, instructions: [...built.instructions, ...buyFee.instructions] };
+			const entryCost = perTrade + (buyFee ? BigInt(buyFee.disclosure.amount) : 0n);
+
 			let sig = 'SIMULATED';
 			// Execution telemetry — only set on a live broadcast; simulate keeps nulls
 			// (except a 'simulated' route marker so the UI can label paper fills).
@@ -573,7 +581,7 @@ export async function executeBuy({ cfg, strat, mint, throttle }) {
 				UPDATE agent_sniper_positions SET
 					status = 'open', buy_sig = ${sig},
 					error = ${ammEntry ? 'graduated:amm_entry' : null},
-					entry_quote_lamports = ${perTrade.toString()},
+					entry_quote_lamports = ${entryCost.toString()},
 					base_amount = ${baseAmount.toString()},
 					entry_price_lamports_per_token = ${pricePerToken},
 					entry_price_impact_pct = ${Number(quote.priceImpactPct)},
@@ -595,7 +603,7 @@ export async function executeBuy({ cfg, strat, mint, throttle }) {
 			});
 			screenPush(`Bought $${(mint.symbol || mint.mint.slice(0, 6)).toUpperCase()} at ${lamportsToSol(perTrade).toFixed(4)} SOL — position open`, 'trade');
 			notifyBuy({ agentName: strat.agent_name || strat.agent_id, symbol: mint.symbol, mint: mint.mint, solSpent: lamportsToSol(perTrade), mode: cfg.mode, sig, chatId: strat.telegram_chat_id || null });
-			await recordSnipeSpend({ agentId: strat.agent_id, userId: strat.user_id, network: cfg.network, lamports: perTrade, signature: sig, mode: cfg.mode, mint: mint.mint, capabilityId: spendCapabilityId });
+			await recordSnipeSpend({ agentId: strat.agent_id, userId: strat.user_id, network: cfg.network, lamports: entryCost, signature: sig, mode: cfg.mode, mint: mint.mint, capabilityId: spendCapabilityId });
 			await recordSnipeDecision({
 				strat, network: cfg.network, mint, posId, sig, mode: cfg.mode,
 				priceImpactPct: Number(quote.priceImpactPct), firewall: firewallSnapshot, perTradeLamports: perTrade,
@@ -735,6 +743,13 @@ export async function executeSell({ cfg, position, reason, fraction = 1, recover
 				}
 			}
 
+			// The trade fee on a sell is taken on the slippage-floor proceeds, so a fill
+			// at the floor still covers it, and it comes out of the leg's P&L.
+			const sellFloor = (BigInt(expectedOut) * BigInt(Math.max(0, Math.round((100 - slippagePct) * 100)))) / 10_000n;
+			const sellFee = await buildAgentTradeFee({ network: cfg.network, payer: keypair.publicKey, userId: position.user_id, side: 'sell', lamports: sellFloor });
+			if (sellFee) built = { ...built, instructions: [...built.instructions, ...sellFee.instructions] };
+			const sellFeeLamports = sellFee ? BigInt(sellFee.disclosure.amount) : 0n;
+
 			let sig = 'SIMULATED';
 			if (cfg.mode === 'live') {
 				sig = await signAndSend(ctx, keypair, built.instructions, cfg.confirmTimeoutMs);
@@ -747,7 +762,7 @@ export async function executeSell({ cfg, position, reason, fraction = 1, recover
 			// partial take-initials books the profit on just the half it sold and the
 			// remainder keeps its own proportional basis.
 			const soldCostBasis = partial ? (entryFull * ppm) / 1_000_000n : entryFull;
-			const legPnl = expectedOut - soldCostBasis;
+			const legPnl = expectedOut - sellFeeLamports - soldCostBasis;
 			const priorRealized = BigInt(position.realized_pnl_lamports || '0');
 			const cumRealized = priorRealized + legPnl;
 

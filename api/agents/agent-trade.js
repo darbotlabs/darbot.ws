@@ -45,6 +45,7 @@ import {
 } from '../_lib/agent-trade-guards.js';
 import { assessTradeSafety, recordFirewallDecision, firewallGuardResponse } from '../_lib/trade-firewall.js';
 import { submitProtected } from '../_lib/execution-engine.js';
+import { buildAgentTradeFee } from '../_lib/pump-platform-fee.js';
 
 const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 const CONFIRM_TIMEOUT_MS = 45_000;
@@ -245,7 +246,7 @@ async function buildTradeInstructions({ ctx, side, venue, mintPk, ownerPk, lampo
 // shape. Buys are gated on the lamport caps + USD ceiling + balance; sells only
 // move SOL inward, so they skip the spend caps but still honor the kill switch,
 // the price-impact breaker, and a fee-headroom floor.
-async function runGuards({ id, side, tradeLimits, prep, walletLamports, network, meta, mintPk, ownerPk, userId }) {
+async function runGuards({ id, side, tradeLimits, prep, walletLamports, network, meta, mintPk, ownerPk, userId, feeLamports = 0n }) {
 	const killed = checkKillSwitch(tradeLimits.kill_switch);
 	if (killed) return tradeGuardResponse(killed);
 
@@ -279,7 +280,7 @@ async function runGuards({ id, side, tradeLimits, prep, walletLamports, network,
 			throw e;
 		}
 
-		const headroom = checkSolHeadroom(walletLamports, lamports, SOL_FEE_HEADROOM_LAMPORTS);
+		const headroom = checkSolHeadroom(walletLamports, BigInt(lamports) + BigInt(feeLamports), SOL_FEE_HEADROOM_LAMPORTS);
 		if (headroom) return tradeGuardResponse(headroom);
 
 		// Rug/honeypot firewall — a REAL on-chain simulated buy→sell round-trip +
@@ -499,10 +500,22 @@ export async function executeAgentTrade({ id, userId, meta, input, req = null, s
 		try { prep.usdValue = await lamportsToUsd(prep.lamports); } catch { prep.usdValue = null; }
 	}
 
+	// The three.ws trade fee rides in the trade transaction: on the SOL spent for a
+	// buy, on the guaranteed minimum SOL out for a sell. Priced before the guards
+	// so the SOL headroom check covers it. Platform-owned agents pay nothing.
+	let tradeFee;
+	try {
+		tradeFee = await buildAgentTradeFee({ network, payer: ownerPk, userId, side, lamports: side === 'buy' ? prep.lamports : prep.minOutRaw });
+	} catch (e) {
+		console.error('[agents/agent-trade] fee build failed', e?.message);
+		return fail(502, 'fee_build_failed', 'could not price the trade fee, try again');
+	}
+	const feeLamports = tradeFee ? BigInt(tradeFee.disclosure.amount) : 0n;
+
 	// Run the shared guardrails — identical for manual + strategy trades.
 	let blocked;
 	try {
-		blocked = await runGuards({ id, side, tradeLimits, prep, walletLamports, network, meta, mintPk: input.mintPk, ownerPk, userId });
+		blocked = await runGuards({ id, side, tradeLimits, prep, walletLamports, network, meta, mintPk: input.mintPk, ownerPk, userId, feeLamports });
 	} catch (e) {
 		console.error('[agents/agent-trade] guard check failed', e?.message);
 		return fail(502, 'guard_check_failed', 'could not verify the trade guardrails — try again');
@@ -520,6 +533,7 @@ export async function executeAgentTrade({ id, userId, meta, input, req = null, s
 		console.error('[agents/agent-trade] build failed', e?.message);
 		return fail(502, 'build_failed', 'could not build the trade — try again');
 	}
+	if (tradeFee) built.instructions = [...built.instructions, ...tradeFee.instructions];
 
 	const ledgerMeta = {
 		side, mint: input.mint, venue: prep.venue, slippage_bps: input.slippageBps,
@@ -527,6 +541,7 @@ export async function executeAgentTrade({ id, userId, meta, input, req = null, s
 		expected_out: prep.expectedOutRaw.toString(),
 		min_out: prep.minOutRaw.toString(),
 		...(side === 'sell' ? { base_amount: prep.baseAmount.toString(), token_decimals: prep.decimals } : {}),
+		...(tradeFee ? { platform_fee: tradeFee.disclosure } : {}),
 		...(isStrategy ? { source: 'strategy', strategy: sourceMeta?.strategy ?? null, strategy_id: sourceMeta?.strategy_id ?? null, equip_id: sourceMeta?.equip_id ?? null } : {}),
 	};
 
@@ -758,8 +773,12 @@ async function handleQuote(req, res, id) {
 		try { prep.usdValue = await lamportsToUsd(prep.lamports); } catch { prep.usdValue = null; }
 	}
 
+	let tradeFee = null;
+	try { tradeFee = await buildAgentTradeFee({ network, payer: ownerPk, userId: auth.userId, side, lamports: side === 'buy' ? prep.lamports : prep.minOutRaw }); } catch { tradeFee = null; }
+	const feeLamports = tradeFee ? BigInt(tradeFee.disclosure.amount) : 0n;
+
 	let blocked = null;
-	try { blocked = await runGuards({ id, side, tradeLimits, prep, walletLamports, network, meta, mintPk: input.mintPk, ownerPk, userId: auth.userId }); } catch { blocked = null; }
+	try { blocked = await runGuards({ id, side, tradeLimits, prep, walletLamports, network, meta, mintPk: input.mintPk, ownerPk, userId: auth.userId, feeLamports }); } catch { blocked = null; }
 
 	return json(res, 200, {
 		data: {
@@ -770,6 +789,7 @@ async function handleQuote(req, res, id) {
 				? { sol_in: lamportsToSol(prep.lamports), expected_tokens_out: prep.expectedOutRaw.toString() }
 				: { tokens_in: prep.baseAmount.toString(), token_decimals: prep.decimals, expected_sol_out: lamportsToSol(prep.expectedOutRaw) }),
 			min_out: prep.minOutRaw.toString(),
+			platform_fee: tradeFee ? tradeFee.disclosure : null,
 			wallet_balance_sol: Number(walletLamports) / 1e9,
 			allowed: !blocked,
 			blocked_reason: blocked ? { code: blocked.code, message: blocked.message, detail: blocked.detail } : null,

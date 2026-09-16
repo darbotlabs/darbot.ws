@@ -276,7 +276,7 @@ export async function runFollowerTrade({
 
 	let instructions;
 	try {
-		instructions = await buildTradeInstructions({ side, conn, network, mintPk, ownerPk: keypair.publicKey, quote, slippageBps, solAmount, tokenAmountRaw });
+		instructions = await buildTradeInstructions({ userId: ownerId, side, conn, network, mintPk, ownerPk: keypair.publicKey, quote, slippageBps, solAmount, tokenAmountRaw });
 	} catch (e) {
 		await updateCustodyEvent(claimId, { status: 'failed', meta: { error: 'build_failed', message: (e?.message || '').slice(0, 200) } }).catch(() => {});
 		return { status: 'failed', code: 'build_failed' };
