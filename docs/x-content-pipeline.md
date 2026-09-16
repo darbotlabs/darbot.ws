@@ -47,7 +47,8 @@ X Articles require the posting account to be on X Premium.
 | [data/x-content/queue.json](../data/x-content/queue.json) | The queue: cadence, quality limits, and every item. |
 | `data/x-content/articles/<id>.md` | Article bodies, in Markdown. |
 | `public/x-media/<id>/` | Media for queue items. Media must live under `public/` or `data/` so it ships inside the production image. |
-| [api/_lib/x-content/](../api/_lib/x-content/) | The engine: quality lint, media rules, Markdown to Article conversion, scheduler, publisher, ledger. |
+| [api/_lib/x-content/](../api/_lib/x-content/) | The engine: voice and editorial lint, media rules, live fact verification, the AI editor, review records, Markdown to Article conversion, scheduler, publisher, ledger. |
+| `data/x-content/reviews/<id>.json` | The editorial review record for each item, bound to a hash of the exact content that was reviewed. |
 | [api/cron/x-content.js](../api/cron/x-content.js) | The Cloud Scheduler tick, every 15 minutes. |
 | [scripts/x-content.mjs](../scripts/x-content.mjs) | The operator CLI. |
 | `app_settings` row `x_content` | The publish ledger, shared by the cron and the CLI. |
@@ -65,17 +66,30 @@ X Articles require the posting account to be on X Premium.
 	"windowMinutes": 90,
 	"posts": [
 		{
-			"text": "Drop a GLB on Rig Doctor and it names the skeleton convention before the bones finish loading: three.ws/rig-doctor",
-			"textFrom": "docs/announcements/open-source-friday.post.txt",
+			"text": "Drop a .glb on Rig Doctor and it names which of 15 rig conventions the skeleton follows, with nothing uploaded: three.ws/rig-doctor",
 			"media": [{ "path": "public/x-media/rig-doctor-clip/clip.mp4", "probe": { "durationSec": 18.2, "width": 1920, "height": 1080, "fps": 60, "videoCodec": "h264", "pixFmt": "yuv420p", "audioCodec": "aac" } }]
 		},
-		{ "text": "Eleven rig conventions so far. The twelfth is an open first issue." }
-	]
+		{ "text": "Every clip in the library is authored against one canonical skeleton, so a rig that maps cleanly animates on arrival." }
+	],
+	"claims": [
+		{
+			"says": "15 rig conventions",
+			"evidence": [
+				{ "type": "page", "url": "https://three.ws/rig-doctor", "contains": "15 rig conventions recognised" },
+				{ "type": "module", "path": "src/rig-report.js", "export": "CONVENTIONS", "length": 15 }
+			]
+		},
+		{ "says": "with nothing uploaded", "evidence": [{ "type": "page", "url": "https://three.ws/rig-doctor", "contains": "Nothing is uploaded" }] },
+		{ "says": "Every clip in the library is authored against one canonical skeleton", "evidence": [{ "type": "page", "url": "https://three.ws/rig-doctor", "contains": "Every clip in the three.ws library is authored against one canonical skeleton" }] }
+	],
+	"mentions": {}
 }
 ```
 
 - `status`: `draft` (may be unfinished), `review` (must pass `check`), `approved` (eligible to publish), `paused`, `posted`.
 - `lane` and `pattern` are free-form labels; rotation compares them against what was published last.
+- `claims` is the fact ledger. Every number, ordinal, and absolute word (first, only, every, never, fastest) in the copy must sit inside some claim's `says`, every `says` must quote the copy, and every claim carries at least one piece of `evidence` (types below).
+- `mentions` maps each @handle in the copy to the reason the tag is true. A tag with no reason is blocked.
 - `textFrom` is optional. When set, `check` fails if the inline text differs from that announcement-pack file, so the copy that was reviewed is the copy that ships.
 - An `article` item carries `"article": { "title", "body", "cover": { "path" } }`, and its optional `posts` quote the published Article.
 
@@ -92,10 +106,14 @@ npm run x:content -- import https://example.com/our-guest-post --as article --id
 # 2. Video: transcode to X's spec, burn in captions, and record the probe on the item
 npm run x:content -- prepare-video ~/Desktop/rig-doctor.mov --out public/x-media/rig-doctor-clip/clip.mp4 --captions ~/Desktop/rig-doctor.srt --item rig-doctor-clip
 
-# 3. Rewrite the imported copy in your own voice, then validate
+# 3. Rewrite the imported copy in your own voice, declare its claims, then validate
 npm run x:content:check
 
-# 4. See exactly what would be sent, and when the queue will send it
+# 4. Run the editorial bar: live fact checks, spelling, media quality, and the AI editor
+npm run x:content -- review web-component-article
+npm run x:content -- review --status review
+
+# 5. See exactly what would be sent, and when the queue will send it
 npm run x:content -- run --dry-run --id web-component-article
 npm run x:content:plan
 ```
@@ -104,6 +122,36 @@ npm run x:content:plan
 
 Images for other channels come from [the announcement capture tool](./announcements/README.md) (`npm run announce:media`), which records frames from the live product; point queue media at those files.
 
+## The editorial bar
+
+Formatting rules keep a feed from looking automated. They do not stop a post from being wrong, and a wrong post from a company account costs more than no post. So nothing can be `approved` until `npm run x:content -- review <id>` passes, and the record it writes is bound to a hash of the copy, every media file's bytes, the alt text, the claims, and the mentions. Change one word or swap one image and the approval is void until the item is reviewed again. A record also expires after 14 days, because facts drift. The production cron enforces the same rule from the records that ship in the image.
+
+A review runs five layers, cheapest first:
+
+| Layer | What it catches | Where |
+|---|---|---|
+| Voice lint | Hype openers, hashtags, emoji, dashes, stacked exclamation marks, shouting, repeats of earlier posts | [quality.js](../api/_lib/x-content/quality.js) |
+| Editorial lint | Brand spelling (three.ws, $THREE, GitHub, NVIDIA, glTF, X not Twitter); anything that reads as a price promise or investment pitch; crypto slang; marketing filler; engagement begging; rhetorical-question openers and one-word drumbeats; more than one link or two tags; undeclared numbers, absolutes, and tags | [editorial.js](../api/_lib/x-content/editorial.js) |
+| Media quality | Images under 1200 px wide, crops X will cut in the timeline, alt text that is too short or repeats the post, and frames captured more than 21 days ago (recapture with `npm run announce:media`) | [editorial.js](../api/_lib/x-content/editorial.js) |
+| Live verification | Every claim against its evidence at the moment of review, every link resolved, every @mention confirmed as a real public X account, and spelling in US or British English (add correct product terms to `quality.glossary`) | [verify.js](../api/_lib/x-content/verify.js) |
+| AI editor | Whether the post is actually good: accuracy against the verified evidence, clarity for a reader who has never heard of three.ws, specificity, voice, a partner-safe professional tone, and whether the image supports the copy. It sees the images, scores six dimensions, quotes each issue with a concrete fix, and proposes a rewrite, which is linted too | [editor.js](../api/_lib/x-content/editor.js) |
+
+Evidence types:
+
+| `type` | Passes when |
+|---|---|
+| `page` | The live page, rendered in a real browser and allowed to finish rendering, contains `contains` |
+| `file` | A repo file contains `contains`, or matches the `matches` regular expression |
+| `module` | A repo module's `export` has `length` entries, or equals `equals` |
+| `github-issue` | `repo#number` has the given `state` and `label` |
+| `github-issues` | `repo` has at least `min` issues with the given `state` and `label` |
+
+The live product is the source of truth. When a screenshot disagrees with the live page, the screenshot is stale: recapture it and use the live number. The editor is instructed the same way, and its verdict cannot pass an item it raised a blocking issue on or scored below 4 anywhere. Where a human disagrees with a `revise` verdict that has no blocking issue, `"editorOverride": { "reason": "..." }` on the item records the decision; nothing overrides a failed fact check or blocking lint.
+
+The editor tries Claude on Vertex AI first, then Claude through OpenRouter, then OpenAI, then Kimi K3 on NVIDIA NIM, falling through on any provider or billing error; each record names the model that reviewed it. The CLI reads missing credentials from the Cloud Run service and uses the signed-in `gh` session for GitHub checks.
+
+This bar caught real errors in the first three queued posts. The Rig Doctor post said the tool knew 11 rig conventions while the live page and code said 15, called a merged fix "an open first issue" when no such issue was open, and shipped a screenshot from before the change. The AWS post was 94 characters and stated no mechanism, and an AI rewrite of it upgraded "an AWS Partner" to "a verified AWS Partner", which no evidence supports.
+
 ## Going live
 
 Posting is owner-gated. The cron ships in preview mode: with `X_CONTENT_AUTO_PUBLISH` unset, each tick returns the exact API calls it would make, which is how the queue is verified in production first.
@@ -111,7 +159,7 @@ Posting is owner-gated. The cron ships in preview mode: with `X_CONTENT_AUTO_PUB
 1. The @trythreews user tokens must be on the Cloud Run service. `X_API_KEY` and `X_API_SECRET` are already there; `X_ACCESS_TOKEN` and `X_ACCESS_SECRET` (generated for @trythreews in the X developer portal, with Read and Write) must be added with `gcloud run services update three-ws-api --region us-central1 --update-secrets` or `--update-env-vars`.
 2. Deploy, which bakes the queue and media into the image, and sync the Cloud Scheduler job from `vercel.json` with [scripts/create-gcp-scheduler.mjs](../scripts/create-gcp-scheduler.mjs).
 3. Read a preview tick: the scheduler job's response, or `gcloud logging read 'resource.type="cloud_run_revision" resource.labels.service_name="three-ws-api" textPayload:"x-content"' --freshness=1h`.
-4. Set items to `approved` and deploy. To publish one item by hand instead of waiting: `npm run x:content -- run --id <slug>` (needs `DATABASE_URL`, so the ledger prevents a double post).
+4. Review each item (`npm run x:content -- review <id>`), set the passing ones to `approved`, commit their review records, and deploy. To publish one item by hand instead of waiting: `npm run x:content -- run --id <slug>` (needs `DATABASE_URL`, so the ledger prevents a double post).
 5. To publish automatically: `gcloud run services update three-ws-api --region us-central1 --update-env-vars X_CONTENT_AUTO_PUBLISH=true`.
 
 Queue edits reach production with the next deploy, because the cron reads the queue from the image. The ledger is in the database, so a redeploy never republishes anything.
@@ -127,4 +175,4 @@ Queue edits reach production with the next deploy, because the cron reads the qu
 
 ## Tests
 
-[tests/x-content.test.js](../tests/x-content.test.js) covers the lint, the media rules, the Markdown to Article offsets, the scheduler's jitter, spacing, cap, rotation, and resume rules, and the publisher's thread chaining, crash resume, and Article draft, publish, and quote sequence.
+[tests/x-content.test.js](../tests/x-content.test.js) covers the voice and editorial lint, the claims ledger, media quality, review records binding approval to exact content, the editor verdict rules, the media rules, the Markdown to Article offsets, the scheduler's jitter, spacing, cap, rotation, and resume rules, and the publisher's thread chaining, crash resume, and Article draft, publish, and quote sequence.

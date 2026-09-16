@@ -252,3 +252,114 @@ describe('publisher', () => {
 		expect(row.url).toBe(`https://x.com/trythreews/status/${row.articlePostId}`);
 	});
 });
+
+describe('editorial', () => {
+	it('passes the reviewed Genesis copy untouched', async () => {
+		const { languageProblems, assertionsIn } = await import('../api/_lib/x-content/editorial.js');
+		const text = 'A sentence or a selfie becomes a rigged 3D agent holding its own custodial @solana wallet, a persona, and a voice. It walks and emotes on arrival: three.ws/genesis';
+		expect(languageProblems(text)).toEqual([]);
+		expect(assertionsIn(text)).toEqual({ numbers: [], absolutes: [] });
+	});
+
+	it('blocks brand errors, financial promotion, slang, pushy asks, and ad-copy structure', async () => {
+		const { languageProblems } = await import('../api/_lib/x-content/editorial.js');
+		const rules = (text) => languageProblems(text).map((row) => `${row.rule}:${row.severity}`);
+		expect(rules('Three.ws ships agents on Github: three.ws/a')).toEqual(['brand:blocking', 'brand:blocking']);
+		expect(rules('$THREE has 100x potential for holders: three.ws/a')).toContain('compliance:blocking');
+		expect(rules('gm frens, agents are live: three.ws/a')).toContain('register:blocking');
+		expect(rules('A robust agent runtime: three.ws/a')).toEqual(['register:major']);
+		expect(rules('Agents are live, check it out: three.ws/a')).toContain('register:blocking');
+		expect(rules('Fast. Simple. Onchain. three.ws/a')).toContain('structure:blocking');
+		expect(rules('What if agents could pay? They can: three.ws/a')).toContain('structure:blocking');
+		expect(rules('Two links: three.ws/a and three.ws/b')).toContain('links:blocking');
+	});
+
+	it('treats names as names and ordinals as numbers', async () => {
+		const { assertionsIn } = await import('../api/_lib/x-content/editorial.js');
+		expect(assertionsIn('3D agents on ERC-8004 with $THREE: three.ws/a').numbers).toEqual([]);
+		expect(assertionsIn('Rig Doctor knows 11 conventions; teach it the 12th in 40 ms at 86%').numbers).toEqual(['11', '12th', '40 ms', '86%']);
+	});
+
+	it('requires every number, absolute, and tag in the copy to be declared', async () => {
+		const { claimProblems } = await import('../api/_lib/x-content/editorial.js');
+		const item = { posts: [{ text: 'The first viewer with 15 rig conventions, built on @solana: three.ws/a' }] };
+		const messages = claimProblems(item).map((row) => row.message).join('\n');
+		expect(messages).toMatch(/"15" is an unverified number/);
+		expect(messages).toMatch(/"first" is an absolute/);
+		expect(messages).toMatch(/@solana has no recorded reason/);
+
+		const declared = {
+			...item,
+			claims: [
+				{ says: 'first viewer', evidence: [{ type: 'file', path: 'x', contains: 'y' }] },
+				{ says: '15 rig conventions', evidence: [{ type: 'file', path: 'x', contains: 'y' }] },
+			],
+			mentions: { '@solana': 'wallets are Solana wallets' },
+		};
+		expect(claimProblems(declared)).toEqual([]);
+		expect(claimProblems({ ...declared, claims: [...declared.claims, { says: 'not in the copy', evidence: [] }] }).map((row) => row.message).join('\n'))
+			.toMatch(/does not appear in the copy[\s\S]*has no evidence/);
+	});
+
+	it('flags soft, badly cropped, undescribed, and stale media', async () => {
+		const { mediaQualityProblems } = await import('../api/_lib/x-content/editorial.js');
+		const { default: sharp } = await import('sharp');
+		const dir = sandbox();
+		await sharp({ create: { width: 800, height: 200, channels: 3, background: '#000' } }).png().toFile(join(dir, 'public/x-media/t/small.png'));
+		await sharp({ create: { width: 1800, height: 1013, channels: 3, background: '#000' } }).png().toFile(join(dir, 'public/x-media/t/hero.png'));
+		mkdirSync(join(dir, 'public/announce'), { recursive: true });
+		writeFileSync(join(dir, 'public/announce/media-manifest.json'), JSON.stringify({ shots: { hero: { src: '/x-media/t/hero.png', route: '/hero', capturedAt: '2026-08-01T00:00:00Z' } } }));
+		const now = Date.parse('2026-09-16T00:00:00Z');
+
+		const small = await mediaQualityProblems({ text: 'x', media: [{ path: 'public/x-media/t/small.png', alt: 'short' }] }, dir, { now });
+		const smallText = small.map((row) => row.message).join('\n');
+		expect(smallText).toMatch(/800px wide/);
+		expect(smallText).toMatch(/4\.00:1/);
+		expect(smallText).toMatch(/alt text is 5 characters/);
+
+		const stale = await mediaQualityProblems({ text: 'x', media: [{ path: 'public/x-media/t/hero.png', alt: 'The hero page with its drop zone and the four stats beneath it' }] }, dir, { now });
+		expect(stale.map((row) => row.message)).toEqual([expect.stringMatching(/captured 46 days ago from \/hero/)]);
+	});
+});
+
+describe('review', () => {
+	it('binds approval to the exact reviewed content', async () => {
+		const { approvalProblems, contentHash, reviewPath } = await import('../api/_lib/x-content/review.js');
+		const dir = sandbox();
+		const item = { id: 'demo', kind: 'post', posts: [{ text: HEAD, media: [{ path: 'public/x-media/t/a.png', alt: 'alt' }] }] };
+		expect(approvalProblems(item, dir).join('\n')).toMatch(/no editorial review/);
+
+		mkdirSync(join(dir, 'data/x-content/reviews'), { recursive: true });
+		const record = { id: 'demo', contentHash: contentHash(item, dir), reviewedAt: '2026-09-16T00:00:00Z', passed: true, blockers: [] };
+		writeFileSync(join(dir, reviewPath('demo')), JSON.stringify(record));
+		const now = Date.parse('2026-09-17T00:00:00Z');
+		expect(approvalProblems(item, dir, now)).toEqual([]);
+
+		expect(approvalProblems({ ...item, posts: [{ ...item.posts[0], text: `${HEAD} ` }] }, dir, now)).toEqual([]);
+		expect(approvalProblems({ ...item, posts: [{ ...item.posts[0], text: HEAD.replace('Rig', 'The rig') }] }, dir, now).join('\n')).toMatch(/changed after the last review/);
+		writeFileSync(join(dir, 'public/x-media/t/a.png'), Buffer.alloc(65));
+		expect(approvalProblems(item, dir, now).join('\n')).toMatch(/changed after the last review/);
+		writeFileSync(join(dir, 'public/x-media/t/a.png'), Buffer.alloc(64));
+		expect(approvalProblems(item, dir, Date.parse('2026-10-16T00:00:00Z')).join('\n')).toMatch(/days old/);
+		writeFileSync(join(dir, reviewPath('demo')), JSON.stringify({ ...record, passed: false, blockers: ['link three.ws/a: HTTP 404'] }));
+		expect(approvalProblems(item, dir, now).join('\n')).toMatch(/did not pass: link three\.ws\/a: HTTP 404/);
+	});
+
+	it('blocks an approved item in the queue validator until it is reviewed', () => {
+		const dir = sandbox();
+		const item = { id: 'demo', status: 'approved', kind: 'post', lane: 'l', pattern: 'p', notBefore: '2026-09-17T14:00:00Z', posts: [{ text: HEAD, media: [{ path: 'public/x-media/t/a.png', alt: 'The Rig Doctor page' }] }] };
+		expect(validateItem(item, dir).join('\n')).toMatch(/review: no editorial review/);
+		expect(validateItem({ ...item, status: 'review' }, dir)).toEqual([]);
+	});
+
+	it('never lets the editor pass its own blocking issue or a low score', async () => {
+		const { parseReview } = await import('../api/_lib/x-content/editor.js');
+		const scores = { accuracy: 5, clarity: 5, specificity: 5, voice: 5, professionalism: 5, visual: 5 };
+		const clean = parseReview(`Here you go: ${JSON.stringify({ verdict: 'publish', scores, issues: [] })}`);
+		expect(clean.verdict).toBe('publish');
+		expect(parseReview(JSON.stringify({ verdict: 'publish', scores, issues: [{ severity: 'blocking', area: 'accuracy' }] })).verdict).toBe('revise');
+		expect(parseReview(JSON.stringify({ verdict: 'publish', scores: { ...scores, clarity: 3 }, issues: [] })).verdict).toBe('revise');
+		expect(() => parseReview(JSON.stringify({ verdict: 'ship', scores, issues: [] }))).toThrow(/verdict/);
+		expect(() => parseReview('no json here')).toThrow(/no JSON/);
+	});
+});
