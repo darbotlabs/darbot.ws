@@ -3,7 +3,7 @@
  * -------------------------
  * GET /api/three-token/stats          — protocol-level metrics (public)
  * GET /api/three-token/revenue-share  — authenticated user's revenue share position
- * GET /api/three-token/burns          — platform burn ledger (always empty: no platform burns)
+ * GET /api/three-token/burns: platform burn ledger (always empty: no platform burns)
  * GET /api/three-token/activity       — protocol activity feed
  * GET /api/three-token/leaderboard    — ranked $THREE holders (public, paginated)
  *
