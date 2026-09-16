@@ -27,20 +27,33 @@ For Cursor, Claude Desktop, or another stdio MCP client:
 
 | Tool | Purpose |
 | --- | --- |
-| `extract_solana_memo_media` | Fetch one finalized transaction and extract supported image data URIs from top-level and inner Memo instructions. |
+| `extract_solana_memo_media` | Fetch one legacy, v0, or v1 transaction and return every supported image in its top-level and inner Memo instructions, with signer, slot, and version. |
+| `find_solana_memo_media` | Scan up to 1,000 recent signatures for an address (pageable with `before`). Only signatures whose memo summary holds a data URI are fetched, so a scan costs a handful of RPC calls. |
 | `decode_solana_memo_data_uri` | Decode one already-copied data URI locally. No network call. |
-| `find_solana_memo_media` | Inspect up to 20 recent finalized transactions for an address and return matching memo media. |
-| `get_solana_memo_media_status` | Show the local policy and RPC failover hosts. No network call. |
+| `get_solana_memo_media_status` | Show the local policy, recognized memo programs, and RPC failover hosts. No network call. |
+
+Recognized memo programs: SPL Memo v1 (`Memo1UhkJRfHyvLMcVLMbLJYfW2tfU8G8H4PqvV6v8`), SPL Memo v2 (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`), and the newer program carried by version 1 transactions (`Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`).
 
 ## Example
 
-Ask an MCP client: "Show any image embedded in Solana transaction `<signature>`." It calls:
+Ask an MCP client: "Show any image embedded in Solana transaction `<signature>`." It calls `extract_solana_memo_media` with:
 
 ```json
 { "signature": "<base58 Solana transaction signature>" }
 ```
 
-The response includes a concise JSON record plus MCP `image` content. JSON metadata contains the source signature, MIME type, byte length, SHA-256, and dimensions when the file format exposes them. The raw data URI is intentionally not echoed into text output.
+The response is a JSON record plus one MCP `image` content block per asset. The record carries the signature, fee payer, slot, transaction version, and for each asset its MIME type, byte length, SHA-256, and dimensions. The raw data URI is intentionally not echoed into text output.
+
+Use it from your own code:
+
+```js
+import { decodeDataUri } from '@three-ws/solana-memo-media-mcp/src/lib/media.js';
+
+const media = decodeDataUri('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lwV8YQAAAABJRU5ErkJggg==');
+console.log(media.mimeType, media.byteLength, media.dimensions, media.sha256);
+```
+
+Full guide: [docs/mcp-solana-memo-media.md](../../docs/mcp-solana-memo-media.md).
 
 ## Safety and provenance
 

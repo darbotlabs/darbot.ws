@@ -26,6 +26,19 @@ function gifDimensions(bytes) {
 	return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) };
 }
 
+function webpDimensions(bytes) {
+	const chunk = bytes.subarray(12, 16).toString('ascii');
+	if (chunk === 'VP8X' && bytes.length >= 30) return { width: bytes.readUIntLE(24, 3) + 1, height: bytes.readUIntLE(27, 3) + 1 };
+	if (chunk === 'VP8L' && bytes.length >= 25 && bytes[20] === 0x2f) {
+		const bits = bytes.readUInt32LE(21);
+		return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+	}
+	if (chunk === 'VP8 ' && bytes.length >= 30 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+		return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+	}
+	return null;
+}
+
 function jpegDimensions(bytes) {
 	let offset = 2;
 	while (offset + 9 < bytes.length) {
@@ -58,7 +71,7 @@ function inspectMagic(type, bytes) {
 	}
 	if (type === 'image/webp') {
 		if (bytes.subarray(0, 4).toString('ascii') !== 'RIFF' || bytes.subarray(8, 12).toString('ascii') !== 'WEBP') throw bad('Bytes do not have a WebP signature.', 'media_signature_mismatch');
-		return null;
+		return webpDimensions(bytes);
 	}
 	return null;
 }

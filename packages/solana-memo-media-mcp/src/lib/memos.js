@@ -1,24 +1,28 @@
-const MEMO_PROGRAMS = new Set(['MemoSq4gqABAXKb96qnH8TysNcV4F6n7jKx9jABZx1s', 'Memo1UhkJRfHyvLMcVLMbLJYfW2tfU8G8H4PqvV6v8']);
+// SPL Memo v1, SPL Memo v2, and the newer memo program that version-1 transactions carry.
+export const MEMO_PROGRAM_IDS = new Set([
+	'Memo1UhkJRfHyvLMcVLMbLJYfW2tfU8G8H4PqvV6v8',
+	'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+	'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH',
+]);
 
 function isMemo(instruction) {
-	return MEMO_PROGRAMS.has(instruction?.programId) || /memo/i.test(String(instruction?.program || '')) || /memo/i.test(String(instruction?.programId || ''));
+	return MEMO_PROGRAM_IDS.has(instruction?.programId) || instruction?.program === 'spl-memo';
 }
 
-function textFrom(instruction) {
-	if (typeof instruction?.parsed === 'string') return instruction.parsed;
-	if (typeof instruction?.data === 'string' && instruction.data.startsWith('data:')) return instruction.data;
-	return null;
-}
-
+// jsonParsed RPC responses carry a memo's UTF-8 text as a string in `parsed`.
 export function memoPayloads(transaction) {
 	const groups = [transaction?.transaction?.message?.instructions || [], ...(transaction?.meta?.innerInstructions || []).map((item) => item.instructions || [])];
 	const output = [];
 	for (const instructions of groups) {
 		for (const instruction of instructions) {
-			if (!isMemo(instruction)) continue;
-			const payload = textFrom(instruction);
-			if (payload) output.push(payload);
+			if (isMemo(instruction) && typeof instruction.parsed === 'string') output.push(instruction.parsed);
 		}
 	}
 	return [...new Set(output)];
+}
+
+// getSignaturesForAddress reports memos as "[length] text; [length] text". A signature whose
+// memo summary holds no data URI cannot carry memo media, so it needs no getTransaction call.
+export function signatureMayCarryMedia(memoSummary) {
+	return typeof memoSummary === 'string' && memoSummary.includes('data:');
 }

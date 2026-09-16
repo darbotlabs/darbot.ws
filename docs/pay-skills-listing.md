@@ -12,7 +12,7 @@
 three.ws is an agent-first 3D model platform. Paid REST endpoints cover glTF/GLB model
 validation, Solana token visualization, Pump.fun agent analytics, on-chain identity
 verification, and a Claude-backed growth-analysis power. All endpoints settle in USDC
-on Solana mainnet, with Base (and Arbitrum for model-check) as the alternative EVM
+(or $THREE) on Solana mainnet, with Base (and Arbitrum for model-check) as the alternative EVM
 rails; Solana is the first accept in every 402 challenge, so a client that takes
 the first accept settles there. The MCP server exposes the same surface as
 JSON-RPC tools.
@@ -35,7 +35,7 @@ are the source of truth and match what the 402 challenges advertise; verify with
 | `/api/x402/agent-reputation` | GET | $0.01 | Reputation snapshot for a three.ws agent: USDC paid in, distinct payers, deployed mints, distribution success rate, attestation count |
 | `/api/x402/fact-check` | POST | $0.10 | Sourced fact-check verdict (supported/contradicted/mixed/insufficient) with cited sources, authority weights, and a SHA-256 attestation |
 | `/api/x402/mint-to-mesh-batch` | POST | $0.05 | Resolve 1–10 Solana SPL mints to themed GLB cubes in one call; per-mint failures report individually |
-| `/api/x402/pump-launch` | POST | $5.00 | Deploy a brand-new pump.fun token in one paid call. Supply name + symbol + (metadataUri or imageUrl); the server fronts the SOL deploy cost and signs the create-coin tx. Creator rewards accrue to any Solana wallet you nominate; optional vanity mint address. Returns mint + tx signature + pump.fun URL |
+| `/api/x402/pump-launch` | POST | $5.00 | Deploy a brand-new pump.fun token in one paid call. Supply name + symbol + (metadataUri or imageUrl); the server fronts the SOL deploy cost and signs the create-coin tx. Creator rewards accrue to any Solana wallet you nominate, or pass `holderReward: true` to route creator fees to holders through the pump.fun holder-rewards PDA; optional vanity mint address. Returns mint + tx signature + pump.fun URL |
 
 All prices are in USDC with 6 decimals. `$0.001` = 1000 atomics.
 
@@ -90,7 +90,12 @@ are supported.
 - Every 402 challenge echoes the resource URL both at top-level `resource.url` AND in
   each `accepts[].resource`, so wallet/facilitator spend logs reconcile cleanly without
   relying on the buyer to remember which endpoint they hit.
-- Solana routes require a `feePayer` field in the accept block (included automatically
-  in the 402 challenge) for PayAI's `/verify` to accept the SPL transfer.
+- Solana accepts normally carry `extra.feePayer` (the platform sponsor, included
+  automatically in the 402 challenge), and an external facilitator such as PayAI
+  requires it at `/verify`. When three.ws settles in-house and the sponsor wallet
+  cannot co-sign, the accept is advertised without `feePayer`: the buyer signs as
+  their own fee payer (self-pay) and needs a little SOL for the network fee.
+- On Solana, `$THREE` is offered as a second accept alongside USDC on the same
+  challenge.
 - No public key-generation endpoints. three.ws does not run any server-side vanity-key
   or keypair-generation paid endpoint — wallet keys never leave the buyer's environment.

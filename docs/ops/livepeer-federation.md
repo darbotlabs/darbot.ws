@@ -24,14 +24,19 @@ routes exactly that class:
   before persistence: gateway `safety_check` screening honored, artifact bytes
   must carry a real PNG/JPEG signature and clear a 1 KB floor. Dark unless
   `LIVEPEER_FEDERATION_ENABLED` is truthy.
-- Chain position in `api/_mcp3d/text-to-image.js`: after the first-party free
-  lanes (Vertex/NIM cost the platform nothing), before the paid Replicate
-  backstop ($0.003/image). A successful federated call is strictly cheaper
-  than every remaining option at that point in the ladder.
+- Chain position in `api/_mcp3d/text-to-image.js`: after the first-party
+  lanes (Vertex/NIM) and the HF-routed FLUX rungs (fal-ai, then nscale, when
+  `HF_TOKEN` is set), before the keyless Pollinations rung and the paid
+  Replicate backstop ($0.003/image). Like every rung, it runs under the
+  ladder's one shared budget (`TEXT_TO_IMAGE_BUDGET_MS`, default 60s), so its
+  own 90s ceiling is capped by whatever is left and a stalled gateway hands
+  off instead of hanging the submit.
 - `api/_lib/image-persist.js`: the persist-to-R2 rule was copy-pasted between
   `text-to-image.js` and `forge-reference-image.js`; the adapter needed a
   third copy, so the rule now lives in one module and both call sites import
-  it. No behavior change.
+  it. When the bucket refuses the write (a storage-infrastructure fault such
+  as a rejected credential), it now returns an inline `data:image/` URI under
+  4 MB instead of throwing, which the platform's own GPU workers read directly.
 - `scripts/livepeer-federation-bench.mjs`: the comparison harness. Runs N
   real jobs per lane, reports latency/success/cost per lane with failure
   classes, and writes a JSON report.

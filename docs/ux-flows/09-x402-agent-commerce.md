@@ -142,10 +142,10 @@ choreographed two-agent narrative driven by Server-Sent Events.
   3. Click **Run Task** → button "Running…", skeleton cards shown.
   4. `POST /api/agents/endpoint-shopper-run` with `{ task, maxCostUsd }` → agent emits a step trace: **discover** 🔍 → **plan** 🗺 → **call** ⚡ (per endpoint, with URL + USDC cost + snippet) → **synthesize** 🧠.
   5. Timeline renders all steps; **Total spent** row ("$0.00…" or "Free"); **Final Answer** card with synthesized text. Button re-enabled.
-- **Decision points / branches:** empty task / budget < $0.01 → button disabled + hint; `402` → paywall card "Pay with Wallet" → `/paywall.html?req=…&return=/shopper`; `400`/`5xx`/network → error card + retry.
+- **Decision points / branches:** empty task / budget < $0.01 → button disabled + hint; `402` → paywall card "Pay with Wallet" → `/paywall.html?req=…&return=/shopper`; `400`/`5xx`/network → error card + retry. The error card never repeats the run route's machine output (a snake_case code such as `no_payto_configured`, or a diagnostic with a module prefix such as `paidEndpoint:`): a `5xx` reads "The agent service is temporarily unavailable", a lost connection says the service could not be reached, and a `4xx` uses the server's text only when it reads as a sentence for a person (`readableServerMessage`), else designed copy.
 - **External calls / dependencies:** `/api/agents/endpoint-shopper-run`, downstream x402 endpoints discovered via the Bazaar, `/paywall.html`.
 - **Success state:** full step timeline + final answer + total cost; ready for a new task.
-- **Empty / error states:** initial skeleton/empty hint ("Enter a task…"); `402` warning card with CTA; red error card with retry; "Free (no paid calls executed)" if only free steps ran.
+- **Empty / error states:** initial skeleton/empty hint ("Enter a task…"); a run that returns no plan and no answer → "No endpoints matched" card quoting the task, with rewrite / raise budget / browse the Bazaar suggestions and a run-again button; `402` warning card with CTA; red error card with retry; "Free (no paid calls executed)" if only free steps ran.
 - **Step count:** 5 required (+3 optional).
 
 ### Fact Checker — `/fact-checker`
@@ -296,20 +296,20 @@ choreographed two-agent narrative driven by Server-Sent Events.
 ---
 
 ### Sniper Arena — `/play/arena`
-- **Source:** `pages/play/arena.html` + `src/play/arena.js`; backend `api/sniper/leaderboard`, `api/sniper/stream` (SSE), `api/sniper/trader`, `api/oracle/agent-stats`.
+- **Source:** `pages/play/arena.html` + `src/play/arena.js` + `src/play/rivalries.js`; backend `api/sniper/leaderboard`, `api/sniper/rivalries` (see `docs/rivalries.md`), `api/sniper/stream` (SSE), `api/sniper/trader`, `api/oracle/agent-stats`.
 - **Entry point:** A 3D world where **autonomous** AI agents trade real pump.fun tokens on Solana mainnet, live. Left = live leaderboard; right = live trade tape; bottom = movement hints. **No x402 micropayments here** — agents have pre-funded wallets and trade autonomously.
 - **Prerequisites / gates:** None to watch. Picking an avatar is local (`localStorage arena:avatar:v1`), no payment. Agents trade with their own funded Solana wallets.
 - **Steps (4 required + 3 optional):**
-  1. **[auto]** Page boots `ArenaWorld` (Three.js 60fps), loads animation manifest + default avatar GLB, fetches `/api/sniper/leaderboard?network=mainnet`, opens SSE `/api/sniper/stream`.
-  2. **[auto]** Agents spawn (deterministic avatar by `agent_id` hash, arc formation, floating DOM labels with rank/name/P&L).
+  1. **[auto]** Page boots `ArenaWorld` (Three.js 60fps) and, without waiting on the 3D load, fetches `/api/sniper/leaderboard?network=mainnet` and mounts the grudge-match strip (`GET /api/sniper/rivalries?window=7d&lookback=24h&limit=2`, refreshed every 90s: each row pairs a trader with the one above them, labelled Passed / Debut / Chasing, with links to the leader's record and Ghost-copy). The board and tape paint while the animation manifest + avatar GLB download; the loading curtain sits below the side panels, so it only hides the empty canvas. Once the world is walkable, SSE `/api/sniper/stream` opens after the first board read.
+  2. **[auto]** Agents spawn once the world is ready (deterministic avatar by `agent_id` hash, arc formation, floating DOM labels with rank/name/P&L).
   3. **[auto/live]** SSE `buy`/`sell`/`update` events → agent emotes + particle burst, trade tape prepends (BUY/SELL ▲▼, symbol, Solscan link), big-win banner, board refresh.
   4. **[user, optional]** **Choose your avatar** → modal → select → spawn player (saved to localStorage).
   5. **[user, optional]** Move with WASD / drag look / scroll zoom / touch joystick.
   6. **[user, optional]** Click an agent label → camera focus + right drawer profile (equity sparkline, stats grid, recent closed trades with on-chain proof, Oracle conviction section) → **Full proof & copy ↗** → `/trader/<agent_id>` new tab.
 - **Decision points / branches:** fully autonomous trading — user only watches/moves/inspects; SSE vs periodic board refresh; avatar selection local; focus/unfocus; big-win banner threshold (≥0.4◎ or ≥100%).
-- **External calls / dependencies:** `/api/sniper/leaderboard`, `/api/sniper/stream` (SSE), `/api/sniper/trader`, `/api/oracle/agent-stats`, `/animations/manifest.json`, avatar GLBs, Solscan, `/trader/<id>`. Solana mainnet (real pump.fun trades).
+- **External calls / dependencies:** `/api/sniper/leaderboard`, `/api/sniper/rivalries`, `/api/sniper/stream` (SSE), `/api/sniper/trader`, `/api/oracle/agent-stats`, `/animations/manifest.json`, avatar GLBs, Solscan, `/trader/<id>`. Solana mainnet (real pump.fun trades).
 - **Success state:** agents render + leaderboard + live tape; user can move + inspect; real trades animate in real time.
-- **Empty / error states:** no live agents → "No agents are live yet… arm a trader and enter"; SSE drop → "Reconnecting…" (retry 2.5s); board fetch fail → keep last good; drawer fail → "Couldn't load this trader"; avatar load fail → mono-initial tile.
+- **Empty / error states:** no live agents → "No agents are live yet… arm a trader and enter"; SSE drop → "Reconnecting…" (retry 2.5s); board never read → "Can't reach the leaderboard." + **Retry now** (KPI strip hidden); refresh fail after a good read → "Standings are stale." keeping the last good board and its KPI strip; rivalries → skeleton, an empty note when fewer than two traders have 3+ closed round-trips, or "Can't reach the rivalry feed." + Retry; drawer fail → "Couldn't load this trader"; avatar load fail → mono-initial tile.
 - **Step count:** 4 required (auto boot) + 3 optional (avatar, move, inspect).
 
 ### Agent Exchange (feature page) — `/features/agent-exchange`
@@ -331,6 +331,7 @@ choreographed two-agent narrative driven by Server-Sent Events.
 
 - **Routing:** all clean URLs resolve through the `vercel.json` route table — read directly by the Cloud Run server (`server/index.mjs`) in production and mirrored by the `vite.config.js` `historyApiFallback` map in dev. `/pay`, `/bazaar`, `/arbitrage`, `/providers`, `/forever`, `/tutor` live under `public/`; the rest under `pages/`.
 - **Shared payment modal:** `/x402.js` (`public/x402.js`, ~2.4k LOC) is the drop-in `window.X402.pay()` modal used by `/pay/c`, `/bazaar`, `/arbitrage`, `/ibm/x402-demo`, `/shopper` (paywall), `/fact-checker`, `/unstoppable`, `/tutor`. It handles wallet connect (Phantom/Solana, MetaMask/Base via EIP-3009), the 402→sign→retry loop, and SIWX re-entry. Its Solana web3.js and SIWX hashing imports go through `/load-module.js` (the pinned version on esm.sh, then jsdelivr, then unpkg, each under a deadline); only when all three fail does the modal steer the buyer to MetaMask on Base, which needs no third-party code. A cross-origin endpoint whose response carries no CORS headers is reported as "<host> does not allow browser requests" with a pointer to a server, an agent, or the x402 CLI, and no Try-again button.
+- **Chain order in the 402:** every `paidEndpoint` route in this cluster (`/api/x402/fact-check`, `/api/x402/tutor`, `/api/x402/symbol-availability`, and the rest) inherits the platform default of Solana first, then Base, so the live challenge lists networks in the same order the discovery catalog advertises and a client that takes the first accept settles on Solana. `tests/x402-solana-first-ordering.test.js` fails the suite if a route pins Base first again.
 - **Server-payer vs user-payer:** the "agent economy" narratives (`/agent-exchange`, `/agent-trade`, `/agent-economy`, `/demo`, `/live`) pay from **server-held agent wallets** and stream the choreography over SSE — the user only triggers/selects, then watches. The "showcase" apps (`/shopper`, `/fact-checker`, `/tutor`, `/bazaar`, `/arbitrage`, `/ibm`) make the **user** pay via the `/x402.js` modal.
 - **Auto-play demos:** `/agent-exchange`, `/agent-trade`, `/agent-economy`, `/demo` need one user click to start, then auto-play. `/live` adds an auth gate for real settlement. `/play/arena` is fully autonomous (agents trade themselves; user only watches/moves/inspects) and uses **no x402** — real pre-funded Solana trades.
 - **Forever** is the only **non-x402** payment in the cluster: native Bitcoin (or Lightning) to an OrdinalsBot charge address, inscribing a real Taproot text inscription on Bitcoin mainnet.

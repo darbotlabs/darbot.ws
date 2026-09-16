@@ -2,7 +2,7 @@
 
 Every project keeps two records of the same work.
 
-The **commit log** is complete and unreadable. The **changelog** is readable and incomplete. On three.ws both are published, both are pushed to the holder Telegram channel, and until now neither knew the other existed. The same afternoon's work reached the same channel twice, in two voices, with nothing saying it was the same work.
+The **commit log** is complete and unreadable. The **changelog** is readable and incomplete. On three.ws both are published, both are pushed to the community Telegram channel, and until now neither knew the other existed. The same afternoon's work reached the same channel twice, in two voices, with nothing saying it was the same work.
 
 The ship log is the join. Live at **[three.ws/ship](https://three.ws/ship)**, served as data at **[/api/ship/feed](https://three.ws/api/ship/feed)**, and computed by an open-source package, **[@three-ws/shipfeed](../packages/shipfeed/README.md)**, that works on any repository.
 
@@ -27,7 +27,7 @@ GitHub /repos/nirholas/three.ws/commits        public/changelog.json
                              │
               ┌──────────────┼───────────────────────┐
               ▼              ▼                       ▼
-        /api/ship/feed    /ship page        the holder Telegram lanes
+        /api/ship/feed    /ship page        the community Telegram lanes
        (JSON, MD, RSS)                   (provenance footer + noise filter)
 ```
 
@@ -140,7 +140,7 @@ curl -s 'https://three.ws/api/ship/feed?format=rss'      # a feed reader, with c
 
 ## What changed in the Telegram channel
 
-Two lanes post to the holders' channel, and they now share this one join.
+Two lanes post to the community channel, and they now share this one join.
 
 **Release announcements** (`/api/cron/changelog-push`, every 20 minutes) carry a provenance footer:
 
@@ -154,7 +154,7 @@ shipped in 4 commits          ← links to the GitHub compare view for the range
 three.ws/changelog/2026-08-27-text-to-3d-... · 2026-08-27 · #fix #infra
 ```
 
-The footer is best-effort by design: if GitHub cannot be read at that moment, the announcement goes out without it rather than not going out.
+The footer is best-effort by design: if GitHub cannot be read at that moment, the announcement goes out without it rather than not going out. Entries are keyed by date and title, and repeats of one key within a batch are collapsed before sending, so a duplicated line in `data/changelog.json` never reaches the channel twice.
 
 **The raw commit feed** (`/api/cron/commit-feed-push`, every 5 minutes) reads its headline from the same parser, so a scoped commit now says "Feature · resilience" rather than "feat(resilience)", and it skips commits the classifier calls noise: merges, `chore(deps):` bumps, and lockfile-only changes. A skipped commit still advances the lane's state, so nothing is ever re-read, and the tick reports `{ posted, skipped }` so the drop is visible in the logs rather than silent.
 

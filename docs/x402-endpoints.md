@@ -36,8 +36,13 @@ Endpoints advertise the networks they accept in the 402 challenge. The platform
 settles **USDC on Solana** (primary, always-on via the self-hosted facilitator)
 and, when configured, **USDC on Base** (EVM) and a **BSC leg** (contract-mediated
 `direct` scheme, advertised only when `X402_PAY_TO_BSC` is set). On the Solana
-rail, `X402_ACCEPT_THREE_SOLANA` optionally advertises **$THREE** alongside USDC
-as a second accept entry on the same challenge. The relevant config (see
+rail, `X402_ACCEPT_THREE_SOLANA` (on by default) advertises **$THREE** alongside
+USDC as a second accept entry on the same challenge; the browser checkout renders a
+token chooser whenever a resource quotes more than one asset on a network, so a
+buyer can actually pay in either. `paidEndpoint` lists networks Solana first, then
+Base; a handler passes `networks` only to narrow that set, and
+`tests/x402-solana-first-ordering.test.js` fails any handler that pins a non-Solana
+network first. The relevant config (see
 [Configuration](configuration.md)):
 
 | Key                                                  | Meaning                              |
@@ -64,22 +69,35 @@ endpoint logic, and issues a signed receipt.
 
 ### When settlement capacity runs dry
 
-Solana settles in sponsor mode: the platform's fee wallet
+Solana normally settles in sponsor mode: the platform's fee wallet
 (`X402_FEE_PAYER_SOLANA`) co-signs and pays the network fee. The
-self-facilitator refuses to settle whenever that wallet drops below
-`X402_SPONSOR_SOL_FLOOR_LAMPORTS` (0.02 SOL), which protects the wallet from
-being drained to zero mid-flight. That refusal is **temporary capacity, not an
-outage**, and the whole path says so:
+self-facilitator refuses a sponsored settle whenever that wallet would end below
+`X402_SPONSOR_SOL_FLOOR_LAMPORTS` (default 0.02 SOL) **after paying the settle's
+own cost** (including ~0.00204 SOL of ATA rent when the receiver has never held
+the mint), which protects the wallet from being drained to zero mid-flight.
 
-| Layer                     | Behaviour while the sponsor is below its floor                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 402 challenge             | The Solana accept is **not advertised**. Other configured networks still are, so the endpoint stays payable.      |
-| No network left to offer  | `503 settlement_unavailable`, retryable, never the `500 no_payto_configured` misconfiguration error.             |
-| A payment that still lands | `503 settlement_unavailable`. Only a genuinely unexplained settle failure is `502 settle_failed`.                 |
+Sponsoring gas is a convenience, not a precondition for being paid. When we
+settle in-house (the self-hosted facilitator) and the sponsor cannot co-sign (no
+key loaded, or known below its floor), both accept builders (`buildRequirements()`
+in `x402-paid-endpoint.js` and `paymentRequirements()` in `x402-spec.js`) keep
+advertising the Solana USDC and $THREE accepts **without `extra.feePayer`**. That
+is the self-pay contract: the buyer signs as their own fee payer and the
+facilitator only broadcasts, spending none of our SOL. Sponsored mode resumes on
+its own once the wallet is refunded. Self-pay is never offered when Solana routes
+to an external facilitator, which pins the sponsor and would reject the challenge
+at `/verify`.
+
+| Situation                                   | Behaviour                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Sponsor below floor, in-house facilitator   | Solana accepts are advertised in self-pay mode (no `feePayer`); the endpoint stays payable on Solana.          |
+| Sponsor below floor, external facilitator   | The Solana accept is not advertised. Other configured networks still are.                                     |
+| No network left to offer                    | `503 settlement_unavailable`, retryable, never the `500 no_payto_configured` misconfiguration error.           |
+| Sponsored payment lands while the wallet is short | `503 settlement_unavailable` (`fee_wallet_below_floor`, `fee_wallet_cannot_cover_settle`). Only a genuinely unexplained settle failure is `502 settle_failed`. |
+| Self-pay buyer cannot cover the network fee | `402 insufficient_fee_balance` (`buyer_cannot_cover_fee`): add a little SOL and pay again. No top-up of ours helps. |
 
 **Buyers should treat `503 settlement_unavailable` as retry-after**, the same as
-any capacity signal. No signed payment is consumed by a doomed settle, and the
-accept reappears automatically within about a minute of the wallet being
+any capacity signal. No signed payment is consumed by a doomed settle, and
+sponsored mode reappears automatically within about a minute of the wallet being
 refunded (each instance re-reads the balance at most once per 20s).
 
 Operators: the funding root tops the fee wallet back up automatically
@@ -87,7 +105,9 @@ Operators: the funding root tops the fee wallet back up automatically
 wallet in the default deployment, the sweep reserves the settle floor plus
 `ECONOMY_MASTER_SPONSOR_HEADROOM_SOL` (0.03) on top of its own reserve, so
 funding engines can never starve settlement. Check the effective value in the
-cron's `sweepFloorSol` field.
+cron's `sweepFloorSol` field. When the master is thin, settle-critical fee wallets
+are funded before float wallets regardless of which has the larger deficit, and a
+skip reason distinguishes a dry master from a run cap that genuinely bound.
 
 ## Where payments land
 
@@ -213,12 +233,12 @@ datapoints at **$0.0005** USDC each by default, overridable per family with
 | ----------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
 | `/api/x402/forge`                                           | tiered    | Text/image → 3D model (price by tier; GPU-bound). Every settled generation also lands in the public community gallery (`forge_creations`) stamped with the payer, settle signature, and price; the gallery shows a Solscan-linked "x402" provenance badge. See [Avatar pipeline](avatar-pipeline.md). |
 | `/api/x402/embody`                                          | $1.00     | **Embodiment.** One call, an agent buys itself a body: prompt or image in → rigged, voiced 3D avatar out, plus a durable persona id and a one-tag `<iframe>` embed for any website. Settles on delivery — a failed generation never charges. See [Embodiment](embody.md). |
-| `/api/x402/pipeline`                                        | per stage | **One call, full 3D asset pipeline** — text or GLB in, rigged/optimized game-ready GLB out. Ordered chain of `generate → rig → remesh → gameready → stylize`; the 402 quote is the exact sum of the requested stages. Poll free at `/api/forge?job=<id>` for per-stage progress. See [3D pipeline](3d-pipeline.md). |
+| `/api/x402/pipeline`                                        | per stage | **One call, full 3D asset pipeline** — text or GLB in, rigged/optimized game-ready GLB out. Ordered chain of `generate → rig → remesh → gameready → stylize`; the 402 quote is the exact sum of the requested stages. Poll free at `/api/forge?job=<id>` for per-stage progress. A bare POST with no body (how listing validators probe a paid row) gets the 402 priced at the catalog's example chain; the body validation error is raised only for a caller that pays. See [3D pipeline](3d-pipeline.md). |
 | `/api/x402/pipeline-rig`                                    | $0.05     | **Pipeline — Rig.** Static GLB in → animation-ready rigged GLB out (skeleton + skin weights). One paid call, durable URL. See [3D pipeline](3d-pipeline.md). |
 | `/api/x402/pipeline-remesh`                                 | $0.03     | **Pipeline — Remesh.** Retopologize a GLB (triangle/quad/lowpoly, repair, decimate to a face budget) with texture re-baked. GLB in → GLB out. See [3D pipeline](3d-pipeline.md). |
 | `/api/x402/pipeline-gameready`                              | $0.03     | **Pipeline — Game-Ready.** Retopologize to a poly budget + PBR re-bake for real-time engines. GLB in → engine-ready GLB out. See [3D pipeline](3d-pipeline.md). |
 | `/api/x402/pipeline-stylize`                                | $0.03     | **Pipeline — Stylize.** Geometric restyle (voxel/brick/voronoi/lowpoly) that rebuilds the mesh. GLB in → GLB out. See [3D pipeline](3d-pipeline.md). |
-| `/api/x402/pipeline-rembg`                                  | $0.01     | **Pipeline — Background Removal.** Image in → transparent PNG out (clean reference view for image→3D). See [3D pipeline](3d-pipeline.md). |
+| `/api/x402/pipeline-rembg`                                  | $0.01     | **Pipeline — Background Removal.** Image in → transparent PNG out (clean reference view for image→3D). `model`: `rmbg2` (default), `birefnet` (cleanest hair and thin edges, ~6 s), `u2net_human_seg`, `isnet`, `u2net`, `silueta`. See [3D pipeline](3d-pipeline.md). |
 | `/api/x402/mint-to-mesh`, `/api/x402/mint-to-mesh-batch`    | $0.001    | Token/mint → 3D mesh; `mint-to-mesh-batch` runs a set at $0.05.                              |
 | `/api/x402/model-check`, `/api/x402/model-validation-sweep` | $0.001    | Validate a GLB / sweep a batch. (`model-check` is kept as a paid convenience; the same inspection is free at `/api/3d/inspect`.) |
 | `/api/x402/avatar-optimize-batch`                           | $0.001    | Batch optimization pass over the top N avatars.                                              |
@@ -232,7 +252,7 @@ datapoints at **$0.0005** USDC each by default, overridable per family with
 | [`/api/x402/vanity`](vanity.md)                                                                                                                                           | $0.01–$0.50 (≤3) · $2.50–$10 (4–5, inventory-only) | **Vanity Grinder** — get a brand-new Solana address that starts with your ticker/prefix and/or ends with a suffix, for a branded token mint or agent/treasury wallet. Checks the pre-ground warehouse first for **instant delivery** (`source: "inventory"`); falls back to a live grind (`source: "ground"`) up to 3 chars. Keypair or importable BIP-39 mnemonic; nothing stored; optional `sealTo` ECIES. Full doc: [vanity.md](vanity.md). |
 | [`/api/x402/vanity-verifiable`](vanity.md#tier-2--provably-fair-grinder)                                                                                                  | $0.02–$0.40    | **Provably-fair grinder** — same grind with a signed commit–reveal receipt proving the key was ground fresh and never kept. Spec: [PROTOCOL-vanity.md](PROTOCOL-vanity.md). |
 | [`/api/x402/vanity-premium`](vanity.md#tier-3--premium-inventory)                                                                                                         | $1–$50 by rarity | **Premium inventory** — buy a pre-ground 4–5+ char brandable address from stock. GET lists available patterns + prices (free); `?address=…` buys via x402 and delivers the key **once** (ciphertext destroyed on delivery). Browsable at `/vanity/premium`. |
-| `/api/x402/pay-by-name`                                                                                                                                                   | $0.001         | Resolve and pay a `@username` / `.sol` name / raw address (see [Agent wallets](agent-wallets.md)); the paid resolve toll is $0.001, the transfer amount itself is buyer-specified. A name that resolves to nothing returns `404 not_found` and the payment is left unsettled, so an unresolvable name is free. |
+| `/api/x402/pay-by-name`                                                                                                                                                   | $0.001         | Resolve and pay a `@username` / `.sol` name / raw address (see [Agent wallets](agent-wallets.md)); the paid resolve toll is $0.001, the transfer amount itself is buyer-specified. A name that resolves to nothing returns `404 not_found` and the payment is left unsettled, so an unresolvable name is free. A body-less POST lands on this paid resolve lane and gets the 402 challenge (the free prep flow must say `mode: "prep"` or carry its wallet/amount fields). |
 | `/api/x402/did`                                                                                                                                                           | $0.001         | **POST** is the DID verification canary: it resolves three.ws's published W3C DID document over its real public route, structurally validates it, and returns `{ verified, latency_ms, configured, checks }`. `configured: false` means the resolver answered 404 or could not be reached at all. `mode: "sweep"` audits recent agent identities for resolvable key material instead. **GET** is the free publisher for `/.well-known/did.json`; every other verb returns `405`. |
 | `/api/x402/three-buy`                                                                                                                                                     | $0.001         | Micro-buy service: one settled toll payment triggers one small, real on-chain USDC to $THREE buy funded by the micro-buy wallet (driven by the `three-buy-loop` cron). |
 | `/api/x402/knock`                                                                                                                                                         | set by recipient | **Knock**: pay a person's own price and get exactly one message through to them, in person. The recipient sets what a moment of their attention costs and the USDC settles straight to their wallet, never the platform's, so a priced door cannot be opened without one. The accepted message becomes a companion event whose importance is derived from the amount paid, and their 3D companion walks on screen wherever they are and delivers it out loud. Body is validated against that door's limits before any 402 is issued, so nobody pays for a message that was going to be refused. |
@@ -269,7 +289,7 @@ directory.
 
 | Endpoint                           | Default  | Returns                                                                                                                                                           |
 | ---------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/x402/analytics`              | $0.005   | Platform reports: club and listing analytics.                                                                                                                     |
+| `/api/x402/analytics`              | $0.005   | Platform reports: club and listing analytics. The volume report's gross totals include the internal ring, so it carries a `revenue_split` block (external / internal ring / synthetic, or `null` when it cannot be computed). |
 | `/api/x402/mcp-tool-catalog`       | $0.001   | Snapshot of every MCP tool (name, paid/free, price, input shape) and a diff vs the last snapshot (added / removed / re-priced tools).                           |
 | **Free read surfaces**             | —        | —                                                                                                                                                                 |
 | `/api/x402/my-receipts`            | free     | A buyer's own settled receipts, gated by a wallet signature (SIWX) rather than a payment.                                                                         |

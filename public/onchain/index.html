@@ -60,7 +60,8 @@
   </main>
   <script>
     const RPC = 'https://api.mainnet-beta.solana.com';
-    const memoProgram = 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH';
+    // SPL Memo v1, v2, and the newer program that version-1 transactions use.
+    const memoPrograms = new Set(['Memo1UhkJRfHyvLMcVLMbLJYfW2tfU8G8H4PqvV6v8', 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr', 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH']);
     const $ = (id) => document.getElementById(id);
     const signatureFrom = (value) => {
       const trimmed = value.trim();
@@ -102,7 +103,9 @@
       try {
         const response = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTransaction', params: [signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }] }) });
         const payload = await response.json(); if (payload.error) throw new Error(payload.error.message); if (!payload.result) throw new Error('Transaction was not found on the Solana mainnet.');
-        const instruction = payload.result.transaction.message.instructions.find((item) => item.programId === memoProgram && typeof item.parsed === 'string');
+        const instructions = [...payload.result.transaction.message.instructions, ...(payload.result.meta?.innerInstructions || []).flatMap((group) => group.instructions || [])];
+        const memos = instructions.filter((item) => memoPrograms.has(item.programId) && typeof item.parsed === 'string');
+        const instruction = memos.find((item) => item.parsed.startsWith('data:')) || memos[0];
         if (!instruction) throw new Error('No readable Memo was found in this transaction.');
         render(signature, payload.result, instruction.parsed);
       } catch (error) { setStatus(error.message || 'Could not read that transaction.', true); }
