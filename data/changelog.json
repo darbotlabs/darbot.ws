@@ -28206,6 +28206,16 @@
 				"security"
 			],
 			"link": "/docs/mcp-studio"
+		},
+		{
+			"date": "2026-09-16",
+			"title": "GitHub fee claims now say what they actually prove",
+			"summary": "A GitHub fee claim on pump.fun proves that a GitHub account collected creator fees routed to it. It does not prove that person built the coin, owns the linked repository, or backs the project. Claim cards on /pumpfun used to read as a developer endorsing a coin even when the account was a lookalike name, the coin had no GitHub link at all, or one fee account was shared by several coins and the card simply picked the biggest one. Every claim now carries one of five labels: verified repository, verified creator wallet, identity mismatch, unverified, or unresolved pooled withdrawal. Only the two verified labels get trade buttons or count toward a coin's reputation score, mismatches are flagged in red, and the Telegram claims channel follows the same rules.",
+			"tags": [
+				"fix",
+				"improvement"
+			],
+			"link": "/pumpfun"
 		}
 	]
 }
