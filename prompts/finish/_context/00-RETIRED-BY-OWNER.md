@@ -67,3 +67,19 @@ Campaign-level orders:
 - `916-roadmap-native-widgets.md`
 - `917-roadmap-pumpfun-trading.md`
 - `918-roadmap-pumpfun-trading-arena.md`
+
+## 2026-09-16: the retirement commit was incomplete, and is now finished
+
+The retirement commit (`1ab0f9754`) lists the 30 orders above but deleted only four of them
+(`309`, `908`, `909`, `910`). The other deletions never reached a commit, so fourteen retired
+orders stayed tracked in `finish/`, read as an open queue, and were edited by later sessions as if
+they were live. On 2026-09-16 the leftovers were removed to match the owner's recorded decision.
+Their final text, including any status notes added after 2026-09-09, is recoverable from the
+parent of the commit that removed each one:
+
+    git log --diff-filter=D --format=%h -- prompts/finish/<name>.md
+    git show <that sha>^:prompts/finish/<name>.md
+
+Nothing was lost by this. The open state those later notes recorded (the Home price decision, the
+translation run, the billing hold) already lives in `home-PROGRESS.md` and
+`production-100-OWNER-ACTIONS.md`.
