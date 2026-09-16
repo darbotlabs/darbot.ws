@@ -7,9 +7,9 @@
 // semantic search that lights up matching stars, and a legend that
 // flies the camera to each named constellation.
 //
-// All data is real (no mock path). When the backend can't build the galaxy — most
-// often because no embedding provider is configured — the viewer explains rather than faking a
-// universe.
+// All data is real (no mock path). When the backend can't build the galaxy (most
+// often because no embedding provider is configured), the viewer explains rather than
+// faking a universe.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
