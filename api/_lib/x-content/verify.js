@@ -74,7 +74,22 @@ function createPageReader() {
 			try {
 				const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 }).catch(() => null);
 				const status = response?.status() ?? 0;
-				const text = await page.evaluate(() => (document.querySelector('main') || document.body).innerText);
+				// Client-rendered pages (AWS Builder Center, most SPAs) can still be
+				// empty at network idle. Wait until the text stops growing, so a
+				// claim is never failed by a page that had not finished rendering.
+				await page
+					.waitForFunction(
+						() => {
+							const length = document.body.innerText.length;
+							const previous = window.__verifyLength || 0;
+							window.__verifyLength = length;
+							return length > 200 && length === previous;
+						},
+						null,
+						{ polling: 1000, timeout: 30_000 },
+					)
+					.catch(() => {});
+				const text = await page.evaluate(() => document.body.innerText);
 				const result = { status, text: normalize(text) };
 				cache.set(url, result);
 				return result;
