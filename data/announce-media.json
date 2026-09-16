@@ -59,7 +59,7 @@
 			"id": "rig-doctor-hero",
 			"surface": "/rig-doctor",
 			"url": "/rig-doctor",
-			"alt": "three.ws Rig Doctor: drop in any humanoid GLB and it names the skeleton convention, then lists joint by joint which bones will animate and which will not move",
+			"alt": "The three.ws Rig Doctor page: a drop zone for a .glb file that runs entirely in the browser, above stats reading 0 bytes leave your machine, 52 canonical joints scored, and 15 rig conventions recognised",
 			"caption": "Rig Doctor tells you which joints will not move before you ever load a clip."
 		},
 		{
