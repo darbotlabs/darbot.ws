@@ -177,43 +177,19 @@ function routeSql(handlers) {
 
 describe('GET /api/three-token/burns', () => {
 	beforeEach(() => { vi.clearAllMocks(); });
-	afterEach(() => { vi.restoreAllMocks(); });
 
-	it('renders the deploy-burn ledger from real agent rows', async () => {
-		routeSql([
-			['ORDER BY created_at DESC', () => Promise.resolve([
-				{ id: 'a1', name: 'Green Galunga', created_at: '2026-08-16T04:58:12.852Z' },
-				{ id: 'a2', name: null, created_at: '2026-08-15T21:17:07.046Z' },
-			])],
-			['count(*)', () => Promise.resolve([{ total: 3167 }])],
-		]);
+	it('reports the no-burn policy with an empty ledger and never touches the database', async () => {
 		const res = makeRes();
 		await handler(makeReq('/api/three-token/burns'), res);
 
 		expect(res.statusCode).toBe(200);
 		const body = getJson(res);
-		expect(body.burn_per_deploy).toBe(1000);
-		expect(body.total_burned).toBe(3167 * 1000);
-		expect(body.burns).toHaveLength(2);
-		expect(body.burns[0]).toMatchObject({ id: 'a1', agent_name: 'Green Galunga', amount: 1000, reason: 'agent_deploy' });
-		// A nameless agent still gets a label rather than an empty cell.
-		expect(body.burns[1].agent_name).toBe('Agent');
-	});
-
-	it('degrades to an empty ledger on a query failure, and logs why', async () => {
-		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-		routeSql([
-			['ORDER BY created_at DESC', () => Promise.reject(new Error('column "nope" does not exist'))],
-			['count(*)', () => Promise.resolve([{ total: 7 }])],
-		]);
-		const res = makeRes();
-		await handler(makeReq('/api/three-token/burns'), res);
-
-		expect(res.statusCode).toBe(200);
-		expect(getJson(res).burns).toEqual([]);
-		// The silent swallow is what hid the original bug: the reason must reach the logs.
-		expect(logged).toHaveBeenCalled();
-		expect(logged.mock.calls.flat().join(' ')).toContain('does not exist');
+		expect(body.policy).toBe('no_platform_burns');
+		expect(body.burns).toEqual([]);
+		expect(body.total_burned).toBe(0);
+		expect(body.burn_per_deploy).toBe(0);
+		// Burns were once derived from the agent count. Nothing here may read it.
+		expect(sql).not.toHaveBeenCalled();
 	});
 });
 

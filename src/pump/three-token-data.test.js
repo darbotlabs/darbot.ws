@@ -30,7 +30,8 @@ const WALLET = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'; // 44-char base58
 function statsOk() {
 	return {
 		token: { mint: THREE_MINT, symbol: '$THREE', price_usd: 2, supply: 1000, decimals: 6, source: 'birdeye' },
-		protocol: { total_agents: 5, revenue_share_pool_pct: 10, agent_deploy_burn: 1000 },
+		protocol: { total_agents: 5, revenue_share_pool_pct: 10 },
+		buyback: { enabled: false, commit_pct: 50, three_bought: 0, runs: 0 },
 	};
 }
 
@@ -38,7 +39,7 @@ function statsOk() {
 function routeGet(path) {
 	if (path === '/api/three-token/stats') return Promise.resolve(statsOk());
 	if (path === '/api/three-token/activity') return Promise.resolve({ events: [{ id: 'e1', type: 'payment' }] });
-	if (path === '/api/three-token/burns') return Promise.resolve({ burns: [], total_burned: 5000, burn_per_deploy: 1000 });
+	if (path === '/api/three-token/burns') return Promise.resolve({ policy: 'no_platform_burns', burns: [], total_burned: 0, burn_per_deploy: 0 });
 	if (path === '/api/three-token/revenue-share') return Promise.resolve({ user_id: 'u1', revenue_share_pool_usd: 50 });
 	return Promise.reject(new Error(`unexpected GET ${path}`));
 }
@@ -62,7 +63,8 @@ describe('createThreeTokenData — protocol/activity/burns', () => {
 		expect(s.activity.status).toBe('ok');
 		expect(s.activity.events).toHaveLength(1);
 		expect(s.burns.status).toBe('ok');
-		expect(s.burns.total_burned).toBe(5000);
+		expect(s.burns.total_burned).toBe(0);
+		expect(s.protocol.buyback.commit_pct).toBe(50);
 		store.destroy();
 	});
 

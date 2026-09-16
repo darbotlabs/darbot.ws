@@ -304,7 +304,7 @@
 			<div class="cell"><div class="label">Holders</div><div class="value" id="pl-holders">—</div></div>
 			<div class="cell"><div class="label">Liquidity</div><div class="value" id="pl-liq">—</div></div>
 			<div class="cell"><div class="label">Agents deployed</div><div class="value" id="pl-agents">—</div></div>
-			<div class="cell"><div class="label">$THREE burned</div><div class="value r" id="pl-burned">—</div></div>
+			<div class="cell"><div class="label">$THREE bought back</div><div class="value" id="pl-bought">—</div></div>
 		</section>
 
 		<!-- Flow counters -->
@@ -711,8 +711,8 @@
 				setTextById('pl-holders', tk.holders != null ? fmtNum(tk.holders) : '—');
 				setTextById('pl-liq', fmtUsd(tk.liquidity));
 				setTextById('pl-agents', pr.total_agents != null ? fmtNum(pr.total_agents) : '—');
-				const burned = (pr.total_agents || 0) * (pr.agent_deploy_burn || 0);
-				setTextById('pl-burned', burned ? fmtNum(burned) : '—');
+				const bb = d.buyback || {};
+				setTextById('pl-bought', bb.three_bought != null ? fmtNum(bb.three_bought) : '—');
 				// market cap gently scales the core
 				if (tk.market_cap) {
 					const mc = Math.min(1, Math.log10(Number(tk.market_cap) + 1) / Math.log10(50_000_000));

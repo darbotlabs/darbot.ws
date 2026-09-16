@@ -3,16 +3,16 @@
  * -------------------------
  * GET /api/three-token/stats          — protocol-level metrics (public)
  * GET /api/three-token/revenue-share  — authenticated user's revenue share position
- * GET /api/three-token/burns          — deploy-to-burn ledger (per-deploy burns)
+ * GET /api/three-token/burns          — platform burn ledger (always empty: no platform burns)
  * GET /api/three-token/activity       — protocol activity feed
  * GET /api/three-token/leaderboard    — ranked $THREE holders (public, paginated)
  *
  * Market data (price, market cap, supply, holders) comes from the shared market
  * module — Birdeye → DexScreener → GeckoTerminal failover with a stale cache —
  * so a Birdeye 429 transparently falls over to the keyless sources instead of
- * blanking the price panel. Protocol data (agents, revenue, deploy burns) is
- * derived from the application database; deploy burns = deployed agents ×
- * AGENT_DEPLOY_BURN.
+ * blanking the price panel. Protocol data (agents, revenue) is derived from the
+ * application database. The platform never burns $THREE (api/_lib/token/config.js);
+ * its supply commitment is the revenue buyback reported under `buyback`.
  */
 
 import { sql } from '../_lib/db.js';
@@ -32,9 +32,7 @@ function shortWallet(addr) {
 }
 
 // Protocol tokenomics (fixed parameters of the $THREE protocol).
-// AGENT_DEPLOY_BURN: $THREE permanently burned each time an agent is deployed.
 // REVENUE_SHARE_POOL_PCT: share of platform revenue distributed to holders.
-const AGENT_DEPLOY_BURN = 1000;
 const REVENUE_SHARE_POOL_PCT = 10;
 
 // Degrade a failed panel query without hiding WHY it failed. A silent
@@ -66,28 +64,6 @@ async function fetchPlatformMetrics() {
 		total_revenue_fee: Number(revenueData[0]?.total_fee ?? 0),
 		total_payments: paymentCount[0]?.total ?? 0,
 	};
-}
-
-// Deploy-to-burn ledger: each agent deployment burns AGENT_DEPLOY_BURN $THREE.
-// We surface the most recent deployments as burn events and the lifetime total
-// so the burn figures are derived from real on-chain deployment records rather
-// than hardcoded or conflated with revenue.
-// `name` is the agent's label everywhere in api/ (agent-task.js,
-// autopilot/activity.js); agent_identities has no display column.
-async function fetchBurnEvents() {
-	const [recent, totalRow] = await Promise.all([
-		sql`
-			SELECT id, name, created_at
-			FROM agent_identities
-			WHERE deleted_at IS NULL
-			ORDER BY created_at DESC
-			LIMIT 20
-		`.catch(degrade('burn_events', [])),
-		sql`SELECT count(*)::int AS total FROM agent_identities WHERE deleted_at IS NULL`.catch(
-			degrade('burn_total', [{ total: 0 }]),
-		),
-	]);
-	return { recent, totalAgents: totalRow[0]?.total ?? 0 };
 }
 
 async function fetchRecentActivity() {
@@ -162,7 +138,6 @@ export default wrap(async (req, res) => {
 					total_revenue_usd: platform.total_revenue_gross / 1_000_000,
 					total_payments: platform.total_payments,
 					revenue_share_pool_pct: REVENUE_SHARE_POOL_PCT,
-					agent_deploy_burn: AGENT_DEPLOY_BURN,
 				},
 				// Revenue converted to onchain buy pressure — programmatic, no burn.
 				// Commitment fields mirror buybackStats() so the page renders the
@@ -228,18 +203,22 @@ export default wrap(async (req, res) => {
 	}
 
 	if (action === 'burns') {
-		const { recent, totalAgents } = await fetchBurnEvents();
-		return json(res, 200, {
-			burns: recent.map((a) => ({
-				id: a.id,
-				agent_name: a.name || 'Agent',
-				amount: AGENT_DEPLOY_BURN,
-				reason: 'agent_deploy',
-				created_at: a.created_at,
-			})),
-			total_burned: totalAgents * AGENT_DEPLOY_BURN,
-			burn_per_deploy: AGENT_DEPLOY_BURN,
-		});
+		// The platform never burns $THREE, so there is no burn ledger to report.
+		// This endpoint once derived "burns" from the agent count with no on-chain
+		// transaction behind them; it now answers with the policy and an empty
+		// ledger, and points callers at the buyback figures that are real.
+		return json(
+			res,
+			200,
+			{
+				policy: 'no_platform_burns',
+				burns: [],
+				total_burned: 0,
+				burn_per_deploy: 0,
+				see: '/api/three-token/stats#buyback',
+			},
+			{ 'cache-control': 'public, s-maxage=3600' },
+		);
 	}
 
 	if (action === 'activity') {

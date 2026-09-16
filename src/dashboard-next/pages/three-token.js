@@ -2,7 +2,7 @@
 //
 // The command center for the $THREE protocol economy. Shows real token
 // data from Birdeye/Pump.fun, platform revenue metrics, and the four
-// utility pillars: agent-to-agent payments, revenue share, deploy burns,
+// utility pillars: agent-to-agent payments, revenue share, revenue buyback,
 // and index token exposure.
 //
 // Real endpoints:
@@ -80,7 +80,7 @@ function pctColor(n) {
 		const host = main.querySelector('[data-slot="content"]');
 
 		// Single source of truth for all $THREE data — price, protocol metrics,
-		// revenue share, activity, burns, and the signed-in holder's live position.
+		// revenue share, activity, buyback, and the signed-in holder's live position.
 		// The store wraps the same /api/three-token/* endpoints this page used to
 		// fetch inline; centralising them keeps every section (and the position
 		// widget) reading one consistent snapshot. It polls protocol + activity and
@@ -120,7 +120,7 @@ function pctColor(n) {
 				return;
 			}
 
-			const stats = { token: snap.protocol.token, protocol: snap.protocol.protocol };
+			const stats = { token: snap.protocol.token, protocol: snap.protocol.protocol, buyback: snap.protocol.buyback };
 
 			// pump.fun verification badge beside the page title. Same live flag and
 			// same badge the public /three-token page renders.
@@ -144,7 +144,7 @@ function pctColor(n) {
 			host.appendChild(renderUtilityPillars(stats));
 			host.appendChild(renderLiveConverter(tokenConfig));
 			host.appendChild(renderRevenueShare(stats, revenueShare));
-			host.appendChild(renderDeployBurn(stats));
+			host.appendChild(renderBuyback(stats));
 			host.appendChild(renderActivityFeed(activity));
 			host.appendChild(renderTokenInfo());
 
@@ -635,11 +635,11 @@ function renderUtilityPillars(stats) {
 			color: '#60a5fa',
 		},
 		{
-			icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px"><path d="M12 22C6.5 22 2 17.5 2 12S6.5 2 12 2s10 4.5 10 10"/><path d="M18 16l4 4m0-4l-4 4"/></svg>`,
-			title: 'Deploy-to-Burn',
-			desc: `Every agent deployed on three.ws burns ${fmtCompact(p.agent_deploy_burn || 1000)} $THREE permanently. More agents = less supply.`,
-			metric: fmtCompact(p.total_agents || 0),
-			metricLabel: 'agents deployed',
+			icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>`,
+			title: 'Revenue Buyback',
+			desc: `${stats?.buyback?.commit_pct ?? 50}% of platform revenue is committed to buying $THREE on the open market. The platform never sells and never burns.`,
+			metric: fmtCompact(stats?.buyback?.three_bought || 0),
+			metricLabel: '$THREE bought back',
 			color: '#f97316',
 		},
 		{
@@ -991,65 +991,41 @@ function calcResultCards(amount, perToken, tokenPrice, revenuePool, totalSupply)
 	`;
 }
 
-// ── Deploy burn section ───────────────────────────────────────────────────────
+// ── Buyback section ───────────────────────────────────────────────────────────
 
-function renderDeployBurn(stats) {
-	const p = stats?.protocol || {};
-	const burnPerAgent = p.agent_deploy_burn || 1000;
-	const totalAgents = p.total_agents || 0;
-	const totalBurned = totalAgents * burnPerAgent;
-	const totalSupply = stats?.token?.supply || 1_000_000_000;
-	const burnPct = totalSupply > 0 ? (totalBurned / totalSupply) * 100 : 0;
+// The platform never burns $THREE. What it commits to is buying $THREE with a
+// fixed share of revenue, so this panel reports that ledger exactly as
+// /api/three-token/stats returns it, including when the engine is switched off.
+function renderBuyback(stats) {
+	const bb = stats?.buyback || {};
+	const enabled = bb.enabled === true;
+	const lastRun = bb.last_run?.created_at || bb.last_run?.at || null;
 
 	const section = document.createElement('div');
 	section.className = 'dn-panel';
 	section.style.cssText = 'position:relative;overflow:hidden;';
 
+	const cell = (label, value, sub) => `
+		<div style="padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--nxt-stroke);border-radius:var(--nxt-radius-sm)">
+			<div style="font-size:11.5px;color:var(--nxt-ink-dim);margin-bottom:4px">${label}</div>
+			<div style="font-size:22px;font-weight:700;font-family:${MONO}">${value}</div>
+			<div style="font-size:11.5px;color:var(--nxt-ink-fade);margin-top:2px">${sub}</div>
+		</div>`;
+
 	section.innerHTML = `
-		<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#f97316,#ef4444);opacity:0.6;border-radius:2px 2px 0 0"></div>
 		<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:4px;margin-bottom:20px">
 			<div>
-				<h2 style="font-size:18px;font-weight:700;margin:0 0 4px">Deploy-to-Burn Mechanism</h2>
-				<p style="font-size:13px;color:var(--nxt-ink-dim);margin:0">Every agent deployed permanently removes $THREE from circulation</p>
+				<h2 style="font-size:18px;font-weight:700;margin:0 0 4px">Revenue Buyback</h2>
+				<p style="font-size:13px;color:var(--nxt-ink-dim);margin:0">${bb.commit_pct ?? 50}% of platform revenue is committed to buying $THREE on the open market. No burn: supply is never destroyed.</p>
 			</div>
+			<span style="font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--nxt-stroke);color:${enabled ? 'var(--nxt-success)' : 'var(--nxt-ink-dim)'}">${enabled ? 'Engine on' : 'Engine off'}</span>
 		</div>
-
-		<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px">
-			<div style="padding:16px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.12);border-radius:var(--nxt-radius-sm)">
-				<div style="font-size:11.5px;color:var(--nxt-ink-dim);margin-bottom:4px">Burn Per Deploy</div>
-				<div style="font-size:22px;font-weight:700;font-family:${MONO};color:#f97316">${fmtCompact(burnPerAgent)}</div>
-				<div style="font-size:11.5px;color:var(--nxt-ink-fade);margin-top:2px">$THREE burned permanently</div>
-			</div>
-			<div style="padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--nxt-stroke);border-radius:var(--nxt-radius-sm)">
-				<div style="font-size:11.5px;color:var(--nxt-ink-dim);margin-bottom:4px">Agents Deployed</div>
-				<div style="font-size:22px;font-weight:700;font-family:${MONO}">${fmtCompact(totalAgents)}</div>
-				<div style="font-size:11.5px;color:var(--nxt-ink-fade);margin-top:2px">on three.ws</div>
-			</div>
-			<div style="padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--nxt-stroke);border-radius:var(--nxt-radius-sm)">
-				<div style="font-size:11.5px;color:var(--nxt-ink-dim);margin-bottom:4px">Total Burned</div>
-				<div style="font-size:22px;font-weight:700;font-family:${MONO};color:#ef4444">${fmtCompact(totalBurned)}</div>
-				<div style="font-size:11.5px;color:var(--nxt-ink-fade);margin-top:2px">${burnPct.toFixed(4)}% of supply</div>
-			</div>
+		<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+			${cell('Committed', fmtUsd(bb.committed_usd || 0), `of ${fmtUsd(bb.revenue_usd || 0)} revenue`)}
+			${cell('Deployed', fmtUsd(bb.deployed_usd || 0), `${Number(bb.commitment_progress_pct || 0).toFixed(1)}% of commitment`)}
+			${cell('$THREE bought', fmtCompact(bb.three_bought || 0), `${fmtCompact(bb.runs || 0)} run${bb.runs === 1 ? '' : 's'}${lastRun ? `, last ${new Date(lastRun).toLocaleDateString()}` : ''}`)}
 		</div>
-
-		<div style="margin-bottom:8px">
-			<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px">
-				<span style="color:var(--nxt-ink-dim)">Supply burned</span>
-				<span style="font-family:${MONO}">${burnPct.toFixed(4)}%</span>
-			</div>
-			<div style="height:8px;border-radius:4px;background:var(--nxt-stroke);overflow:hidden;position:relative">
-				<div style="height:100%;width:${Math.min(100, burnPct).toFixed(4)}%;background:linear-gradient(90deg,#f97316,#ef4444);transition:width 600ms ease;min-width:${burnPct > 0 ? '2px' : '0'}"></div>
-			</div>
-			<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--nxt-ink-fade);margin-top:4px">
-				<span>0%</span>
-				<span>Circulating supply: ${fmtCompact(totalSupply - totalBurned)}</span>
-				<span>100%</span>
-			</div>
-		</div>
-
-		<div style="margin-top:16px;padding:12px 16px;background:rgba(249,115,22,0.04);border:1px solid rgba(249,115,22,0.08);border-radius:8px;font-size:12.5px;color:var(--nxt-ink-dim);line-height:1.55">
-			Every time a creator deploys a new agent on three.ws, <strong style="color:var(--nxt-ink)">${fmtCompact(burnPerAgent)} $THREE</strong> are burned — permanently removed from circulation. This creates a deflationary flywheel: as the platform grows and more agents are deployed, the total supply of $THREE shrinks, concentrating value among remaining holders.
-		</div>
+		${enabled ? '' : '<div style="margin-top:16px;padding:12px 16px;border:1px solid var(--nxt-stroke);border-radius:8px;font-size:12.5px;color:var(--nxt-ink-dim);line-height:1.55">The buyback engine is not running yet, so nothing has been bought. These figures update from the live ledger the moment it starts.</div>'}
 	`;
 
 	return section;

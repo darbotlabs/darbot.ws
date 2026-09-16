@@ -12,7 +12,7 @@
 //   GET  /api/three-token/stats          (public, edge-cached)  → protocol + token market
 //   GET  /api/three-token/revenue-share  (authed; 401 = guest)  → pro-rata pool math
 //   GET  /api/three-token/activity                              → recent revenue events
-//   GET  /api/three-token/burns                                 → deploy-burn ledger
+//   GET  /api/three-token/burns                                 → platform burn ledger (empty: the platform never burns)
 //   POST /api/wallet/balances {chain:'solana',address}          → the holder's position
 //
 // Design: a plain subscribable store (this codebase is vanilla JS modules, not
@@ -43,7 +43,7 @@ function errInfo(err) {
 
 function freshState() {
 	return {
-		protocol:     { status: 'loading', token: null, protocol: null, source: null, updatedAt: null, error: null },
+		protocol:     { status: 'loading', token: null, protocol: null, buyback: null, source: null, updatedAt: null, error: null },
 		revenueShare: { status: 'loading', unauthenticated: false, error: null },
 		activity:     { status: 'loading', events: [], error: null },
 		burns:        { status: 'loading', burns: [], total_burned: null, burn_per_deploy: null, error: null },
@@ -110,6 +110,7 @@ export function createThreeTokenData(opts = {}) {
 				status: 'ok',
 				token: data?.token ?? null,
 				protocol: data?.protocol ?? null,
+				buyback: data?.buyback ?? null,
 				source: data?.token?.source ?? null,
 				updatedAt: Date.now(),
 				error: null,
