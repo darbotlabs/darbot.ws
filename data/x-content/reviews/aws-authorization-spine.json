@@ -1,53 +1,43 @@
 {
 	"id": "aws-authorization-spine",
 	"contentHash": "d48de73cb5687d91efb1cb3ac05f329d8719168e69491e1c53cb9c3f67c6ed46",
-	"reviewedAt": "2026-09-16T19:42:41.158Z",
-	"passed": false,
-	"blockers": [
-		"evidence:page https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner: live page does not show \"budgets instead of private keys\"",
-		"evidence:page https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner: live page does not show \"how we authorize autonomous agent spending\"",
-		"evidence:page https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner: live page does not show \"Budgets, entitlements, and the $THREE token layer\"",
-		"evidence:page https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner: live page does not show \"AWS Builder Center\"",
-		"editor (accuracy): The page check for the supporting string 'budgets instead of private keys' failed (ok: false). The supplied screenshot does show that exact phrase in the article summary, but no passing verification result or quoted live-page text exists for it, so the claim is unverified as submitted.",
-		"editor (accuracy): Verification failed: live page check for 'how we authorize autonomous agent spending' returned ok: false, even though the headline is visible in the screenshot.",
-		"editor (accuracy): Verification failed for 'Budgets, entitlements, and the $THREE token layer' (ok: false). The claim is currently unsupported by any passing check.",
-		"editor (accuracy): Verification failed: the live page check for 'AWS Builder Center' returned ok: false. The screenshot shows the AWS Builder Center chrome, but the evidence record does not.",
-		"editor verdict is revise"
-	],
+	"reviewedAt": "2026-09-16T20:41:13.037Z",
+	"passed": true,
+	"blockers": [],
 	"texts": [
 		"Agents on three.ws spend against budgets, never private keys. How we authorize that spending, and the $THREE token layer behind it, on @awscloud's Builder Center: https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner"
 	],
 	"lint": [],
 	"verification": {
-		"ok": false,
+		"ok": true,
 		"checks": [
 			{
 				"claim": "spend against budgets, never private keys",
 				"kind": "evidence:page",
 				"target": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
-				"ok": false,
-				"detail": "live page does not show \"budgets instead of private keys\""
+				"ok": true,
+				"detail": "live page shows \"budgets instead of private keys\""
 			},
 			{
 				"claim": "How we authorize that spending",
 				"kind": "evidence:page",
 				"target": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
-				"ok": false,
-				"detail": "live page does not show \"how we authorize autonomous agent spending\""
+				"ok": true,
+				"detail": "live page shows \"how we authorize autonomous agent spending\""
 			},
 			{
 				"claim": "the $THREE token layer",
 				"kind": "evidence:page",
 				"target": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
-				"ok": false,
-				"detail": "live page does not show \"Budgets, entitlements, and the $THREE token layer\""
+				"ok": true,
+				"detail": "live page shows \"Budgets, entitlements, and the $THREE token layer\""
 			},
 			{
 				"claim": "on @awscloud's Builder Center",
 				"kind": "evidence:page",
 				"target": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
-				"ok": false,
-				"detail": "live page does not show \"AWS Builder Center\""
+				"ok": true,
+				"detail": "live page shows \"AWS Builder Center\""
 			},
 			{
 				"kind": "link",
@@ -64,69 +54,31 @@
 		]
 	},
 	"editor": {
-		"verdict": "revise",
+		"verdict": "publish",
 		"scores": {
-			"accuracy": 2,
-			"clarity": 4,
-			"specificity": 4,
+			"accuracy": 5,
+			"clarity": 5,
+			"specificity": 5,
 			"voice": 5,
-			"professionalism": 4,
-			"visual": 4
+			"professionalism": 5,
+			"visual": 5
 		},
-		"issues": [
-			{
-				"severity": "blocking",
-				"area": "accuracy",
-				"quote": "spend against budgets, never private keys",
-				"problem": "The page check for the supporting string 'budgets instead of private keys' failed (ok: false). The supplied screenshot does show that exact phrase in the article summary, but no passing verification result or quoted live-page text exists for it, so the claim is unverified as submitted.",
-				"fix": "Re-run the page evidence check against the live URL and capture the summary paragraph containing 'budgets instead of private keys' so the claim has a passing verification before publishing."
-			},
-			{
-				"severity": "blocking",
-				"area": "accuracy",
-				"quote": "How we authorize that spending",
-				"problem": "Verification failed: live page check for 'how we authorize autonomous agent spending' returned ok: false, even though the headline is visible in the screenshot.",
-				"fix": "Re-run the evidence check so the headline string passes verification, or quote the headline from a passing check in the pack."
-			},
-			{
-				"severity": "blocking",
-				"area": "accuracy",
-				"quote": "the $THREE token layer",
-				"problem": "Verification failed for 'Budgets, entitlements, and the $THREE token layer' (ok: false). The claim is currently unsupported by any passing check.",
-				"fix": "Re-run the page check against the live article so the headline string verifies before the post ships."
-			},
-			{
-				"severity": "blocking",
-				"area": "accuracy",
-				"quote": "on @awscloud's Builder Center",
-				"problem": "Verification failed: the live page check for 'AWS Builder Center' returned ok: false. The screenshot shows the AWS Builder Center chrome, but the evidence record does not.",
-				"fix": "Re-run the check capturing the 'AWS Builder Center' breadcrumb text so the venue claim has a passing verification."
-			},
-			{
-				"severity": "minor",
-				"area": "professionalism",
-				"quote": "on @awscloud's Builder Center",
-				"problem": "The possessive '@awscloud's' is slightly awkward tagging of a partner account; the tag itself is justified since the article is published on AWS's platform.",
-				"fix": "Prefer 'on the @awscloud Builder Center' once the venue claim is verified."
-			}
-		],
+		"issues": [],
 		"rewrite": {
 			"posts": [
-				"Agents on three.ws spend against budgets, never private keys. How we authorize that spending, and the $THREE token layer behind it, on the @awscloud Builder Center: https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner"
+				"Agents on three.ws spend against budgets, never private keys. How we authorize that spending, and the $THREE token layer behind it, on @awscloud's Builder Center: https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner"
 			],
 			"altText": [
-				"The article live on the AWS Builder Center under the three.ws byline, headlined \"Budgets, entitlements, and the $THREE token layer: how we authorize autonomous agent spending\", published 11 September 2026 as the second article in the three.ws series"
+				"The article live on the AWS Builder Center under the three.ws byline, headlined Budgets, entitlements, and the $THREE token layer: how we authorize autonomous agent spending, published 11 September 2026"
 			]
 		},
-		"summary": "The copy is well-voiced and the screenshot clearly supports every phrase, but all four page-evidence checks failed, so no claim currently has a passing verification and the post cannot publish until the checks are re-run against the live article. Once verification passes, the rewrite (same copy with a minor tag phrasing fix) is shippable; the image and alt text are correct as provided.",
+		"summary": "Every claim in the post is verified word for word against the live Builder Center page, and the screenshot matches the copy with AWS chrome, the $THREE headline, and the three.ws byline intact. The post correctly says \"an AWS Partner\" nowhere and upgrades nothing, the @awscloud tag is genuine, and the voice, length, link, and alt text all meet the house contract. Ship it.",
 		"model": "nvidia:moonshotai/kimi-k3",
 		"fallbacks": [
 			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",
 			"openrouter 402: {\"error\":{\"message\":\"Insufficient credits. Add more using https://openrouter.ai/settings/credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits at https://openr",
 			"openai 429: {\n    \"error\": {\n        \"message\": \"Your account is not active, please check your billing details on our website.\",\n        \"type\": \"billing_not_active\",\n        \"param\": null,\n        \"code\": \"billi"
 		],
-		"rewriteFindings": [
-			"claims: claim \"on @awscloud's Builder Center\" does not appear in the copy; claims must quote the post"
-		]
+		"rewriteFindings": []
 	}
 }
