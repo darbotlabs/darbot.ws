@@ -11,6 +11,12 @@ import {
 } from '../api/_lib/solana/transaction-v1.js';
 import { cosignV1Transaction } from '../src/erc8004/solana-deploy.js';
 import { getTransactionDecoder } from '@solana/kit';
+import bs58 from 'bs58';
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
+import { mplCore } from '@metaplex-foundation/mpl-core';
+import { mplAgentIdentity } from '@metaplex-foundation/mpl-agent-registry';
+import { createNoopSigner, publicKey as umiPublicKey, signerIdentity } from '@metaplex-foundation/umi';
+import { buildAgentMint } from '../packages/metaplex-agent-mcp/src/lib/mint.js';
 
 function signedLegacyTransfer() {
 	const payer = Keypair.generate();
@@ -144,6 +150,38 @@ describe('Solana transaction V1 inspector', () => {
 		expect(decoded.signatures[owner.publicKey.toBase58()]).toBeNull();
 
 		await expect(cosignV1Transaction(wire, Keypair.generate().secretKey)).rejects.toThrow();
+	});
+
+	it('fits a Genesis-shape create+register mint, too big for v0, into one v1 transaction', async () => {
+		const umi = createUmi('http://127.0.0.1:1').use(mplCore()).use(mplAgentIdentity());
+		const wallet = Keypair.generate().publicKey.toBase58();
+		umi.use(signerIdentity(createNoopSigner(umiPublicKey(wallet))));
+		const mint = buildAgentMint(umi, {
+			network: 'devnet',
+			creator: wallet,
+			name: 'Genesis Shape Agent',
+			description: 'd'.repeat(280),
+			image: 'https://three.ws/api/avatars/0f7a2c1e-8b1d-4b8e-9a51-5c7e3d2a9f10/thumbnail.webp',
+			modelUrl: 'https://three.ws/api/avatars/0f7a2c1e-8b1d-4b8e-9a51-5c7e3d2a9f10/model.glb',
+			externalUrl: 'https://three.ws/agents/0f7a2c1e-8b1d-4b8e-9a51-5c7e3d2a9f10',
+		});
+		expect(mint.atomic).toBe(false);
+
+		const wire = await buildPartiallySignedV1Transaction({
+			instructions: mint.combinedBuilder.getInstructions(),
+			signers: mint.combinedBuilder.getSigners(umi),
+			feePayer: wallet,
+			lifetime: { blockhash: Keypair.generate().publicKey.toBase58(), lastValidBlockHeight: 1 },
+		});
+		const inspected = inspectWireTransaction(Buffer.from(wire).toString('base64'));
+		expect(inspected.version).toBe(1);
+		expect(inspected.bytes).toBeGreaterThan(LEGACY_TRANSACTION_LIMIT);
+		expect(inspected.bytes).toBeLessThanOrEqual(V1_TRANSACTION_LIMIT);
+
+		const decoded = getTransactionDecoder().decode(wire);
+		const asset = mint.assetSigner.publicKey.toString();
+		expect(nacl.sign.detached.verify(decoded.messageBytes, decoded.signatures[asset], bs58.decode(asset))).toBe(true);
+		expect(decoded.signatures[wallet]).toBeNull();
 	});
 
 	it('rejects malformed wire input without contacting an RPC', () => {

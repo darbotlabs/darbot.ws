@@ -14,6 +14,11 @@
  * create(+register) transaction(s) with the wallet as a noop signer → the
  * wallet signs (signAllTransactions) → broadcast IN ORDER through the
  * same-origin RPC proxy, absorbing the create→register propagation race.
+ *
+ * When create+register overflow the 1,232-byte v0 limit and the wallet
+ * advertises Solana transaction v1 (Wallet Standard), the mint instead ships as
+ * ONE atomic v1 transaction (4,096 bytes): no second signature, no propagation
+ * race, and no half-deployed asset if registration would fail.
  */
 
 import {
@@ -423,6 +428,50 @@ async function confirmSig(conn, signature) {
 	throw new Error(`Confirmation timed out for ${signature}. Check the explorer before retrying.`);
 }
 
+/**
+ * Build the whole mint as one partially signed v1 transaction when the split
+ * v0 path would otherwise be needed. Returns null when the wallet cannot sign
+ * v1 or the mint still exceeds the v1 size limit, so the caller keeps the
+ * two-transaction path.
+ */
+async function buildAtomicV1Mint(umi, mint) {
+	if (mint.atomic) return null;
+	const [{ getWallets }, { findV1WalletStandardSigner }, v1] = await Promise.all([
+		import('@wallet-standard/app'),
+		import('./onchain/adapters/solana.js'),
+		import('../api/_lib/solana/transaction-v1.js'),
+	]);
+	const signer = findV1WalletStandardSigner(getWallets().get(), state.walletAddr);
+	if (!signer) return null;
+	const lifetime = await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' });
+	try {
+		const bytes = await v1.buildPartiallySignedV1Transaction({
+			instructions: mint.combinedBuilder.getInstructions(),
+			signers: mint.combinedBuilder.getSigners(umi),
+			feePayer: state.walletAddr,
+			lifetime,
+		});
+		return { signer, bytes };
+	} catch (err) {
+		if (/exceeds limit of \d+ bytes/i.test(err?.message || '')) return null;
+		throw err;
+	}
+}
+
+async function sendAtomicV1Mint(web3, v1Mint) {
+	const [result] = await v1Mint.signer.feature.signTransaction({
+		account: v1Mint.signer.account,
+		transaction: v1Mint.bytes,
+		options: { preflightCommitment: 'confirmed' },
+	});
+	if (!result?.signedTransaction) throw new Error('The wallet returned no signed transaction.');
+	setStage('mint', ['build', 'sign']);
+	const conn = new web3.Connection(RPC[state.network], 'confirmed');
+	const sig = await conn.sendRawTransaction(result.signedTransaction, { skipPreflight: false });
+	await confirmSig(conn, sig);
+	return sig;
+}
+
 async function deploy() {
 	if (state.deploying || !state.wallet || !state.walletAddr) return;
 	const p = mintParams();
@@ -451,6 +500,18 @@ async function deploy() {
 
 		const mint = mintLib.buildAgentMint(umi, p);
 		const asset = mint.assetSigner.publicKey.toString();
+		const [agentWalletPda] = coreLib.findAssetSignerPda(umi, { asset: umiLib.publicKey(asset) });
+
+		const v1Mint = await buildAtomicV1Mint(umi, mint);
+		if (v1Mint) {
+			setStage('sign', ['build']);
+			const sig = await sendAtomicV1Mint(web3, v1Mint);
+			setStage('live', ['build', 'sign', 'mint', 'register']);
+			showSuccess({ asset, signatures: [sig], agentWallet: agentWalletPda.toString(), transactionVersion: 1 });
+			refreshBalance();
+			loadLatest();
+			return;
+		}
 
 		const built = [];
 		for (const builder of mint.builders) built.push(await builder.buildAndSign(umi));
@@ -501,8 +562,7 @@ async function deploy() {
 		}
 
 		setStage('live', ['build', 'sign', 'mint', 'register']);
-		const [agentWalletPda] = coreLib.findAssetSignerPda(umi, { asset: umiLib.publicKey(asset) });
-		showSuccess({ asset, signatures, agentWallet: agentWalletPda.toString() });
+		showSuccess({ asset, signatures, agentWallet: agentWalletPda.toString(), transactionVersion: 0 });
 		refreshBalance();
 		loadLatest();
 	} catch (err) {
@@ -523,8 +583,14 @@ function friendlyError(err) {
 	return `Deploy failed: ${msg}`;
 }
 
-function showSuccess({ asset, signatures, agentWallet }) {
+function showSuccess({ asset, signatures, agentWallet, transactionVersion }) {
 	$('do-out-asset').textContent = asset;
+	$('do-out-format').textContent =
+		transactionVersion === 1
+			? 'Minted and registered atomically in one Solana v1 transaction'
+			: signatures.length > 1
+				? 'Minted, then registered, in two transactions'
+				: 'Minted and registered atomically in one transaction';
 	$('do-out-wallet').textContent = agentWallet || 'derived on first read (see the agent page)';
 	const dev = state.network === 'devnet';
 	const links = [
