@@ -28,6 +28,7 @@ let THREE_MINT = 'FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump';
 function fmtUsd(n) {
 	if (n == null || !Number.isFinite(+n)) return '—';
 	const v = +n;
+	if (v === 0) return '$0.00';
 	if (v >= 1_000_000) return '$' + (v / 1_000_000).toFixed(2) + 'M';
 	if (v >= 1_000) return '$' + (v / 1_000).toFixed(2) + 'K';
 	if (v >= 1) return '$' + v.toFixed(2);

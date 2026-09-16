@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-16T16:41:04.225Z",
+	"generated_at": "2026-09-16T16:58:37.768Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3684,
+	"total": 3685,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -17,6 +17,16 @@
 			"link": "/docs/launchpad",
 			"tags": [
 				"launch"
+			]
+		},
+		{
+			"date": "2026-09-16",
+			"type": "update",
+			"title": "$THREE pages now show the real buyback ledger instead of a burn estimate",
+			"summary": "The $THREE live page and the token dashboard used to show a \"$THREE burned\" total that was estimated from the number of agents on the platform, not read from the blockchain. The platform does not burn $THREE, so that number is gone. Both pages now show what the protocol actually commits to: the share of revenue set aside to buy $THREE on the open market, how much has been bought, and whether the buyback engine is running. The AWS page also no longer says Marketplace usage is billed to your AWS invoice; the subscription is free and usage is paid per call.",
+			"link": "/three-live",
+			"tags": [
+				"fix"
 			]
 		},
 		{
@@ -1606,17 +1616,6 @@
 			"tags": [
 				"fix",
 				"infra"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "update",
-			"title": "A payment we cannot read now comes back with the price list, not a bare error",
-			"summary": "When an agent pays one of our x402 endpoints and the payment header arrives mangled (truncated in transit, double-encoded, wrapped by a proxy), the answer used to be a plain 400 error with no prices in it, so the agent had nothing left to work from and no way to retry. Every rejected payment now returns the ordinary 402 with the full list of accepted rails, tokens and amounts attached, exactly as it does when a payment is simply missing. That is what the x402 spec and the OKX seller SDK both do, and it means a paying agent can always read the quote again and try once more. Only a real server fault answers without a quote.",
-			"link": "/docs/okx-marketplace",
-			"tags": [
-				"fix",
-				"improvement"
 			]
 		}
 	]
