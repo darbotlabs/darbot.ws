@@ -231,7 +231,7 @@ export async function findUndeclaredApiImports({ apiDir = resolve(ROOT, 'api') }
 			continue;
 		}
 		for (const imp of imports) {
-			const spec = imp.n;
+			const spec = imp.specifier;
 			if (!spec) continue; // non-literal dynamic import
 			if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('node:')) continue;
 			const name = bareSpecifierToPackageName(spec);
