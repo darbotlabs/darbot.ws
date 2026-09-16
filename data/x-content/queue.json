@@ -14,7 +14,36 @@
 		"archiveSimilarityLimit": 0.42,
 		"queueSimilarityLimit": 0.34,
 		"maximumSameLaneInARow": 2,
-		"maximumSamePatternInARow": 1
+		"maximumSamePatternInARow": 1,
+		"glossary": [
+			"GLB",
+			"glTF",
+			"three.ws",
+			"Mixamo",
+			"VRM",
+			"VRoid",
+			"Avaturn",
+			"Reallusion",
+			"MediaPipe",
+			"Kinect",
+			"ARKit",
+			"HumanIK",
+			"Rigify",
+			"Daz",
+			"MakeHuman",
+			"Nemotron",
+			"watsonx",
+			"MCP",
+			"x402",
+			"ERC-8004",
+			"emotes",
+			"onchain",
+			"custodial",
+			"retarget",
+			"retargets",
+			"reprojection",
+			"GPU"
+		]
 	},
 	"items": [
 		{
@@ -38,7 +67,47 @@
 						}
 					]
 				}
-			]
+			],
+			"claims": [
+				{
+					"says": "custodial @solana wallet",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/genesis",
+							"contains": "A real Solana + EVM wallet"
+						},
+						{
+							"type": "file",
+							"path": "docs/genesis.md",
+							"contains": "custodial Solana"
+						}
+					]
+				},
+				{
+					"says": "a persona, and a voice",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/genesis",
+							"contains": "Persona (optional) Voice"
+						}
+					]
+				},
+				{
+					"says": "walks and emotes on arrival",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/genesis",
+							"contains": "A rigged avatar that walks, idles and emotes"
+						}
+					]
+				}
+			],
+			"mentions": {
+				"@solana": "Every Genesis agent is provisioned a custodial Solana wallet (POST /api/agents/:id/wallet/provision); Solana is the platform's home chain."
+			}
 		},
 		{
 			"id": "rig-doctor",
@@ -52,12 +121,56 @@
 			},
 			"posts": [
 				{
-					"text": "Approved for GitHub's Open Source Friday. Rig Doctor knows 11 rig conventions. Teaching it the 12th is an open first issue, and we merge it live on stream: three.ws/rig-doctor",
+					"text": "Approved for GitHub's Open Source Friday. Rig Doctor names which of 15 rig conventions a .glb follows, right in your browser, with nothing uploaded: three.ws/rig-doctor",
 					"textFrom": "docs/announcements/open-source-friday.post.txt",
 					"media": [
 						{
 							"path": "public/announce/img/rig-doctor-hero.webp",
-							"alt": "three.ws Rig Doctor: drop in any humanoid GLB and it names the skeleton convention, then lists joint by joint which bones will animate and which will not move"
+							"alt": "The three.ws Rig Doctor page: a drop zone for a .glb file that runs entirely in the browser, above stats reading 0 bytes leave your machine, 52 canonical joints scored, and 15 rig conventions recognised"
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "Approved for GitHub's Open Source Friday",
+					"evidence": [
+						{
+							"type": "github-issue",
+							"repo": "githubevents/open-source-friday",
+							"number": 254,
+							"label": "approved"
+						}
+					]
+				},
+				{
+					"says": "15 rig conventions",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/rig-doctor",
+							"contains": "15 rig conventions recognised"
+						},
+						{
+							"type": "module",
+							"path": "src/rig-report.js",
+							"export": "CONVENTIONS",
+							"length": 15
+						}
+					]
+				},
+				{
+					"says": "right in your browser, with nothing uploaded",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/rig-doctor",
+							"contains": "Nothing is uploaded"
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/rig-doctor",
+							"contains": "0 bytes leave your machine"
 						}
 					]
 				}
@@ -75,7 +188,7 @@
 			},
 			"posts": [
 				{
-					"text": "How we authorize autonomous spend, and the $THREE layer, on @awscloud: https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
+					"text": "Agents on three.ws spend against budgets, never private keys. How we authorize that spending, and the $THREE token layer behind it, on @awscloud's Builder Center: https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
 					"textFrom": "docs/announcements/aws-builder-center-authorization-spine.post.txt",
 					"media": [
 						{
@@ -84,7 +197,52 @@
 						}
 					]
 				}
-			]
+			],
+			"claims": [
+				{
+					"says": "spend against budgets, never private keys",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
+							"contains": "budgets instead of private keys"
+						}
+					]
+				},
+				{
+					"says": "How we authorize that spending",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
+							"contains": "how we authorize autonomous agent spending"
+						}
+					]
+				},
+				{
+					"says": "the $THREE token layer",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
+							"contains": "Budgets, entitlements, and the $THREE token layer"
+						}
+					]
+				},
+				{
+					"says": "on @awscloud's Builder Center",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
+							"contains": "AWS Builder Center"
+						}
+					]
+				}
+			],
+			"mentions": {
+				"@awscloud": "The article is published on the AWS Builder Center under the three.ws byline, as an AWS Partner."
+			}
 		}
 	]
 }

@@ -10,6 +10,8 @@ import { resolve } from 'node:path';
 import { copyProblems, copySimilarity, hasUrl, weightedLength } from './quality.js';
 import { attachmentProblems, mediaProblems, mediaType } from './media.js';
 import { MARKDOWN_ENTITY_BUDGET, markdownToContentState } from './articles.js';
+import { claimProblems, languageProblems } from './editorial.js';
+import { approvalProblems } from './review.js';
 
 export const QUEUE_PATH = 'data/x-content/queue.json';
 export const STATUSES = ['draft', 'review', 'approved', 'paused', 'posted'];
@@ -133,6 +135,16 @@ export function validateItem(item, root) {
 		// the link and the head may be short.
 		if (item.posts?.length) problems.push(...postProblems(item, root, { headMinimum: 40, headNeedsUrl: false }));
 	}
+
+	// Editorial standards that can be judged offline block at every stage.
+	const texts = [item.kind === 'article' ? item.article?.title : null, ...(item.posts || []).map((post) => post.text)].filter(Boolean);
+	for (const text of texts) {
+		for (const finding of languageProblems(text)) if (finding.severity === 'blocking') problems.push(`${finding.rule}: ${finding.message}`);
+	}
+	for (const finding of claimProblems(item)) if (finding.severity === 'blocking') problems.push(`${finding.rule}: ${finding.message}`);
+
+	// Approval is only real while a passing review covers these exact bytes.
+	if (item.status === 'approved') problems.push(...approvalProblems(item, root).map((problem) => `review: ${problem}`));
 	return problems;
 }
 

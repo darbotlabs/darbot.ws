@@ -1,0 +1,83 @@
+{
+	"id": "genesis",
+	"contentHash": "389437a0ab2f81adf4ce2805f009501d11d2093fb6ea5ad4be3c744290f6dc0e",
+	"reviewedAt": "2026-09-16T19:28:18.681Z",
+	"passed": true,
+	"blockers": [],
+	"texts": [
+		"A sentence or a selfie becomes a rigged 3D agent holding its own custodial @solana wallet, a persona, and a voice. It walks and emotes on arrival: three.ws/genesis"
+	],
+	"lint": [],
+	"verification": {
+		"ok": true,
+		"checks": [
+			{
+				"claim": "custodial @solana wallet",
+				"kind": "evidence:page",
+				"target": "https://three.ws/genesis",
+				"ok": true,
+				"detail": "live page shows \"A real Solana + EVM wallet\""
+			},
+			{
+				"claim": "custodial @solana wallet",
+				"kind": "evidence:file",
+				"target": "docs/genesis.md",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"claim": "a persona, and a voice",
+				"kind": "evidence:page",
+				"target": "https://three.ws/genesis",
+				"ok": true,
+				"detail": "live page shows \"Persona (optional) Voice\""
+			},
+			{
+				"claim": "walks and emotes on arrival",
+				"kind": "evidence:page",
+				"target": "https://three.ws/genesis",
+				"ok": true,
+				"detail": "live page shows \"A rigged avatar that walks, idles and emotes\""
+			},
+			{
+				"kind": "link",
+				"target": "https://three.ws/genesis",
+				"ok": true,
+				"detail": "HTTP 200"
+			},
+			{
+				"kind": "mention",
+				"target": "@solana",
+				"ok": true,
+				"detail": "Solana (business verified)"
+			}
+		]
+	},
+	"editor": {
+		"verdict": "publish",
+		"scores": {
+			"accuracy": 5,
+			"clarity": 5,
+			"specificity": 5,
+			"voice": 5,
+			"professionalism": 5,
+			"visual": 5
+		},
+		"issues": [],
+		"rewrite": {
+			"posts": [
+				"A sentence or a selfie becomes a rigged 3D agent holding its own custodial @solana wallet, a persona, and a voice. It walks and emotes on arrival: three.ws/genesis"
+			],
+			"altText": [
+				"The three.ws Genesis page signed in: describe an agent, upload a selfie, or remix a public avatar, and it becomes a rigged 3D agent with its own wallet and on-chain identity."
+			]
+		},
+		"summary": "Every claim in the post is backed by verified evidence from the live page and docs, and the screenshot from the signed-in route shows exactly the interface the copy describes with no contradictions. Voice, length, tag choice, link, and alt text all comply with the house contract, so the post ships unchanged.",
+		"model": "nvidia:moonshotai/kimi-k3",
+		"fallbacks": [
+			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",
+			"openrouter 402: {\"error\":{\"message\":\"Insufficient credits. Add more using https://openrouter.ai/settings/credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits at https://openr",
+			"openai 429: {\n    \"error\": {\n        \"message\": \"Your account is not active, please check your billing details on our website.\",\n        \"type\": \"billing_not_active\",\n        \"param\": null,\n        \"code\": \"billi"
+		]
+	}
+}

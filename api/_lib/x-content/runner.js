@@ -4,6 +4,7 @@
 import { loadQueue, validateQueue } from './queue.js';
 import { pickDue } from './schedule.js';
 import { previewClient, publishItem, xClientFromEnv } from './publisher.js';
+import { itemTexts, linkChecks } from './verify.js';
 
 export async function runTick({ root, store, now = Date.now(), dryRun = true, requestedId = null, env = process.env }) {
 	const queue = loadQueue(root);
@@ -35,6 +36,12 @@ export async function runTick({ root, store, now = Date.now(), dryRun = true, re
 		const scratch = structuredClone(state);
 		await publishItem({ item, client, root, state: scratch, store: { save: async () => {} }, account: queue.account });
 		return { preview: { id: item.id, kind: item.kind, dueAt: new Date(decision.dueAt).toISOString(), calls: client.calls }, blocked };
+	}
+
+	// A page can break between review and publish. Never send a dead link.
+	const broken = (await linkChecks(itemTexts(item))).filter((check) => !check.ok);
+	if (broken.length) {
+		return { published: null, reason: `${item.id} links a page that is down right now`, blocked: [...blocked, { id: item.id, problems: broken.map((check) => `${check.target}: ${check.detail}`) }] };
 	}
 
 	const client = await xClientFromEnv(env);

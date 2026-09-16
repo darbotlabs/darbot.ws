@@ -8,6 +8,8 @@
 //   npm run x:content -- run --id slug              publish one item now (owner-approved posts only)
 //   npm run x:content -- import <blog-slug|url> --as post|article --id slug [--lane l] [--pattern p]
 //   npm run x:content -- prepare-video <input> --out public/x-media/<id>/clip.mp4 [--captions file.srt] [--item slug]
+//   npm run x:content -- review <slug> [--no-editor]      the editorial bar: lint, live fact checks, AI editor
+//   npm run x:content -- review --status review            review every item awaiting review
 //
 // Env: reads .env.local then .env. DATABASE_URL gives plan/run the shared
 // publish ledger; X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET are
@@ -24,6 +26,7 @@ import { runTick } from '../api/_lib/x-content/runner.js';
 import { dbStore, memoryStore } from '../api/_lib/x-content/state.js';
 import { VIDEO_LIMITS, mediaType, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
 import { weightedLength } from '../api/_lib/x-content/quality.js';
+import { reviewItem } from '../api/_lib/x-content/review.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -38,7 +41,7 @@ loadEnvFile(resolve(root, '.env.local'));
 loadEnvFile(resolve(root, '.env'));
 
 const args = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['--id', '--as', '--lane', '--pattern', '--out', '--captions', '--item', '--now']);
+const VALUE_FLAGS = new Set(['--id', '--as', '--lane', '--pattern', '--out', '--captions', '--item', '--now', '--status']);
 const positional = args.filter((arg, index) => !arg.startsWith('--') && !VALUE_FLAGS.has(args[index - 1]));
 const has = (flag) => args.includes(`--${flag}`);
 const option = (name, fallback = null) => {
@@ -328,6 +331,71 @@ function prepareVideo() {
 	console.log(`\nAttached to ${itemId} as the head post's only media.`);
 }
 
-const commands = { check, plan, run, import: importSource, 'prepare-video': prepareVideo };
+// --- review ----------------------------------------------------------------
+
+// Credentials the review needs, taken from the Cloud Run service when they are
+// not in the local env files.
+const REVIEW_ENV = ['X_API_KEY', 'X_API_SECRET', 'OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'NVIDIA_API_KEY'];
+
+function hydrateReviewEnv() {
+	if (!process.env.GOOGLE_CLOUD_PROJECT) process.env.GOOGLE_CLOUD_PROJECT = 'aerial-vehicle-466722-p5';
+	for (const name of REVIEW_ENV.filter((key) => !process.env[key])) {
+		const read = spawnSync(process.execPath, [resolve(root, 'scripts/read-service-env.mjs'), `^${name}$`, '--raw'], { cwd: root, encoding: 'utf8' });
+		const value = read.status === 0 ? read.stdout.trim() : '';
+		if (value) process.env[name] = value;
+	}
+	if (!process.env.GITHUB_TOKEN && !process.env.GH_TOKEN) {
+		const token = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' });
+		if (token.status === 0 && token.stdout.trim()) process.env.GITHUB_TOKEN = token.stdout.trim();
+	}
+}
+
+function printReview(record) {
+	const mark = (ok) => (ok ? 'pass' : 'FAIL');
+	console.log(`\n=== ${record.id}: ${record.passed ? 'PASSED' : 'NOT READY'} ===`);
+	for (const text of record.texts) console.log(`  > ${text.replace(/\n/g, '\n    ')}`);
+	console.log('\nFacts');
+	for (const check of record.verification.checks) console.log(`  ${mark(check.ok)}  ${check.kind} ${check.target}${check.claim ? ` [${check.claim}]` : ''}: ${check.detail}`);
+	if (record.lint.length) {
+		console.log('\nEditorial lint');
+		for (const row of record.lint) console.log(`  ${row.severity.padEnd(8)} ${row.where}: ${row.message}`);
+	}
+	if (record.editor) {
+		const e = record.editor;
+		console.log(`\nEditor (${e.model}): ${e.verdict}`);
+		console.log(`  ${Object.entries(e.scores).map(([key, value]) => `${key} ${value}`).join(' | ')}`);
+		console.log(`  ${e.summary || ''}`);
+		for (const issue of e.issues) console.log(`  ${issue.severity.padEnd(8)} ${issue.area}: "${issue.quote}" ${issue.problem}\n           fix: ${issue.fix}`);
+		if (e.rewrite?.posts?.length) {
+			console.log('  suggested rewrite:');
+			for (const text of e.rewrite.posts) console.log(`    > ${text}`);
+			for (const finding of e.rewriteFindings || []) console.log(`    rewrite not usable as is: ${finding}`);
+		}
+		if (e.fallbacks?.length) console.log(`  (fell back past: ${e.fallbacks.map((f) => f.split(':')[0]).join(', ')})`);
+	}
+	if (record.blockers.length) {
+		console.log('\nBlocking approval');
+		for (const blocker of record.blockers) console.log(`  - ${blocker}`);
+	}
+	console.log(`\nRecorded in data/x-content/reviews/${record.id}.json`);
+}
+
+async function review() {
+	const queue = loadQueue(root);
+	const status = option('status');
+	const id = positional[1];
+	const items = queue.items.filter((item) => (id ? item.id === id : status ? item.status === status : false));
+	if (!items.length) fail('Usage: review <slug> | review --status review [--no-editor]');
+	hydrateReviewEnv();
+	let failed = 0;
+	for (const item of items) {
+		const record = await reviewItem(item, { root, glossary: queue.quality?.glossary || [], skipEditor: has('no-editor') });
+		printReview(record);
+		if (!record.passed) failed++;
+	}
+	if (failed) process.exit(1);
+}
+
+const commands = { check, plan, run, review, import: importSource, 'prepare-video': prepareVideo };
 if (!commands[command]) fail(`Unknown command ${command}. Commands: ${Object.keys(commands).join(', ')}`);
 await commands[command]();
