@@ -223,6 +223,13 @@ async function main() {
     );
   }
 
+  if (bondingCurve.isHolderReward === true) {
+    throw new Error(
+      "This is a holder-reward coin: its creator is the holder-rewards PDA and every creator fee is paid out to holders " +
+      "by pump.fun through distribute_fee_to_holders. Fee sharing config cannot be created for holder-reward coins.",
+    );
+  }
+
   // Detect mode
   const configExists = hasCoinCreatorMigratedToSharingConfig({ mint, creator: effectiveCreator });
   let mode = values.mode ?? (configExists ? "update" : "create");

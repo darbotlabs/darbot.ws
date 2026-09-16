@@ -136,6 +136,14 @@ async function main() {
       );
     }
 
+
+    if (bondingCurve.isHolderReward === true) {
+      throw new Error(
+        "This is a holder-reward coin: its creator is the holder-rewards PDA and every creator fee is paid out to holders " +
+        "by pump.fun through distribute_fee_to_holders. There is no creator vault for the launcher to collect.",
+      );
+    }
+
     // Check for sharing config
     if (
       hasCoinCreatorMigratedToSharingConfig({ mint, creator })

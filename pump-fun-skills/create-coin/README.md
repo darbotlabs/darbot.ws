@@ -22,9 +22,15 @@ caller's wallet co-signs and submits.
 
 Required args: `user` (creator wallet pubkey), `name`, `symbol`, `uri`
 (metadata JSON on IPFS or HTTPS), `solLamports` (initial buy in lamports).
-Optional: `mayhemMode`, `cashback`, `tokenizedAgent` (+ `buybackBps`, e.g.
+Optional: `mayhemMode`, `holderReward` (script flag `--holder-reward`; cashback launches were retired in Pump SDK 2), `tokenizedAgent` (+ `buybackBps`, e.g.
 `5000` = 50%), `frontRunningProtection` (+ `tipAmount`, a Jito tip in SOL),
 `feePayer`, `creator`.
+
+The tool refuses `cashback: true` (Pump SDK 2 retired cashback launches, the
+program fails with 6082) and `holderReward: true` (the hosted builder does not
+encode it yet). Holder-reward coins, whose creator fees are paid out to
+holders, are built locally with
+`node scripts/build-create-coin-tx.mjs --holder-reward ...`.
 
 The response contains a base64-encoded `VersionedTransaction` already
 partial-signed by the server-generated mint keypair, plus `mintPublicKey`.

@@ -28217,6 +28217,15 @@
 				"improvement"
 			],
 			"link": "/pumpfun"
+		},
+		{
+			"date": "2026-09-16",
+			"title": "pump.fun agent skills now launch holder-reward coins",
+			"summary": "The pump.fun launch, swap and fee skills that agents use on three.ws now run on version 2 of the pump.fun SDK. Launching a coin can now turn on holder rewards, which sends every creator fee to the coin's holders instead of the launcher, permanently. Cashback launches were retired by pump.fun, so the skill now refuses them up front with a clear message instead of handing back a transaction that would fail after you sign it. The fee skill also recognizes holder-reward coins and explains where their fees go rather than trying to collect them.",
+			"tags": [
+				"improvement",
+				"fix"
+			]
 		}
 	]
 }
