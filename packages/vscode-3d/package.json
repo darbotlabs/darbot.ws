@@ -5,6 +5,7 @@
 	"version": "0.2.0",
 	"publisher": "threews",
 	"license": "Apache-2.0",
+	"pricing": "Free",
 	"homepage": "https://three.ws",
 	"repository": {
 		"type": "git",
@@ -386,6 +387,8 @@
 		"watch": "node build.mjs --watch",
 		"test": "node build.mjs && node --test \"test/*.test.mjs\"",
 		"package": "npx --yes @vscode/vsce package --no-dependencies",
+		"publish:marketplace": "npx --yes @vscode/vsce publish --no-dependencies",
+		"publish:openvsx": "npx --yes ovsx publish --no-dependencies",
 		"vscode:prepublish": "node build.mjs --production"
 	},
 	"dependencies": {

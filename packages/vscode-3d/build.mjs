@@ -21,9 +21,10 @@ const watch = process.argv.includes('--watch');
 const threeLibs = dirname(dirname(require.resolve('three/examples/jsm/libs/basis/basis_transcoder.js')));
 
 // Only what the loaders fetch at runtime: the Draco encoder alone is a megabyte
-// of dead weight in the .vsix.
+// of dead weight in the .vsix. DRACOLoader takes the pure-JS decoder
+// (draco_decoder.js) only when WebAssembly is missing, and every VS Code webview
+// has it (the CSP grants 'wasm-unsafe-eval'), so only the wasm pair ships.
 const DECODERS = [
-	['draco/gltf/draco_decoder.js', 'draco/draco_decoder.js'],
 	['draco/gltf/draco_decoder.wasm', 'draco/draco_decoder.wasm'],
 	['draco/gltf/draco_wasm_wrapper.js', 'draco/draco_wasm_wrapper.js'],
 	['basis/basis_transcoder.js', 'basis/basis_transcoder.js'],

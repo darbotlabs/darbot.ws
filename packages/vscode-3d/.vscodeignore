@@ -7,3 +7,6 @@ build.mjs
 **/*.map
 **/tsconfig.json
 node_modules/**
+package-lock.json
+PUBLISHING.md
+*.vsix

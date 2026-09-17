@@ -95,21 +95,30 @@ platform's own inspectors, and generation calls the live studio API.
 
 ## Install
 
-From the workspace root:
+Search for **three.ws 3D** in the Extensions view, or install it by ID:
 
 ```bash
-cd packages/vscode-3d
-npm install
-npm run build
+code --install-extension threews.vscode-3d
 ```
 
-Then press <kbd>F5</kbd> in VS Code with `packages/vscode-3d` open to launch an
-Extension Development Host, or build a `.vsix` and install it:
+It is listed on the
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=threews.vscode-3d)
+and, for VSCodium, Cursor, Windsurf and other Open VSX editors, on
+[Open VSX](https://open-vsx.org/extension/threews/vscode-3d).
+
+To build it from source instead:
 
 ```bash
+git clone https://github.com/nirholas/three.ws.git
+cd three.ws/packages/vscode-3d
+npm install
 npm run package
 code --install-extension vscode-3d-0.2.0.vsix
 ```
+
+For development, open `packages/vscode-3d` in VS Code and press <kbd>F5</kbd> to
+launch an Extension Development Host. Maintainers: releasing a new version is
+covered in [PUBLISHING.md](https://github.com/nirholas/three.ws/blob/main/packages/vscode-3d/PUBLISHING.md).
 
 ## Use it
 
@@ -229,13 +238,13 @@ and real committed GLBs.
 
 ## Related
 
-- [`docs/vscode.md`](../../docs/vscode.md) walks through the whole workflow.
-- [`@three-ws/vscode-x402`](../vscode-x402) is the sibling extension for paying
+- [`docs/vscode.md`](https://github.com/nirholas/three.ws/blob/main/docs/vscode.md) walks through the whole workflow.
+- [`@three-ws/vscode-x402`](https://github.com/nirholas/three.ws/tree/main/packages/vscode-x402) is the sibling extension for paying
   x402 endpoints from the editor.
-- [`docs/embedding.md`](../../docs/embedding.md) documents every `<agent-3d>`
+- [`docs/embedding.md`](https://github.com/nirholas/three.ws/blob/main/docs/embedding.md) documents every `<agent-3d>`
   attribute the diagnostics and completions know.
-- [`@three-ws/glb-diff`](../glb-diff) is the structural differ behind the
+- [`@three-ws/glb-diff`](https://github.com/nirholas/three.ws/tree/main/packages/glb-diff) is the structural differ behind the
   compare command, also available as a CLI for CI.
-- [`@three-ws/glb-tools`](../glb-tools) does inspection and baking from the shell.
+- [`@three-ws/glb-tools`](https://github.com/nirholas/three.ws/tree/main/packages/glb-tools) does inspection and baking from the shell.
 
 Apache-2.0. Built by [three.ws](https://three.ws).
