@@ -8,6 +8,15 @@ const output = resolve(root, 'dist');
 const entry = resolve(root, 'src/index.js');
 const built = await ncc(entry, { minify: true, sourceMap: false });
 
+// ncc turns an import it cannot resolve into a stub that only throws when the code path runs.
+// A missing optional peer (meshoptimizer, which decodes EXT_meshopt_compression) therefore
+// bundles cleanly and then fails on real avatars in adopters' pull requests. Refuse that bundle.
+const unresolved = [built.code, ...Object.values(built.assets).map((asset) => String(asset.source))]
+	.flatMap((code) => [...code.matchAll(/eval\("require"\)\("([^"]+)"\)/g)].map((match) => match[1]));
+if (unresolved.length) {
+	throw new Error(`the bundle has unresolved imports; add them to dependencies: ${[...new Set(unresolved)].join(', ')}`);
+}
+
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await writeFile(resolve(output, 'index.js'), built.code);

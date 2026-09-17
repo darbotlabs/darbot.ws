@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Document, NodeIO } from '@gltf-transform/core';
+import { EXTMeshoptCompression } from '@gltf-transform/extensions';
+import { MeshoptEncoder } from 'meshoptimizer';
 import { diffModels } from '@three-ws/glb-diff';
 import {
 	COMMENT_MARKER,
@@ -24,6 +26,28 @@ function model({ mesh = 'Body', x = 0 } = {}) {
 	const node = document.createNode('Root').setMesh(document.createMesh(mesh).addPrimitive(primitive));
 	document.createScene('Scene').addChild(node);
 	return new NodeIO().writeBinary(document);
+}
+
+async function meshoptModel() {
+	const document = new Document();
+	const buffer = document.createBuffer();
+	const position = document
+		.createAccessor()
+		.setType('VEC3')
+		.setArray(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]))
+		.setBuffer(buffer);
+	const primitive = document.createPrimitive().setAttribute('POSITION', position);
+	const node = document.createNode('Root').setMesh(document.createMesh('Body').addPrimitive(primitive));
+	document.createScene('Scene').addChild(node);
+	document
+		.createExtension(EXTMeshoptCompression)
+		.setRequired(true)
+		.setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
+	await MeshoptEncoder.ready;
+	const io = new NodeIO().registerExtensions([EXTMeshoptCompression]).registerDependencies({
+		'meshopt.encoder': MeshoptEncoder,
+	});
+	return io.writeBinary(document);
 }
 
 test('validates user inputs', () => {
@@ -71,4 +95,12 @@ test('runs the real GLB engine and renders an idempotent report', async () => {
 	assert.ok(report.startsWith(COMMENT_MARKER));
 	assert.match(report, /avatar\.glb/);
 	assert.match(report, /Highest severity: \*\*major\*\*/);
+});
+
+test('reads meshopt-compressed models, the format most optimized web avatars ship in', async () => {
+	const bytes = await meshoptModel();
+	assert.match(new TextDecoder().decode(bytes.subarray(0, 2048)), /EXT_meshopt_compression/);
+	const changes = await diffModels(bytes, bytes, { nameA: 'before', nameB: 'after' });
+	assert.equal(changes.identical, true);
+	assert.equal(changes.severity, 'none');
 });
