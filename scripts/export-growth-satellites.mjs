@@ -73,6 +73,35 @@ function copyProject(target) {
 	return destination;
 }
 
+function listFiles(root, path = root) {
+	return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
+		const child = join(path, entry.name);
+		return entry.isDirectory() ? listFiles(root, child) : [relative(root, child)];
+	});
+}
+
+// The Action runs the committed bundle, so the monorepo copy must be exactly what a clean build
+// of the locked dependencies produces. A mismatch means the published runtime would differ from
+// reviewed source: an unresolved optional import, a stale chunk, or a dependency the build found
+// outside the satellite's own lockfile.
+function assertBundleMatchesSource(target, destination) {
+	const committed = join(REPO, target.source, 'dist');
+	const built = join(destination, 'dist');
+	const committedFiles = listFiles(committed).sort();
+	const builtFiles = listFiles(built).sort();
+	const drift = [...new Set([...committedFiles, ...builtFiles])].filter(
+		(file) =>
+			!committedFiles.includes(file) ||
+			!builtFiles.includes(file) ||
+			!readFileSync(join(committed, file)).equals(readFileSync(join(built, file))),
+	);
+	if (drift.length) {
+		throw new Error(
+			`${target.name} committed dist/ differs from a clean build (${drift.join(', ')}); run npm ci && npm run build in ${target.source} and commit dist/`,
+		);
+	}
+}
+
 function verifyProject(target, destination) {
 	if (OFFLINE) return;
 	run('npm', ['ci', '--ignore-scripts'], destination);
@@ -82,6 +111,7 @@ function verifyProject(target, destination) {
 		if (!existsSync(join(destination, 'dist', 'index.js'))) {
 			throw new Error(`${target.name} build did not produce dist/index.js`);
 		}
+		assertBundleMatchesSource(target, destination);
 	}
 }
 

@@ -23,5 +23,5 @@ outputs:
   files-checked:
     description: Number of changed GLB files included in the report.
 runs:
-  using: node20
+  using: node24
   main: dist/index.js
