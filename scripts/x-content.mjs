@@ -10,6 +10,8 @@
 //   npm run x:content -- prepare-video <input> --out public/x-media/<id>/clip.mp4 [--captions file.srt] [--item slug]
 //   npm run x:content -- review <slug> [--no-editor]      the editorial bar: lint, live fact checks, AI editor
 //   npm run x:content -- review --status review            review every item awaiting review
+//   npm run x:content -- approve <slug>                    owner gate: release a reviewed item
+//   npm run x:content -- approve --status review           release every item whose review passed
 //
 // Env: reads .env.local then .env. DATABASE_URL gives plan/run the shared
 // publish ledger; X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET are
@@ -26,7 +28,7 @@ import { runTick } from '../api/_lib/x-content/runner.js';
 import { dbStore, memoryStore } from '../api/_lib/x-content/state.js';
 import { VIDEO_LIMITS, mediaType, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
 import { weightedLength } from '../api/_lib/x-content/quality.js';
-import { reviewItem } from '../api/_lib/x-content/review.js';
+import { approvalProblems, reviewItem } from '../api/_lib/x-content/review.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -396,6 +398,32 @@ async function review() {
 	if (failed) process.exit(1);
 }
 
-const commands = { check, plan, run, review, import: importSource, 'prepare-video': prepareVideo };
+// The owner's gate, as a command instead of a hand edit. It only ever moves an
+// item to `approved`, and only while a passing review record covers the exact
+// bytes that are in the queue right now, which is the same rule the publisher
+// enforces at send time.
+async function approve() {
+	const queue = loadQueue(root);
+	const status = option('status');
+	const id = positional[1];
+	const items = queue.items.filter((item) => (id ? item.id === id : status ? item.status === status : false));
+	if (!items.length) fail('Usage: approve <slug> | approve --status review');
+
+	let blocked = 0;
+	for (const item of items) {
+		const problems = approvalProblems({ ...item, status: 'approved' }, root);
+		if (problems.length) {
+			blocked++;
+			console.log(`hold  ${item.id}: ${problems.join('; ')}`);
+			continue;
+		}
+		item.status = 'approved';
+		console.log(`ok    ${item.id}: approved for ${dueAt(item, queue.cadence) ? new Date(dueAt(item, queue.cadence)).toISOString() : item.notBefore}`);
+	}
+	writeFileSync(resolve(root, QUEUE_PATH), `${JSON.stringify(queue, null, '\t')}\n`);
+	if (blocked) process.exit(1);
+}
+
+const commands = { check, plan, run, review, approve, import: importSource, 'prepare-video': prepareVideo };
 if (!commands[command]) fail(`Unknown command ${command}. Commands: ${Object.keys(commands).join(', ')}`);
 await commands[command]();

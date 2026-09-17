@@ -48,6 +48,8 @@ X Articles require the posting account to be on X Premium.
 | `data/x-content/articles/<id>.md` | Article bodies, in Markdown. |
 | `public/x-media/<id>/` | Media for queue items. Media must live under `public/` or `data/` so it ships inside the production image. |
 | [api/_lib/x-content/](../api/_lib/x-content/) | The engine: voice and editorial lint, media rules, live fact verification, the AI editor, review records, Markdown to Article conversion, scheduler, publisher, ledger. |
+| [api/_lib/x-content/llm.js](../api/_lib/x-content/llm.js) | The model chain (Vertex, OpenRouter, OpenAI, NVIDIA NIM) the editor and the announcement drafter share. |
+| [api/_lib/announce/](../api/_lib/announce/) | The [announcement factory](./announcement-factory.md): it fills this queue from the backlog of shipped surfaces nobody has posted about. |
 | `data/x-content/reviews/<id>.json` | The editorial review record for each item, bound to a hash of the exact content that was reviewed. |
 | [api/cron/x-content.js](../api/cron/x-content.js) | The Cloud Scheduler tick, every 15 minutes. |
 | [scripts/x-content.mjs](../scripts/x-content.mjs) | The operator CLI. |
@@ -86,7 +88,7 @@ X Articles require the posting account to be on X Premium.
 }
 ```
 
-- `status`: `draft` (may be unfinished), `review` (must pass `check`), `approved` (eligible to publish), `paused`, `posted`.
+- `status`: `draft` (may be unfinished), `review` (must pass `check`), `approved` (eligible to publish), `paused`, `posted`. Move an item to `approved` with `npm run x:content -- approve <slug>` (or `--status review` for a whole batch), which refuses anything a passing review record does not already cover.
 - `lane` and `pattern` are free-form labels; rotation compares them against what was published last.
 - `claims` is the fact ledger. Every number, ordinal, and absolute word (first, only, every, never, fastest) in the copy must sit inside some claim's `says`, every `says` must quote the copy, and every claim carries at least one piece of `evidence` (types below).
 - `mentions` maps each @handle in the copy to the reason the tag is true. A tag with no reason is blocked.

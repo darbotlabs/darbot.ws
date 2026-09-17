@@ -284,6 +284,7 @@ if (!explicitFiles.length) {
 const UNPUBLISHED_DOCS = new Map([
 	['agora', 'internal: strategy framing, not a reader-facing product doc'],
 	['announce-voice', 'internal: the voice contract announcement packs are written and gated against'],
+	['announcement-factory', 'internal: the marketing machinery that fills the X content queue, like x-content-pipeline'],
 	['announcement-coverage', 'internal: X announcement coverage matrix for marketing planning'],
 	['announcement-coverage-telegram', 'internal: paste-ready holders-channel post drafted from the coverage matrix'],
 	['avatar-cli', 'internal: in-flight, register when the CLI ships'],

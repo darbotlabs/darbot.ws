@@ -82,7 +82,19 @@ export async function reviewItem(item, { root, glossary = [], env = process.env,
 		}
 	}
 	const verification = await verifyItem(item, { root, glossary, env });
-	const editor = skipEditor ? null : await reviewWithEditor(await buildReviewRequest(item, { root, verification, lint }), env);
+	// An unreachable editor is a blocker, not a crash. The lint and the live
+	// verification are the expensive half of a review and they are already done
+	// by this point; throwing them away leaves the operator with no record of
+	// the problems a model was never needed to find.
+	let editorError = null;
+	let editor = null;
+	if (!skipEditor) {
+		try {
+			editor = await reviewWithEditor(await buildReviewRequest(item, { root, verification, lint }), env);
+		} catch (err) {
+			editorError = err.message;
+		}
+	}
 
 	const blockers = [
 		...lint.filter((row) => row.severity === 'blocking').map((row) => `${row.where}: ${row.message}`),
@@ -93,7 +105,7 @@ export async function reviewItem(item, { root, glossary = [], env = process.env,
 		const overridden = item.editorOverride?.reason && editor.verdict === 'revise' && !editor.issues.some((row) => row.severity === 'blocking');
 		if (editor.verdict !== 'publish' && !overridden) blockers.push(`editor verdict is ${editor.verdict}`);
 	} else {
-		blockers.push('the AI editor did not run');
+		blockers.push(editorError ? `the AI editor did not run: ${editorError.split('\n')[0]}` : 'the AI editor did not run');
 	}
 
 	// The editor's rewrite is a draft like any other: lint it, and list every
@@ -115,6 +127,7 @@ export async function reviewItem(item, { root, glossary = [], env = process.env,
 		lint,
 		verification,
 		editor,
+		editorError,
 	};
 	const path = resolve(root, reviewPath(item.id));
 	mkdirSync(dirname(path), { recursive: true });

@@ -60,7 +60,7 @@ export async function linkChecks(texts) {
 	return checks;
 }
 
-function createPageReader() {
+export function createPageReader() {
 	let browser = null;
 	const cache = new Map();
 	return {
@@ -90,7 +90,9 @@ function createPageReader() {
 					)
 					.catch(() => {});
 				const text = await page.evaluate(() => document.body.innerText);
-				const result = { status, text: normalize(text) };
+				// `text` is normalized for substring checks; `raw` keeps the line
+				// breaks and casing the announcement brief harvests facts from.
+				const result = { status, text: normalize(text), raw: text };
 				cache.set(url, result);
 				return result;
 			} finally {

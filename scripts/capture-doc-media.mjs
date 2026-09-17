@@ -151,7 +151,7 @@ function readSpec() {
 		if (!shot.id) fail('every shot needs an id');
 		if (seen.has(shot.id)) fail(`duplicate shot id: ${shot.id}`);
 		seen.add(shot.id);
-		if (!shot.url) fail(`shot ${shot.id} has no url`);
+		if (!shot.url && !shot.card) fail(`shot ${shot.id} has neither a url nor a card recipe`);
 		if (!shot.alt) fail(`shot ${shot.id} has no alt text (a doc image without alt is a bug)`);
 		if (!VIEWPORTS[shot.viewport || 'desktop']) {
 			fail(`shot ${shot.id} has unknown viewport "${shot.viewport}"`);
@@ -235,6 +235,20 @@ async function applyActions(page, actions = []) {
 
 /** Everything a page needs to look like a real, settled visit before we shoot. */
 async function preparePage(page, shot) {
+	// A shot with no route is a title card for a surface that has no page: a
+	// package, a worker, or a service. It is typeset from that thing's own
+	// README and package.json (api/_lib/announce/card.js) and rendered in the
+	// same browser, at the same viewport, through the same WebP writer, so it
+	// carries the same provenance as a photographed route.
+	if (shot.card) {
+		const { cardFacts, cardHtml, fetchFontCss } = await import('../api/_lib/announce/card.js');
+		const facts = cardFacts(ROOT_DIR, shot.card);
+		const fontCss = await fetchFontCss(BASE);
+		await page.setContent(cardHtml(facts, { origin: BASE, fontCss }), { waitUntil: 'domcontentloaded', timeout: 30000 });
+		await page.evaluate(() => document.fonts?.ready).catch(() => {});
+		await page.waitForTimeout(shot.settle ?? 1200);
+		return;
+	}
 	const url = shot.url.startsWith('http') ? shot.url : BASE + shot.url;
 	await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 	await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {
@@ -479,7 +493,7 @@ async function captureShot(browser, shot, commit) {
 			src: `${PUBLIC_SRC}/${shot.id}.webp`,
 			alt: shot.alt,
 			caption: shot.caption || null,
-			route: shot.url,
+			route: shot.url || `card:${shot.card?.dir || shot.id}`,
 			viewport: shot.viewport || 'desktop',
 			animated: Boolean(shot.motion),
 			authenticated: Boolean(shot.auth),
@@ -506,7 +520,7 @@ async function main() {
 	if (flag('list')) {
 		for (const shot of shots) {
 			console.log(
-				`${shot.id.padEnd(30)} ${shot.motion ? 'motion' : 'still '} ${(shot.viewport || 'desktop').padEnd(8)} ${shot.url}`,
+				`${shot.id.padEnd(30)} ${shot.motion ? 'motion' : 'still '} ${(shot.viewport || 'desktop').padEnd(8)} ${shot.url || `card:${shot.card?.dir || ''}`}`,
 			);
 		}
 		console.log(`\n${shots.length} shot(s)`);

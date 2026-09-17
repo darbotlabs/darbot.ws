@@ -194,6 +194,8 @@
 		"i18n:backfill": "node scripts/i18n-backfill.mjs",
 		"changelog:gaps": "node scripts/changelog-gaps.mjs",
 		"announce:rank": "node scripts/announce-rank.mjs",
+		"announce:plan": "node scripts/announce-plan.mjs",
+		"announce:kit": "node scripts/announce-kit.mjs",
 		"announce:media": "node scripts/capture-doc-media.mjs --spec data/announce-media.json --out public/announce/img --manifest public/announce/media-manifest.json",
 		"check:announce": "node scripts/check-announce.mjs",
 		"x:content": "node scripts/x-content.mjs",

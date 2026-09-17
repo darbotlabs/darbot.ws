@@ -13,16 +13,15 @@
 // account's best-performing posts. It returns a verdict, scores, specific
 // issues with fixes, and a rewrite. It never edits the queue: a human decides.
 //
-// Transport chain, strongest first: Claude on Vertex AI (GCP credits), Claude
-// through OpenRouter, OpenAI, then Kimi K3 on NVIDIA NIM (free, multimodal, and
-// slow: a full review takes minutes). Each rung is skipped when its credentials
-// are absent and falls through on any provider error, including billing.
+// The transport chain it runs on (Vertex, OpenRouter, OpenAI, NVIDIA NIM) is
+// shared with the drafter and lives in llm.js.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { mediaType } from './media.js';
+import { EDITOR_MODEL, callModelChain } from './llm.js';
 
-export const EDITOR_MODEL = 'claude-opus-5';
+export { EDITOR_MODEL };
 const MAX_SOURCE_CHARS = 24_000;
 const MAX_ARTICLE_CHARS = 40_000;
 
@@ -141,46 +140,7 @@ export function parseReview(raw) {
 	return review;
 }
 
-async function viaVertex({ system, parts }) {
-	const { vertexClaudeConfigured, vertexAnthropicMessages } = await import('../vertex-claude.js');
-	if (!vertexClaudeConfigured()) return null;
-	const content = parts.map((part) => (part.type === 'image' ? { type: 'image', source: { type: 'base64', media_type: part.mime, data: part.data } } : { type: 'text', text: part.text }));
-	const response = await vertexAnthropicMessages({ model: EDITOR_MODEL, max_tokens: 6000, system, messages: [{ role: 'user', content }] });
-	if (!response.ok) throw new Error(`Vertex ${response.status}: ${(await response.text()).slice(0, 200)}`);
-	const body = await response.json();
-	return { model: `vertex:${EDITOR_MODEL}`, text: body.content.filter((block) => block.type === 'text').map((block) => block.text).join('') };
-}
-
-async function viaChatCompletions({ system, parts }, { url, key, model, label, extraHeaders = {} }) {
-	if (!key) return null;
-	const content = parts.map((part) => (part.type === 'image' ? { type: 'image_url', image_url: { url: `data:${part.mime};base64,${part.data}` } } : { type: 'text', text: part.text }));
-	const response = await fetch(url, {
-		method: 'POST',
-		headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', ...extraHeaders },
-		body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content }] }),
-		signal: AbortSignal.timeout(600_000),
-	});
-	if (!response.ok) throw new Error(`${label} ${response.status}: ${(await response.text()).slice(0, 200)}`);
-	const body = await response.json();
-	return { model: `${label}:${model}`, text: body.choices?.[0]?.message?.content || '' };
-}
-
 export async function reviewWithEditor(request, env = process.env) {
-	const rungs = [
-		() => viaVertex(request),
-		() => viaChatCompletions(request, { url: 'https://openrouter.ai/api/v1/chat/completions', key: env.OPENROUTER_API_KEY, model: `anthropic/${EDITOR_MODEL}`, label: 'openrouter', extraHeaders: { 'http-referer': 'https://three.ws', 'x-title': 'three.ws editorial review' } }),
-		() => viaChatCompletions(request, { url: 'https://api.openai.com/v1/chat/completions', key: env.OPENAI_API_KEY, model: 'gpt-5.5-pro', label: 'openai' }),
-		() => viaChatCompletions(request, { url: 'https://integrate.api.nvidia.com/v1/chat/completions', key: env.NVIDIA_API_KEY, model: 'moonshotai/kimi-k3', label: 'nvidia' }),
-	];
-	const failures = [];
-	for (const rung of rungs) {
-		try {
-			const result = await rung();
-			if (!result) continue;
-			return { ...parseReview(result.text), model: result.model, fallbacks: failures };
-		} catch (err) {
-			failures.push(err.message);
-		}
-	}
-	throw new Error(`no editor model was reachable:\n  ${failures.join('\n  ') || 'no credentials for Vertex, OpenRouter, or OpenAI'}`);
+	const { value, model, fallbacks } = await callModelChain(request, { env, parse: parseReview });
+	return { ...value, model, fallbacks };
 }

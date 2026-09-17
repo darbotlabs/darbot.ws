@@ -1,0 +1,62 @@
+// The model chain both editorial jobs run on: drafting a post from an evidence
+// brief, and reviewing one before it ships.
+//
+// Order is cost and quality, strongest first: Claude on Vertex AI (Google
+// credits, the standing approval in the operating rules), Claude through
+// OpenRouter, OpenAI, then Kimi K3 on NVIDIA NIM (free, multimodal, slow). A
+// rung with no credentials is skipped; a rung that errors, or that answers with
+// something the caller cannot parse, falls through to the next one. Falling
+// through on a parse failure is deliberate: a model that returns prose where
+// JSON was asked for has failed the call, and the next rung usually will not.
+
+export const EDITOR_MODEL = 'claude-opus-5';
+
+async function viaVertex({ system, parts }) {
+	const { vertexClaudeConfigured, vertexAnthropicMessages } = await import('../vertex-claude.js');
+	if (!vertexClaudeConfigured()) return null;
+	const content = parts.map((part) => (part.type === 'image' ? { type: 'image', source: { type: 'base64', media_type: part.mime, data: part.data } } : { type: 'text', text: part.text }));
+	const response = await vertexAnthropicMessages({ model: EDITOR_MODEL, max_tokens: 6000, system, messages: [{ role: 'user', content }] });
+	if (!response.ok) throw new Error(`Vertex ${response.status}: ${(await response.text()).slice(0, 200)}`);
+	const body = await response.json();
+	return { model: `vertex:${EDITOR_MODEL}`, text: body.content.filter((block) => block.type === 'text').map((block) => block.text).join('') };
+}
+
+async function viaChatCompletions({ system, parts }, { url, key, model, label, extraHeaders = {} }) {
+	if (!key) return null;
+	const content = parts.map((part) => (part.type === 'image' ? { type: 'image_url', image_url: { url: `data:${part.mime};base64,${part.data}` } } : { type: 'text', text: part.text }));
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', ...extraHeaders },
+		body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content }] }),
+		signal: AbortSignal.timeout(600_000),
+	});
+	if (!response.ok) throw new Error(`${label} ${response.status}: ${(await response.text()).slice(0, 200)}`);
+	const body = await response.json();
+	return { model: `${label}:${model}`, text: body.choices?.[0]?.message?.content || '' };
+}
+
+export function modelRungs(request, env = process.env) {
+	return [
+		() => viaVertex(request),
+		() => viaChatCompletions(request, { url: 'https://openrouter.ai/api/v1/chat/completions', key: env.OPENROUTER_API_KEY, model: `anthropic/${EDITOR_MODEL}`, label: 'openrouter', extraHeaders: { 'http-referer': 'https://three.ws', 'x-title': 'three.ws editorial review' } }),
+		() => viaChatCompletions(request, { url: 'https://api.openai.com/v1/chat/completions', key: env.OPENAI_API_KEY, model: 'gpt-5.5-pro', label: 'openai' }),
+		() => viaChatCompletions(request, { url: 'https://integrate.api.nvidia.com/v1/chat/completions', key: env.NVIDIA_API_KEY, model: 'moonshotai/kimi-k3', label: 'nvidia' }),
+	];
+}
+
+// `parse` turns a rung's raw text into the caller's shape and may throw to
+// reject that rung. The parsed value comes back with the model that produced it
+// and the failures of every rung above it.
+export async function callModelChain(request, { env = process.env, parse = (text) => text } = {}) {
+	const failures = [];
+	for (const rung of modelRungs(request, env)) {
+		try {
+			const result = await rung();
+			if (!result) continue;
+			return { value: parse(result.text), model: result.model, fallbacks: failures };
+		} catch (err) {
+			failures.push(err.message);
+		}
+	}
+	throw new Error(`no model was reachable:\n  ${failures.join('\n  ') || 'no credentials for Vertex, OpenRouter, OpenAI, or NVIDIA'}`);
+}
