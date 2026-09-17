@@ -42,6 +42,8 @@ vi.mock('../api/_lib/auth.js', () => ({
 	extractBearer: vi.fn(() => null),
 }));
 vi.mock('../api/_lib/csrf.js', () => ({ requireCsrf: vi.fn(async () => true) }));
+// The real-funds agreement gate has its own suite (tests/real-funds-agreement.test.js).
+vi.mock('../api/_lib/real-funds-agreement.js', () => ({ requireRealFundsAgreement: vi.fn(async () => true) }));
 vi.mock('../api/_lib/db.js', () => ({
 	sql: vi.fn(async (...args) => {
 		sqlState.calls.push(args);

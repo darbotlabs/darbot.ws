@@ -9,6 +9,12 @@ const payerState = {
 	payResult: null,
 	payError: null,
 };
+// The real-funds agreement gate has its own suite (tests/real-funds-agreement.test.js).
+vi.mock('../../api/_lib/real-funds-agreement.js', () => ({
+	currentSignatureFor: vi.fn(async () => ({ signedAt: '2026-09-17T00:00:00.000Z', signatureName: 'Test Signer', context: null })),
+	agreementRequirement: () => ({ version: 2, sign_url: 'https://three.ws/legal/agreements', documents: [] }),
+}));
+
 vi.mock('../../api/_lib/x402-user-payer.js', () => ({
 	resolveSpendEnabled: () => payerState.spendEnabled,
 	getUserWalletStatus: vi.fn(async () => payerState.walletStatus),

@@ -20,6 +20,7 @@ import { cors, json, method, error, readJson, rateLimited, serverError } from '.
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { limits } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import { getSolanaAddressBalances } from '../_lib/agent-wallet.js';
 import { getSpendLimits, getTradeLimits } from '../_lib/agent-trade-guards.js';
@@ -128,6 +129,8 @@ async function handleGetOne(req, res, id, orderId) {
 async function handleCreate(req, res, id) {
 	const owned = await loadOwned(req, res, id);
 	if (owned.error) return;
+	// A live order trades from the agent wallet on its own when it fires.
+	if (!(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(req), context: 'order-create' }))) return;
 	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	const rl = await limits.tradePerUser(owned.auth.userId);
 	if (!rl.success) return rateLimited(res, rl);
@@ -215,6 +218,9 @@ async function handleUpdate(req, res, id, orderId) {
 
 	let body;
 	try { body = await readJson(req); } catch (e) { return error(res, e?.status === 415 ? 415 : 400, 'bad_request', e?.message || 'invalid request body'); }
+
+	// Resuming a paused order re-arms it; pausing and other edits never need a signature.
+	if (body?.paused === false && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(req), context: 'order-resume' }))) return;
 
 	try {
 		const result = await updateOrder(id, orderId, body);

@@ -9,6 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { cors, json, method, error, readJson, wrap, rateLimited } from '../_lib/http.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits } from '../_lib/rate-limit.js';
 import { authWrite } from '../_lib/vault-auth.js';
 import { getVault } from '../_lib/vault-store.js';
@@ -56,6 +57,8 @@ export default wrap(async (req, res) => {
 		amountRaw = parseAmountInput(body.amount);
 		if (amountRaw == null) return error(res, 400, 'validation_error', 'amount must be a positive number or "max"');
 	}
+
+	if (!(await requireRealFundsAgreement(req, res, { userId, network: vault.network, context: 'vault-trade' }))) return;
 
 	const result = await vaultTrade({
 		vaultId, userId, side, mint, usdcInAtomics, amountRaw, slippageBps,

@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { cors, json, method, error, readJson, wrap, rateLimited } from '../_lib/http.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits } from '../_lib/rate-limit.js';
 import { authWrite } from '../_lib/vault-auth.js';
 import { redeemFromVault } from '../_lib/vault-transfer.js';
@@ -37,6 +38,8 @@ export default wrap(async (req, res) => {
 		if (parsed == null) return error(res, 400, 'validation_error', 'shares must be a positive number or "max"');
 		sharesIn = String(parsed);
 	}
+
+	if (!(await requireRealFundsAgreement(req, res, { userId, context: 'vault-redeem' }))) return;
 
 	const result = await redeemFromVault({
 		vaultId, userId, shares: sharesIn,

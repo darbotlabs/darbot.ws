@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { cors, json, method, error, readJson, wrap, rateLimited } from '../_lib/http.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits } from '../_lib/rate-limit.js';
 import { authWrite, loadOwnedAgent } from '../_lib/vault-auth.js';
 import { getVault } from '../_lib/vault-store.js';
@@ -39,6 +40,8 @@ export default wrap(async (req, res) => {
 
 	let toAgent;
 	try { toAgent = await loadOwnedAgent(toAgentId, userId); } catch (e) { return error(res, e.status || 400, e.code || 'bad_request', e.message); }
+
+	if (!(await requireRealFundsAgreement(req, res, { userId, network: vault.network, context: 'vault-claim-fees' }))) return;
 
 	const result = await claimVaultFees({
 		vaultId, ownerUserId: userId, toAgent,
