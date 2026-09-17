@@ -11,6 +11,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runAutopilotCycleMock = vi.fn(async () => ({ ran: true, results: [] }));
 
+// The real-funds agreement gate is covered by tests/real-funds-agreement.test.js;
+// here the account has signed, so the handler's own guards are what is under test.
+vi.mock('../api/_lib/real-funds-agreement.js', () => ({
+	requireRealFundsAgreement: vi.fn(async () => true),
+	currentSignatureFor: vi.fn(async () => ({ signedAt: '2026-09-17T00:00:00.000Z', signatureName: 'Test Signer', context: null })),
+	agreementRequirement: () => ({ version: 2, sign_url: 'https://three.ws/legal/agreements', documents: [] }),
+}));
+
 vi.mock('../api/_lib/treasury-autopilot.js', () => ({
 	getAutopilot: vi.fn(() => ({ armed: true })),
 	setAutopilot: vi.fn(async () => ({})),

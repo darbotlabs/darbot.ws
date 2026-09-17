@@ -11,6 +11,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const fetchAgentSolanaWallet = vi.fn();
 const fetchAgentSolanaActivity = vi.fn();
 
+// The deposit address is revealed only after the real-funds agreements are
+// signed. Most tests here cover the signed funding surface; the gate itself is
+// exercised in its own describe block below.
+const agreement = { signed: true };
+const ensureRiskAck = vi.fn(async () => {
+	agreement.signed = true;
+	return true;
+});
+vi.mock('../src/shared/risk-ack.js', () => ({
+	hasRiskAckVerified: vi.fn(async () => agreement.signed),
+	ensureRiskAck: (...a) => ensureRiskAck(...a),
+}));
+
 vi.mock('../src/agent-solana-wallet.js', () => ({
 	fetchAgentSolanaWallet: (...a) => fetchAgentSolanaWallet(...a),
 	fetchAgentSolanaActivity: (...a) => fetchAgentSolanaActivity(...a),
@@ -54,6 +67,8 @@ function mountTab(ctx = makeCtx()) {
 }
 
 beforeEach(() => {
+	agreement.signed = true;
+	ensureRiskAck.mockClear();
 	fetchAgentSolanaWallet.mockReset();
 	fetchAgentSolanaActivity.mockReset();
 	fetchAgentSolanaActivity.mockResolvedValue({ signatures: [] });
@@ -213,6 +228,61 @@ describe('Deposit tab — public funding surface', () => {
 		inst.onShow();
 		await tick();
 		expect(panel.textContent).toMatch(/still being prepared/i);
+		inst.destroy();
+	});
+});
+
+describe('Deposit tab: real-funds agreement gate', () => {
+	it('hides the address, QR, and copy control on mainnet until the visitor signs', async () => {
+		agreement.signed = false;
+		fetchAgentSolanaWallet.mockResolvedValue({ status: 'ok', data: { address: ADDR, sol: 0, deposits_enabled: true } });
+		const { panel, inst } = mountTab();
+		inst.onShow();
+		await tick();
+		expect(panel.textContent).not.toContain(ADDR);
+		expect(panel.querySelector('a.awh-dep-qr')).toBeNull();
+		expect(panel.querySelector('[data-act="copy"]')).toBeNull();
+		expect(panel.querySelector('a[href="/legal/agent-wallet"]')).toBeTruthy();
+		expect(panel.textContent).toMatch(/not responsible for any loss/i);
+		inst.destroy();
+	});
+
+	it('reveals the address after signing', async () => {
+		agreement.signed = false;
+		fetchAgentSolanaWallet.mockResolvedValue({ status: 'ok', data: { address: ADDR, sol: 0, deposits_enabled: true } });
+		const { panel, inst } = mountTab();
+		inst.onShow();
+		await tick();
+		panel.querySelector('[data-act="sign"]').click();
+		await tick();
+		await tick();
+		expect(ensureRiskAck).toHaveBeenCalledWith({ context: 'deposit' });
+		expect(panel.textContent).toContain(ADDR);
+		expect(panel.querySelector('a[href="/legal/agent-wallet"]')).toBeTruthy();
+		inst.destroy();
+	});
+
+	it('keeps the address hidden when the visitor declines', async () => {
+		agreement.signed = false;
+		ensureRiskAck.mockImplementationOnce(async () => false);
+		fetchAgentSolanaWallet.mockResolvedValue({ status: 'ok', data: { address: ADDR, sol: 0, deposits_enabled: true } });
+		const { panel, inst } = mountTab();
+		inst.onShow();
+		await tick();
+		panel.querySelector('[data-act="sign"]').click();
+		await tick();
+		await tick();
+		expect(panel.textContent).not.toContain(ADDR);
+		inst.destroy();
+	});
+
+	it('never gates devnet', async () => {
+		agreement.signed = false;
+		fetchAgentSolanaWallet.mockResolvedValue({ status: 'ok', data: { address: ADDR, sol: 0, deposits_enabled: true } });
+		const { panel, inst } = mountTab(makeCtx({ network: 'devnet', getNetwork: () => 'devnet' }));
+		inst.onShow();
+		await tick();
+		expect(panel.textContent).toContain(ADDR);
 		inst.destroy();
 	});
 });
