@@ -29,6 +29,10 @@ a first issue now and it gets merged on air.
 | Teaching it a 12th is an open first issue | [#110](https://github.com/nirholas/three.ws/issues/110) (Apple / ARKit `_joint`), [#111](https://github.com/nirholas/three.ws/issues/111) (Kinect trailing-side), [#112](https://github.com/nirholas/three.ws/issues/112) (Reallusion numbered spine), all open and labelled `good first issue`, each naming its file and verification command |
 | We merge it live | The owner is the reviewer on this repo, so a PR opened on stream can be reviewed and merged on stream. This is section 4 of the runsheet. |
 
+**Re-check before posting (2026-09-17):** #110, #111, and #112 were all closed on 2026-09-14 and
+2026-09-15, and the repo had no open issues, so "an open first issue" is not true until the owner
+creates the new ones in the [contribution menu](../../marketing/growth/events/open-source-friday-menu.md).
+
 The 0-of-10-joints framing belongs to #110 and #111 only. #112 is a two-joint spine gap on an
 otherwise-mapped skeleton, so do not describe it as a convention that maps nothing.
 

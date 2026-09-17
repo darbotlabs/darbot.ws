@@ -27,6 +27,9 @@ This directory is the operational layer above the repo's deeper source material:
 - [Measurement](./measurement.md): the UTM convention, campaign scorecard, and weekly review.
 - [Co-marketing templates](./templates.md): a one-page partner brief, social amplification
   request, event invitation, and post-campaign proof note.
+- [Community event kits](./events/README.md): the turnkey kits for IBM Community event two,
+  the monthly Three World Session template with the November session filled in, and the Open
+  Source Friday contribution menu with its booking reply.
 
 The existing [partnership pipeline](../../docs/partners/opportunities.md) remains the source
 of truth for the state of a listing or partner program. The existing
@@ -179,10 +182,12 @@ wording.
 The execution order is deliberately narrow:
 
 1. Book the approved [GitHub Open Source Friday issue #254](https://github.com/githubevents/open-source-friday/issues/254),
-   then activate the existing announcement and stream plan.
+   then activate the existing announcement and stream plan. The booking reply and the seven
+   first issues to create are in the [contribution menu](./events/open-source-friday-menu.md).
 2. Send one IBM relationship note covering the second event, the promised IBM-domain page,
    the promised social co-promotion, and Partner Plus marketing access. Send the Agent Connect
-   `APP_ID` request separately to its program inbox.
+   `APP_ID` request separately to its program inbox. Both emails, the event page, every post,
+   and the run of show are in the [event two kit](./events/ibm-event-two.md).
 3. Submit the prepared OpenAI Showcase packet and request that three.ws be made visible in the
    OpenAI Partner Locator if it is absent from the authenticated partner record.
 4. Publish one finished NVIDIA technical post, then use the live NVIDIA-domain URL as the
@@ -239,5 +244,6 @@ partner response are recorded.
 | What exists on Hugging Face?              | [Hugging Face index](../../docs/huggingface.md)                        |
 | What can be claimed about $THREE utility? | [$THREE thesis](../../docs/three-thesis.md)                            |
 | What is the Open Source Friday state?     | [Stream plan](../../docs/open-source-friday-plan.md)                   |
+| What runs at the next community event?    | [Community event kits](./events/README.md)                            |
 
 Last verified: **2026-09-15**.

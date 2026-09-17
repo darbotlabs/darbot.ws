@@ -26,7 +26,13 @@ Send to **IBMAgentConnect@ibm.com**. Allow 2 to 3 business days.
 > artifacts. Also performs remeshing, retexturing, segmentation, optimisation, and
 > automatic rigging on existing models.
 >
-> We are an existing IBM Business Partner running IBM Granite on watsonx.ai in production.
+> We are an existing IBM Business Partner. three.ws agents can run on IBM Granite foundation
+> models served through IBM watsonx.ai.
+
+The last sentence uses the safe claim from [`badge-usage.md`](badge-usage.md): do not say Granite
+runs "in production" while the production service has no `WATSONX_*` credentials
+(`/api/ibm/galaxy` answered `watsonx_not_configured` on 2026-09-17). The same email is in the
+[event two kit](../growth/events/ibm-event-two.md#3-agent-connect-app_id-request-separate-email).
 
 Save the `APP_ID` from the reply. If it is ever lost, the same address retrieves it given
 the server name.

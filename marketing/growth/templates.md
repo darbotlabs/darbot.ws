@@ -38,6 +38,9 @@ Subject: `Three.ws user group: event two, Agent Connect, and the open June follo
 > Build-track Partner Marketing Kit? The full public implementation and relationship wording
 > are documented at https://three.ws/ibm/hello.
 
+The dispatch-ready version for event two, with the date options and all four asks, is section 2
+of the [event two kit](./events/ibm-event-two.md#2-relationship-email-to-ibm).
+
 Send the Agent Connect `APP_ID` request separately using the existing
 [submission pack](../ibm-partner-plus/agent-connect-listing.md); combining a technical unblock
 with the marketing note makes both harder to route.
@@ -68,7 +71,9 @@ after booking:
 > The stream plan and fallback assets are ready; happy to send the 16:9 card and 20-second demo
 > clip in advance for the official announcement.
 
-Do not use this reply until the booking is confirmed; the current issue has no date.
+Do not use this reply until the booking is confirmed; the current issue has no date. The fuller
+reply written after approval, with only the date left to fill, is in the
+[contribution menu](./events/open-source-friday-menu.md#booking-reply-for-issue-254).
 
 ## Coinbase Founders Fuel application core
 

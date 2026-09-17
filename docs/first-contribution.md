@@ -45,13 +45,13 @@ No scratch files in the repo root: probe the function straight from the shell.
 ```bash
 node --input-type=module -e "
 import { canonicalizeBoneName as c } from './src/glb-canonicalize.js';
-for (const n of ['left_arm_joint', 'hips_joint', '左腕', 'upperarm_l']) console.log(n, '->', c(n));
+for (const n of ['Character1Hips', 'hips_joint', '左腕', 'upperarm_l']) console.log(n, '->', c(n));
 "
 ```
 
 ```
-left_arm_joint -> null        Apple / ARKit rigs: not supported yet (issue #110)
-hips_joint -> null
+Character1Hips -> null        HumanIK after three.js strips the colon: not supported yet
+hips_joint -> Hips            Apple / ARKit rigs: supported
 左腕 -> LeftArm               MikuMikuDance: supported, added 2026-08-21
 upperarm_l -> LeftArm         Unreal mannequin: supported
 ```
@@ -134,11 +134,13 @@ describe('MMD (MikuMikuDance) Japanese skeleton', () => {
 
 ### Now do one that is actually open
 
-MMD is done, so do not re-submit it. Pick a convention that still returns `null` and give it the same four-part treatment (alias map, tests, Rig Doctor fingerprint, docs row). Three are verified open and waiting, each with the file, the bones, and the verification command spelled out:
+MMD is done, so do not re-submit it. So are Apple / ARKit, Kinect, and the Reallusion numbered spine: the three issues this section used to list were all merged in September 2026. Pick a convention that still returns `null` and give it the same four-part treatment (alias map, tests, Rig Doctor fingerprint, docs row). The next ones are verified open and written up with the file, the bones, and the verification command:
 
-- [#110](https://github.com/nirholas/three.ws/issues/110): Apple / ARKit rigs, which suffix every joint with `_joint` (`hips_joint`, `left_arm_joint`). 0 of 10 joints map today.
-- [#111](https://github.com/nirholas/three.ws/issues/111): Kinect rigs, which put the side word last (`ShoulderLeft`, `ElbowLeft`, `SpineBase`). 0 of 10 map today.
-- [#112](https://github.com/nirholas/three.ws/issues/112): Reallusion Character Creator 3/4, whose numbered spine chain (`CC_Base_Spine01`, `CC_Base_Spine02`) returns `null` while the rest of the CC skeleton already maps. A smaller gap than the other two, and a good first one if you want the shape of the change without the full ten joints.
+- **HumanIK after three.js loads it.** `Character1:Hips` maps, but three.js deletes the colon when it loads a model, and the runtime retargeter then sees `Character1Hips`, which maps to nothing. The smallest of the three.
+- **3ds Max Biped fingers.** The body maps; `Bip01 L Finger0`, `Finger01`, and the rest of the numbered finger chain do not.
+- **Source engine skeletons.** `ValveBiped.Bip01_Pelvis` and the rest of the `ValveBiped` rig map to nothing, and Rig Doctor does not recognise the convention.
+
+Find them under the [`good first issue`](https://github.com/nirholas/three.ws/labels/good%20first%20issue) label. If a label search comes back empty, the ready-to-file bodies are in [marketing/growth/events/osf-issues/](../marketing/growth/events/osf-issues/01-rig-humanik-sanitized-names.md), and you can work from them directly.
 
 Comment on the one you are taking, then:
 

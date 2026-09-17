@@ -6,6 +6,7 @@
 **Criteria:** [admin/project-criteria.md](https://github.com/githubevents/open-source-friday/blob/main/admin/project-criteria.md)
 **Request form:** https://github.com/githubevents/open-source-friday/issues/new?template=osf-guest-invite.yml
 **Our request:** https://github.com/githubevents/open-source-friday/issues/254 (opened 2026-08-25)
+**Contribution menu and booking reply:** [marketing/growth/events/open-source-friday-menu.md](../marketing/growth/events/open-source-friday-menu.md) (approved; all six August issues are closed, so the menu carries seven new verified issue bodies)
 
 ---
 
@@ -114,7 +115,7 @@ This follows the order and length in their own [Streaming Guide](https://github.
 | 0:05-0:08 | What is your project? | Prompt to rigged avatar to embedded on a blank page, narrated, no slides |
 | 0:08-0:18 | Demo | (a) generate an avatar live and watch it animate, (b) one `<agent-3d>` tag in an empty `index.html`, drive mood from the console, (c) upload an unsupported rig to [Rig Doctor](https://three.ws/rig-doctor) and show exactly which joints will not move. Fallback GLB staged in case a worker is slow |
 | 0:18-0:23 | Motivation / how it started | Why "3D agent" was a dead end until rendering and runtime could talk; what broke the first three times |
-| 0:23-0:33 | How can people contribute? | Done live: take [#110](https://github.com/nirholas/three.ws/issues/110) or [#111](https://github.com/nirholas/three.ws/issues/111), write the mapping, write the test, run `npx vitest run tests/glb-canonicalize.test.js`, open the PR on air, merge it on air |
+| 0:23-0:33 | How can people contribute? | Done live: take the HumanIK issue (issue 1 in the [contribution menu](../marketing/growth/events/open-source-friday-menu.md); #110 and #111, the original picks, were closed on 2026-09-15), write the mapping, write the test, run `npx vitest run tests/glb-canonicalize.test.js`, open the PR on air, merge it on air |
 | 0:33-0:36 | Last thing pushed / next thing | Read it off the [public changelog](https://three.ws/changelog); it ships to Telegram on every release so the honest answer is the only one available |
 | 0:36-0:42 | Audience questions | End with the `good first issue` list on screen, by number |
 | 0:42-0:45 | Wrap-up questions | Best tip for new contributors: comment on the issue before you start, one line. They also ask favourite song, an emoji, and an ice cream flavour; have answers, do not improvise on air |
@@ -190,7 +191,9 @@ Every hard criterion is met, stars included. What remains is one click, polish, 
 | 2026-08-25 | **Issue submitted**: [open-source-friday#254](https://github.com/githubevents/open-source-friday/issues/254) | Done |
 | 2026-08-25 | Reply to Andrea's X thread with the issue link (draft: [x-posts/osf-issue-reply.md](x-posts/osf-issue-reply.md)) | Owner |
 | 2026-08-28+ | Booking link arrives on approval, book the slot | Owner |
-| ~2026-09-11 | Stream (earliest date satisfying the two-week rule) | Owner |
+| 2026-09-01 | Approved; booking bot asked for a date | Done |
+| 2026-09-17 | All six August issues closed; seven new issue bodies and the booking reply written ([menu](../marketing/growth/events/open-source-friday-menu.md)) | Done |
+| Next | Book a Friday (earliest October 2), reply on #254, create the menu issues | Owner |
 
 ---
 

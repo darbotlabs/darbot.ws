@@ -10,6 +10,14 @@ This document is the proposal for the second one. It exists so the conversation 
 starts from a concrete run of show rather than a format debate, and so the engineering work
 is scoped before a date is promised.
 
+**The turnkey kit for event two** (event page, both IBM emails, every post, a minute-by-minute
+run of show inside `/play`, and three October dates) is
+[marketing/growth/events/ibm-event-two.md](../marketing/growth/events/ibm-event-two.md). It
+runs a one-hour in-world session that can serve as the Forge-Off Open's kickoff. One claim below
+needs re-checking before it is used in IBM copy: `api/_lib/publish-safety.js` now screens with an
+NVIDIA NemoGuard classifier, not Granite Guardian, so the responsible-AI argument under Option A
+no longer matches the code.
+
 **The goal is not another audience. It is usage.** A webinar is measured in registrations
 and a recording. This event is measured in how many people typed something into three.ws
 who never had before, and how many of them came back the next day. Everything below is
