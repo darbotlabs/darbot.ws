@@ -12,7 +12,8 @@
  *                 net buy, unique traders, price change (pump.fun swap API
  *                 trades, paged back up to 24h)
  *   · holders     holder count, top-10 share, top holder, dev share, bonding
- *                 curve share, early-buyer share, top-10 list (Helius DAS)
+ *                 curve share, early-buyer share, top-10 list (Helius DAS, or
+ *                 the 20 largest accounts over plain RPC when Helius is down)
  *   · authorities mint and freeze authority as read off the mint account
  *   · curve       bonding curve progress, curve reserves, graduation state
  *   · market      liquidity and DEX Screener paid-profile state
@@ -166,23 +167,26 @@ function shareOfSupply(units, supply) {
  * program-owned liquidity, not holders, so they are reported separately and
  * excluded from the top-holder ranking the way trading terminals do.
  */
-export function holderStats(holders, { supply, creator, curve, pool, earlyBuyers }) {
+export function holderStats(holders, { supply, creator, curve, pool, earlyBuyers, complete = true }) {
 	const program = new Set([curve, pool].filter(Boolean));
 	const people = holders.filter((h) => !program.has(h.wallet));
 	const byWallet = new Map(holders.map((h) => [h.wallet, h.units]));
 	const sum = (list) => list.reduce((acc, h) => acc + h.units, 0n);
 	const top10 = people.slice(0, 10);
-	const early = earlyBuyers
+	// A largest-accounts-only set knows the top of the book but not the tail, so
+	// the full count and the early-buyer sum are unknowable from it.
+	const early = earlyBuyers && complete
 		? sum(people.filter((h) => earlyBuyers.has(h.wallet) && h.wallet !== creator))
 		: null;
 	return {
-		count: people.length,
+		count: complete ? people.length : null,
 		top10_pct: shareOfSupply(sum(top10), supply),
 		top1_pct: people[0] ? shareOfSupply(people[0].units, supply) : null,
-		dev_pct: creator ? shareOfSupply(byWallet.get(creator) || 0n, supply) : null,
+		// Outside the largest accounts the dev's balance is unknown, not zero.
+		dev_pct: creator && (complete || byWallet.has(creator)) ? shareOfSupply(byWallet.get(creator) || 0n, supply) : null,
 		curve_pct: curve ? shareOfSupply(byWallet.get(curve) || 0n, supply) : null,
 		pool_pct: pool ? shareOfSupply(byWallet.get(pool) || 0n, supply) : null,
-		early_buyers: earlyBuyers ? earlyBuyers.size : null,
+		early_buyers: earlyBuyers && complete ? earlyBuyers.size : null,
 		early_buyers_pct: early == null ? null : shareOfSupply(early, supply),
 		top: top10.map((h) => ({
 			wallet: h.wallet,
@@ -190,6 +194,45 @@ export function holderStats(holders, { supply, creator, curve, pool, earlyBuyers
 			is_dev: h.wallet === creator,
 		})),
 	};
+}
+
+/**
+ * Holder set from standard RPC when Helius DAS is unavailable (quota, outage):
+ * the 20 largest token accounts, resolved to their owner wallets. Any provider
+ * on the failover chain serves getTokenLargestAccounts, so the top of the book
+ * survives a Helius outage; the full holder count does not.
+ */
+async function largestHolderSet(mint) {
+	const conn = getConnection({ network: 'mainnet' });
+	const mintPk = new PublicKey(mint);
+	const largest = await conn.getTokenLargestAccounts(mintPk, 'confirmed');
+	const accounts = (largest?.value || []).filter((a) => a.amount && a.amount !== '0');
+	if (!accounts.length) return null;
+	const parsed = await conn.getMultipleParsedAccounts(accounts.map((a) => a.address), { commitment: 'confirmed' });
+	const byOwner = new Map();
+	accounts.forEach((a, i) => {
+		const owner = parsed?.value?.[i]?.data?.parsed?.info?.owner;
+		if (!owner) return;
+		byOwner.set(owner, (byOwner.get(owner) || 0n) + BigInt(a.amount));
+	});
+	const holders = [...byOwner.entries()]
+		.map(([wallet, units]) => ({ wallet, units }))
+		.sort((a, b) => (b.units > a.units ? 1 : b.units < a.units ? -1 : 0));
+	return holders.length ? { holders, complete: false } : null;
+}
+
+async function readHolderSet(mint) {
+	try {
+		const live = await liveHolderSet({ mint, network: 'mainnet' });
+		if (live?.holders?.length) return { holders: live.holders, complete: true };
+	} catch {
+		/* Helius DAS unavailable with no cached copy: fall through to plain RPC */
+	}
+	try {
+		return await largestHolderSet(mint);
+	} catch {
+		return null;
+	}
 }
 
 async function readAuthorities(mint) {
@@ -235,7 +278,7 @@ async function buildStats(mint) {
 
 	const [tradeHist, holderSet, authorities, dex, solUsd] = await Promise.all([
 		fetchDayOfTrades(mint, now),
-		liveHolderSet({ mint, network: 'mainnet' }).catch(() => null),
+		readHolderSet(mint),
 		readAuthorities(mint),
 		readDexScreener(mint),
 		solPriceUsd().catch(() => null),
@@ -275,8 +318,8 @@ async function buildStats(mint) {
 			? windowStats(tradeHist.trades, { now, coveredFrom: tradeHist.complete ? null : tradeHist.oldest })
 			: null,
 		trades_sampled: tradeHist?.trades.length ?? null,
-		holders: holderSet?.holders?.length
-			? holderStats(holderSet.holders, { supply, creator, curve, pool, earlyBuyers })
+		holders: holderSet
+			? { ...holderStats(holderSet.holders, { supply, creator, curve, pool, earlyBuyers, complete: holderSet.complete }), complete: holderSet.complete }
 			: null,
 		authorities,
 		dev: creator

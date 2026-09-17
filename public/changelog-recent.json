@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-17T06:41:56.528Z",
+	"generated_at": "2026-09-17T06:50:17.765Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3691,
+	"total": 3692,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -28,6 +28,16 @@
 			"tags": [
 				"feature",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Coin pages show the numbers, not a score",
+			"summary": "Every coin launched on three.ws used to carry a quality score, a conviction tier and risk labels on its page, in the launch feed and on its share image. A high score can read as investment advice and a low one as FUD about someone's launch, so all of them are gone. In their place is a Token stats panel with the facts traders look up in terminals: volume, buys, sells, net buy and price change over 5 minutes, 1 hour, 6 hours and 24 hours, plus holders, the top 10 share, how much the dev holds, how much early buyers still hold, mint and freeze authority, bonding curve progress, liquidity and whether a DEX Screener profile was paid for. The Holders panel lists the ten largest wallets with links to each one, and leaves the bonding curve and pool out of the ranking. If the full holder index is unavailable, the page still shows the largest holders and says so instead of going blank.",
+			"link": "/launches",
+			"tags": [
+				"improvement"
 			]
 		},
 		{
@@ -1608,16 +1618,6 @@
 			"title": "Awesome 3D Agents",
 			"summary": "A curated, link-checked list of everything you need to give an AI agent a body: text-to-3D models, capture and Gaussian splatting, avatars, rigging, motion generation, lipsync and voice, web renderers, asset pipelines, and the agent frameworks that drive them. Searchable and filterable, and published as an awesome list on GitHub.",
 			"link": "/awesome",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Docs · Robinhood Portfolios",
-			"summary": "How Robinhood Portfolios works: the manifest that makes a generated basket binding, in-kind issuance that needs no price oracle, the descending-price rebalance auction nobody can front-run, what happens when a tokenized equity is halted, and the lineage fee budget that leaves sybils nothing to farm.",
-			"link": "/docs/robinhood-portfolios",
 			"tags": [
 				"launch"
 			]

@@ -23,6 +23,14 @@
 			<description>Some Solana transactions carry a small image written straight into their memo, which explorers show as thousands of characters of unreadable text. A new free MCP server, @three-ws/solana-memo-media-mcp, lets Claude, Cursor or any other MCP client fetch a transaction by its signature and show you the image directly, alongside who signed it and a fingerprint of the exact bytes. It can also scan an account's recent history and pick out only the transactions that carry images. It needs no account, key or wallet, never writes anything, and only shows PNG, JPEG, WebP and GIF files whose contents match their label. The Onchain Viewer at /onchain was also fixed: it only recognised the newest memo program, so memos written through the standard Solana memo program were reported as missing. It now reads all three.</description>
 		</item>
 		<item>
+			<title>Coin pages show the numbers, not a score</title>
+			<link>https://three.ws/launches</link>
+			<guid isPermaLink="false">2026-09-17:Coin pages show the numbers, not a score</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>improvement</category>
+			<description>Every coin launched on three.ws used to carry a quality score, a conviction tier and risk labels on its page, in the launch feed and on its share image. A high score can read as investment advice and a low one as FUD about someone's launch, so all of them are gone. In their place is a Token stats panel with the facts traders look up in terminals: volume, buys, sells, net buy and price change over 5 minutes, 1 hour, 6 hours and 24 hours, plus holders, the top 10 share, how much the dev holds, how much early buyers still hold, mint and freeze authority, bonding curve progress, liquidity and whether a DEX Screener profile was paid for. The Holders panel lists the ten largest wallets with links to each one, and leaves the bonding curve and pool out of the ranking. If the full holder index is unavailable, the page still shows the largest holders and says so instead of going blank.</description>
+		</item>
+		<item>
 			<title>Pick your chart on every coin page, and click an agent's coin to open it</title>
 			<link>https://three.ws/launches</link>
 			<guid isPermaLink="false">2026-09-17:Pick your chart on every coin page, and click an agent's coin to open it</guid>

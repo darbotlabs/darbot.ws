@@ -3,6 +3,13 @@
 	"entries": [
 		{
 			"date": "2026-09-17",
+			"title": "Coin pages show the numbers, not a score",
+			"summary": "Every coin launched on three.ws used to carry a quality score, a conviction tier and risk labels on its page, in the launch feed and on its share image. A high score can read as investment advice and a low one as FUD about someone's launch, so all of them are gone. In their place is a Token stats panel with the facts traders look up in terminals: volume, buys, sells, net buy and price change over 5 minutes, 1 hour, 6 hours and 24 hours, plus holders, the top 10 share, how much the dev holds, how much early buyers still hold, mint and freeze authority, bonding curve progress, liquidity and whether a DEX Screener profile was paid for. The Holders panel lists the ten largest wallets with links to each one, and leaves the bonding curve and pool out of the ranking. If the full holder index is unavailable, the page still shows the largest holders and says so instead of going blank.",
+			"tags": ["improvement"],
+			"link": "/launches"
+		},
+		{
+			"date": "2026-09-17",
 			"title": "Pick your chart on every coin page, and click an agent's coin to open it",
 			"summary": "Every coin launched on three.ws now lets you choose the chart you trust, right on its page: our own price line, live TradingView candles that tick with each trade, or the DexScreener, Birdeye, GMGN and GeckoTerminal charts, all free and all without leaving three.ws. Your choice is remembered from coin to coin. Birdeye and GMGN are also added to the chart picker on /coin pages. A brand-new coin used to show \"no price history\" for its first hours, because the chart data sources had not listed it yet; it now charts from its very first trade. If GeckoTerminal has not listed a young coin yet, its tab says so and offers a chart that already covers it, instead of an error page. And the coin shown on an agent's page, its profile and its home card is now a link straight to that coin's page, where before it could not be clicked at all.",
 			"tags": ["feature", "fix"],

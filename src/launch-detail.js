@@ -494,7 +494,12 @@ function loadStats() {
 }
 
 const usd = (n) => (n == null ? '-' : fmtUsd(n, { sign: false }));
-const share = (v) => (v == null ? '-' : fmtPct(v * 100, { dp: v < 0.001 && v > 0 ? 3 : v < 0.1 ? 2 : 1 }));
+const share = (v) => {
+	if (v == null) return '-';
+	// Dust balances would otherwise print as a misleading flat 0.000%.
+	if (v > 0 && v < 0.00001) return '<0.001%';
+	return fmtPct(v * 100, { dp: v < 0.001 && v > 0 ? 3 : v < 0.1 ? 2 : 1 });
+};
 
 function statCell(label, value, { cls = '', title = null } = {}) {
 	return el('div', { class: 'ld-ts-cell', title }, [
@@ -571,7 +576,7 @@ function factsGrid(stats) {
 	const m = stats.market || {};
 	const dev = stats.dev;
 	return el('div', { class: 'ld-ts-grid ld-ts-facts' }, [
-		statCell('Holders', h ? compact(h.count) : '-'),
+		statCell('Holders', h?.count != null ? compact(h.count) : '-'),
 		statCell('Top 10', h ? share(h.top10_pct) : '-', { title: 'Supply held by the ten largest wallets, excluding the bonding curve and AMM pool.' }),
 		statCell('Dev holds', h ? share(h.dev_pct) : '-', { title: 'Supply held by the creator wallet.' }),
 		statCell('Early buyers', h?.early_buyers_pct != null ? `${share(h.early_buyers_pct)} · ${compact(h.early_buyers)}` : '-', {
@@ -1134,7 +1139,7 @@ async function renderDistribution() {
 			el('span', { class: 'ld-metric-val', text: v }),
 		]);
 	const metrics = el('div', { class: 'ld-metrics' }, [
-		metric('Holders', compact(h.count)),
+		metric('Holders', h.count != null ? compact(h.count) : '-'),
 		metric('Top holder', share(h.top1_pct)),
 		metric('Top 10', share(h.top10_pct)),
 		metric('Dev', share(h.dev_pct)),
@@ -1165,9 +1170,14 @@ async function renderDistribution() {
 		el('div', { class: 'ld-dist' }, [
 			metrics,
 			rows.length ? el('div', { class: 'ld-holders' }, rows) : null,
-			el('p', { class: 'ld-ts-note', text: 'Shares are of total supply. The bonding curve and AMM pool are liquidity, not holders, so they are left out of the ranking.' }),
+			el('p', {
+				class: 'ld-ts-note',
+				text: h.complete === false
+					? 'Shares are of total supply, read from the 20 largest accounts while the full holder index is unavailable, so the holder count is not shown. The bonding curve and AMM pool are liquidity, not holders, and are left out of the ranking.'
+					: 'Shares are of total supply. The bonding curve and AMM pool are liquidity, not holders, so they are left out of the ranking.',
+			}),
 		]),
-		{ tag: 'live · Helius' },
+		{ tag: h.complete === false ? 'live · largest accounts' : 'live · all holders' },
 	);
 }
 // ════════════════════════════════════════════════════════════════════════════
