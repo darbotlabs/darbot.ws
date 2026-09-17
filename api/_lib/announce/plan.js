@@ -39,7 +39,7 @@ export const LANES = ['community', 'developer', 'token', 'labs'];
 export const PATTERNS = ['mechanism', 'clip', 'number', 'correction', 'walkthrough'];
 
 const DEVELOPER_SECTIONS = new Set(['build', 'agent-tools', 'machine', 'package', 'worker', 'service']);
-const TOKEN_RE = /\$THREE|\btoken\b|\bcoin\b|\bx402\b|\bwallet\b|\bUSDC\b|on-chain|onchain|\bmint\b|\btrading\b|\bpump\.fun\b/i;
+const TOKEN_RE = /\$THREE|\btoken\b|\bcoin\b|\bx402\b|\bwallet\b|\bUSDC\b|on-chain|onchain|\bmint\b|\btrading\b|\blaunchpad\b/i;
 
 export function laneFor(entry) {
 	if (entry.section === 'crypto') return 'token';
