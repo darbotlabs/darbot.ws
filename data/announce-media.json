@@ -101,6 +101,39 @@
 					"selector": "#mc-count"
 				}
 			]
+		},
+		{
+			"id": "forged-hero",
+			"surface": "/forged",
+			"url": "/forged",
+			"alt": "The three.ws Agent-Forged Gallery: 3D props bought by AI agents, each card a rotating model with the prompt the agent paid for and a receipt strip showing the USDC price, the paying agent wallet, and a link to the Solana settlement transaction",
+			"caption": "Every card is a paid generation, and every receipt links to its settlement.",
+			"settle": 15000,
+			"hide": [
+				".ch-hero > p",
+				".ch-toolbar",
+				".ch-chips"
+			]
+		},
+		{
+			"id": "walk-hero",
+			"surface": "/walk",
+			"url": "/walk",
+			"alt": "The three.ws Walk page: a live 3D avatar walking inside a one-tag iframe embed beside the headline Your avatar walks anywhere on the web",
+			"caption": "Walk, as the page serves it: the avatar in the frame is a live embed, not a video.",
+			"settle": 4000,
+			"actions": [
+				{
+					"type": "hide",
+					"selectors": [
+						"iframe[data-src]"
+					]
+				},
+				{
+					"type": "wait",
+					"ms": 6000
+				}
+			]
 		}
 	]
 }

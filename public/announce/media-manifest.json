@@ -1,6 +1,6 @@
 {
 	"generatedBy": "scripts/capture-doc-media.mjs",
-	"generatedAt": "2026-09-16T19:32:22.381Z",
+	"generatedAt": "2026-09-17T17:13:00.199Z",
 	"shots": {
 		"activity-hero": {
 			"id": "activity-hero",
@@ -52,6 +52,28 @@
 			"commit": "8b426bc58",
 			"sha256": "413fbcb5cd822dad02bced47f758e07f6174720a2e0bd56bca68c1f942cc5ad8",
 			"bytes": 136432,
+			"width": 1800,
+			"height": 1013
+		},
+		"forged-hero": {
+			"id": "forged-hero",
+			"src": "/announce/img/forged-hero.webp",
+			"alt": "The three.ws Agent-Forged Gallery: 3D props bought by AI agents, each card a rotating model with the prompt the agent paid for and a receipt strip showing the USDC price, the paying agent wallet, and a link to the Solana settlement transaction",
+			"caption": "Every card is a paid generation, and every receipt links to its settlement.",
+			"route": "/forged",
+			"viewport": "wide",
+			"animated": false,
+			"authenticated": false,
+			"hidden": [
+				".ch-hero > p",
+				".ch-toolbar",
+				".ch-chips"
+			],
+			"capturedAt": "2026-09-17T17:08:16.749Z",
+			"capturedFrom": "https://three.ws",
+			"commit": "7d5f9b760",
+			"sha256": "aea66cea6ca704e493b43064ecf5f3be40655af5a9362a5301db39c7ef5d0238",
+			"bytes": 95166,
 			"width": 1800,
 			"height": 1013
 		},
@@ -109,6 +131,23 @@
 			"width": 1800,
 			"height": 1013
 		},
+		"three-token-mcp-hero": {
+			"id": "three-token-mcp-hero",
+			"src": "/announce/img/three-token-mcp-hero.webp",
+			"alt": "The three.ws MCP Tool Catalog filtered to the @three-ws/three-token-mcp server: 3 of 321 tools, with three_balance and three_price labelled read-only and three_burn labelled irreversible, all free",
+			"caption": "The server's three tools as the public catalog classifies them: two reads an assistant can run unprompted, one irreversible burn it has to ask about.",
+			"route": "/mcp-tools?server=three-token-mcp",
+			"viewport": "wide",
+			"animated": false,
+			"authenticated": false,
+			"capturedAt": "2026-09-17T17:07:45.001Z",
+			"capturedFrom": "https://three.ws",
+			"commit": "7d5f9b760",
+			"sha256": "6c5138f7b6926db0636a4578ec375758a072dd7876c54b4dd76661cc812f4164",
+			"bytes": 63704,
+			"width": 1800,
+			"height": 1013
+		},
 		"three-token-trades": {
 			"id": "three-token-trades",
 			"src": "/announce/img/three-token-trades.webp",
@@ -142,6 +181,23 @@
 			"commit": "17c198dcc",
 			"sha256": "5fb55a3dae29b0b779047ad66e17cbf4ffedb6421129bb3564f9ffbcdf0a372f",
 			"bytes": 58652,
+			"width": 1800,
+			"height": 1013
+		},
+		"walk-hero": {
+			"id": "walk-hero",
+			"src": "/announce/img/walk-hero.webp",
+			"alt": "The three.ws Walk page: a live 3D avatar walking inside a one-tag iframe embed beside the headline Your avatar walks anywhere on the web",
+			"caption": "Walk, as the page serves it: the avatar in the frame is a live embed, not a video.",
+			"route": "/walk",
+			"viewport": "wide",
+			"animated": false,
+			"authenticated": false,
+			"capturedAt": "2026-09-17T17:12:29.940Z",
+			"capturedFrom": "https://three.ws",
+			"commit": "657c8d671",
+			"sha256": "a3cac1c4f3ca25b80b28936c87d74c39f176cb8fcd7631326fef7a2923851ee0",
+			"bytes": 58174,
 			"width": 1800,
 			"height": 1013
 		}
