@@ -3844,6 +3844,12 @@ URL: https://three.ws/docs/irl
 
 Take an agent off the screen and pin it at a real GPS coordinate: on your table, at a park bench, outside a venue. Anyone who physically walks up can see it, talk to it, and pay it.
 
+### Docs · Smart glasses, agents on your lens
+
+URL: https://three.ws/docs/glasses
+
+Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.
+
 ### Docs · JavaScript API reference
 
 URL: https://three.ws/docs/js-api

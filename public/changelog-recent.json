@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-17T07:21:10.854Z",
+	"generated_at": "2026-09-17T19:55:26.694Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3695,
+	"total": 3697,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -22,11 +22,32 @@
 		{
 			"date": "2026-09-17",
 			"type": "launch",
+			"title": "Docs · Smart glasses, agents on your lens",
+			"summary": "Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.",
+			"link": "/docs/glasses",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
 			"title": "Real-Funds Agreements",
 			"summary": "Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.",
 			"link": "/legal/agreements",
 			"tags": [
 				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "A plan for meeting agents through smart glasses",
+			"summary": "three.ws already lets you pin a 3D agent at a real place and walk up to it, and /irl can already mirror the nearest-agent cue to Brilliant Labs Frame and Even Realities G1 lenses over Bluetooth. New documentation maps the whole glasses lane: how the work splits between the lens (who is near, which way, how far) and the phone (the 3D body in AR), a full build plan for Meta Ray-Ban Display glasses and the Neural Band, and an honest survey of every platform, repository and package involved, including which ones have shut down and should not be built on.",
+			"link": "/docs/glasses",
+			"tags": [
+				"docs",
+				"feature"
 			]
 		},
 		{
@@ -1598,28 +1619,6 @@
 			"tags": [
 				"fix",
 				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Two thirds of the site was missing its mobile stylesheet, and every page it reached got bigger buttons",
-			"summary": "three.ws keeps one stylesheet for phones: it sets a 44px minimum on anything you tap, keeps 3D viewers from fighting the page scroll, and holds bottom bars clear of the iPhone home indicator. It was reaching 192 of the 584 pages that carry a stylesheet at all. The build injected it, and the injector only ever saw pages built through the bundler, so everything served as a plain HTML file quietly went without: the whole documentation site, this changelog, /ar and hundreds of others. The documentation sidebar was the clearest case, 296 links measured at 30 pixels tall on a Pixel 5, against a rule sizing them to 44 that had been sitting in that stylesheet unused. The build now sweeps every page it produces, which added the stylesheet to 210 more of them, and the same sweep switches on the setting iOS needs before safe-area spacing does anything at all. On top of that, the controls the audit still found short have been raised across the home page, the marketplace, /coin, /play, /launches, /forge, /markets, /news, /irl, /walk and the docs shell.",
-			"link": "/docs/start-here",
-			"tags": [
-				"improvement",
-				"fix"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Watch your model being made, instead of watching a spinner",
-			"summary": "Making a model from a written prompt starts with work you never saw: an art director rewrites your words into a proper brief, then an image model paints the reference picture the mesh is actually sculpted from, and on our best lane it paints the extra angles that fill in the subject's back. All of that used to happen inside one long silent request, so Forge could only say \"art-directing your prompt\" for the whole wait and then reveal the reference picture at the very end, when it had already existed for half a minute. Now the pipeline reports each step the instant it finishes, so the stage list ticks over as the work really happens and the reference image appears on screen while the sculpting is still running. Nothing on that list is a guess: a step only lights up because the server said it finished. On a phone, pressing Generate now brings the panel into view instead of leaving the whole thing playing out below the fold, and the same is true when a model lands or when something goes wrong. If our asset storage is the thing that is down, Forge now says so plainly, tells you nothing was charged, and points you at the models you already made, which keep working throughout. A model on screen also stops spinning by itself for anyone who has asked their device for less motion, and the report-a-bug prompt no longer pops up on top of the recovery buttons on a narrow screen.",
-			"link": "/forge",
-			"tags": [
-				"improvement",
-				"fix"
 			]
 		}
 	]

@@ -15,12 +15,28 @@
 			<description>The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.</description>
 		</item>
 		<item>
+			<title>Docs · Smart glasses, agents on your lens</title>
+			<link>https://three.ws/docs/glasses</link>
+			<guid isPermaLink="false">2026-09-17:Docs · Smart glasses, agents on your lens</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>launch</category>
+			<description>Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.</description>
+		</item>
+		<item>
 			<title>Real-Funds Agreements</title>
 			<link>https://three.ws/legal/agreements</link>
 			<guid isPermaLink="false">2026-09-17:Real-Funds Agreements</guid>
 			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
 			<category>launch</category>
 			<description>Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.</description>
+		</item>
+		<item>
+			<title>A plan for meeting agents through smart glasses</title>
+			<link>https://three.ws/docs/glasses</link>
+			<guid isPermaLink="false">2026-09-17:A plan for meeting agents through smart glasses</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>docs</category>
+			<description>three.ws already lets you pin a 3D agent at a real place and walk up to it, and /irl can already mirror the nearest-agent cue to Brilliant Labs Frame and Even Realities G1 lenses over Bluetooth. New documentation maps the whole glasses lane: how the work splits between the lens (who is near, which way, how far) and the phone (the 3D body in AR), a full build plan for Meta Ray-Ban Display glasses and the Neural Band, and an honest survey of every platform, repository and package involved, including which ones have shut down and should not be built on.</description>
 		</item>
 		<item>
 			<title>Agent wallets that cannot sign no longer look tradeable</title>

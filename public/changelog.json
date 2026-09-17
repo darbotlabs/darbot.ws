@@ -1,5 +1,5 @@
 {
-	"generated_at": "2026-09-17T07:21:10.824Z",
+	"generated_at": "2026-09-17T19:55:26.659Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
@@ -19,11 +19,32 @@
 		{
 			"date": "2026-09-17",
 			"type": "launch",
+			"title": "Docs · Smart glasses, agents on your lens",
+			"summary": "Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.",
+			"link": "/docs/glasses",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
 			"title": "Real-Funds Agreements",
 			"summary": "Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.",
 			"link": "/legal/agreements",
 			"tags": [
 				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "A plan for meeting agents through smart glasses",
+			"summary": "three.ws already lets you pin a 3D agent at a real place and walk up to it, and /irl can already mirror the nearest-agent cue to Brilliant Labs Frame and Even Realities G1 lenses over Bluetooth. New documentation maps the whole glasses lane: how the work splits between the lens (who is near, which way, how far) and the phone (the 3D body in AR), a full build plan for Meta Ray-Ban Display glasses and the Neural Band, and an honest survey of every platform, repository and package involved, including which ones have shut down and should not be built on.",
+			"link": "/docs/glasses",
+			"tags": [
+				"docs",
+				"feature"
 			]
 		},
 		{
