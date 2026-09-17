@@ -11,7 +11,7 @@ import {
 	statSync,
 	rmSync,
 } from 'fs';
-import { extname, basename, relative, sep } from 'path';
+import { extname, basename, dirname, relative, sep } from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { rewriteHead } from './server/seo-head.mjs';
@@ -3466,45 +3466,26 @@ const appConfig = {
 			// `/src/*` in production.
 			name: 'promote-bundled-public-html',
 			closeBundle() {
-				const pairs = [
-					['dist/public/agent/index.html', 'dist/agent/index.html'],
-					['dist/public/login.html', 'dist/login.html'],
-					['dist/public/register.html', 'dist/register.html'],
-					['dist/public/characters.html', 'dist/characters.html'],
-					['dist/public/character.html', 'dist/character.html'],
-					['dist/public/agents/index.html', 'dist/agents/index.html'],
-					['dist/public/validation/index.html', 'dist/validation/index.html'],
-					[
-						'dist/public/reputation/market/index.html',
-						'dist/reputation/market/index.html',
-					],
-					['dist/public/gallery/index.html', 'dist/gallery/index.html'],
-					['dist/public/demos/brain.html', 'dist/demos/brain.html'],
-					['dist/public/demos/lipsync-tts.html', 'dist/demos/lipsync-tts.html'],
-					['dist/public/demos/lipsync-mic.html', 'dist/demos/lipsync-mic.html'],
-					['dist/public/demos/erc8004.html', 'dist/demos/erc8004.html'],
-					['dist/public/demos/button-jump.html', 'dist/demos/button-jump.html'],
-					['dist/public/demos/button.html', 'dist/demos/button.html'],
-					['dist/public/demos/3d-home.html', 'dist/demos/3d-home.html'],
-					['dist/public/eth-vanity.html', 'dist/eth-vanity.html'],
-					['dist/public/evm-wallet.html', 'dist/evm-wallet.html'],
-					// /vanity-wallet: its sealed-drops controller pulls bare deps
-					// (bs58, @noble/*, qrcode) that only resolve through the bundler.
-					// Serving the raw publicDir copy threw "Failed to resolve module
-					// specifier bs58" in production; promote the bundled output.
-					['dist/public/vanity-wallet.html', 'dist/vanity-wallet.html'],
-					// Grind-bounty market: its controller pulls bare deps (bs58, @noble,
-					// sealed-envelope) through the bundler, so the BUNDLED output must be
-					// served — promote it over the raw publicDir copy before dist/public
-					// is wiped.
-					['dist/public/vanity/bounties/index.html', 'dist/vanity/bounties/index.html'],
-				];
-				for (const [from, to] of pairs) {
-					const src = resolve(__dirname, from);
-					const dst = resolve(__dirname, to);
-					if (!existsSync(src)) continue;
-					cpSync(src, dst, { force: true });
-				}
+				// Every HTML file under dist/public exists only because it is a
+				// registered Vite input, so every one is the bundled version of a
+				// raw publicDir copy. Promote all of them rather than keeping a
+				// hand-written list: /demos/audio2face and /demos/halfbody-xr were
+				// missing from that list and shipped raw `import 'three'`, which
+				// the browser cannot resolve ("Failed to resolve module specifier").
+				const mirrorRoot = resolve(__dirname, 'dist/public');
+				const promote = (dir) => {
+					for (const entry of readdirSync(dir, { withFileTypes: true })) {
+						const src = resolve(dir, entry.name);
+						if (entry.isDirectory()) {
+							promote(src);
+						} else if (entry.name.endsWith('.html')) {
+							const dst = resolve(__dirname, 'dist', relative(mirrorRoot, src));
+							mkdirSync(dirname(dst), { recursive: true });
+							cpSync(src, dst, { force: true });
+						}
+					}
+				};
+				if (existsSync(mirrorRoot)) promote(mirrorRoot);
 				const publicMirror = resolve(__dirname, 'dist/public');
 				if (existsSync(publicMirror)) {
 					rmSync(publicMirror, { recursive: true, force: true });
