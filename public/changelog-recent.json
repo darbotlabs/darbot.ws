@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-17T04:57:12.856Z",
+	"generated_at": "2026-09-17T06:41:56.528Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3690,
+	"total": 3691,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -25,6 +25,17 @@
 			"title": "Ask your AI assistant to show the picture inside a Solana transaction",
 			"summary": "Some Solana transactions carry a small image written straight into their memo, which explorers show as thousands of characters of unreadable text. A new free MCP server, @three-ws/solana-memo-media-mcp, lets Claude, Cursor or any other MCP client fetch a transaction by its signature and show you the image directly, alongside who signed it and a fingerprint of the exact bytes. It can also scan an account's recent history and pick out only the transactions that carry images. It needs no account, key or wallet, never writes anything, and only shows PNG, JPEG, WebP and GIF files whose contents match their label. The Onchain Viewer at /onchain was also fixed: it only recognised the newest memo program, so memos written through the standard Solana memo program were reported as missing. It now reads all three.",
 			"link": "/docs/mcp-solana-memo-media",
+			"tags": [
+				"feature",
+				"fix"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Pick your chart on every coin page, and click an agent's coin to open it",
+			"summary": "Every coin launched on three.ws now lets you choose the chart you trust, right on its page: our own price line, live TradingView candles that tick with each trade, or the DexScreener, Birdeye, GMGN and GeckoTerminal charts, all free and all without leaving three.ws. Your choice is remembered from coin to coin. Birdeye and GMGN are also added to the chart picker on /coin pages. A brand-new coin used to show \"no price history\" for its first hours, because the chart data sources had not listed it yet; it now charts from its very first trade. If GeckoTerminal has not listed a young coin yet, its tab says so and offers a chart that already covers it, instead of an error page. And the coin shown on an agent's page, its profile and its home card is now a link straight to that coin's page, where before it could not be clicked at all.",
+			"link": "/launches",
 			"tags": [
 				"feature",
 				"fix"
@@ -1607,16 +1618,6 @@
 			"title": "Docs · Robinhood Portfolios",
 			"summary": "How Robinhood Portfolios works: the manifest that makes a generated basket binding, in-kind issuance that needs no price oracle, the descending-price rebalance auction nobody can front-run, what happens when a tokenized equity is halted, and the lineage fee budget that leaves sybils nothing to farm.",
 			"link": "/docs/robinhood-portfolios",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Docs · SEO and crawler rendering",
-			"summary": "How a JavaScript site is served to search engines: the four server-side render paths, the contract that keeps a page and its sitemap entry agreeing, and how to audit the live origin.",
-			"link": "/docs/seo",
 			"tags": [
 				"launch"
 			]
