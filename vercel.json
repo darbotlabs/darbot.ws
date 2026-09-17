@@ -4877,14 +4877,6 @@
 			"dest": "/contributors.html"
 		},
 		{
-			"src": "/fee-bridge",
-			"dest": "/fee-bridge.html"
-		},
-		{
-			"src": "/fee-bridge/",
-			"dest": "/fee-bridge.html"
-		},
-		{
 			"src": "/bazaar",
 			"dest": "/bazaar.html"
 		},

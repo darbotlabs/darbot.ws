@@ -287,6 +287,7 @@ const UNPUBLISHED_DOCS = new Map([
 	['announcement-coverage', 'internal: X announcement coverage matrix for marketing planning'],
 	['announcement-coverage-telegram', 'internal: paste-ready holders-channel post drafted from the coverage matrix'],
 	['avatar-cli', 'internal: in-flight, register when the CLI ships'],
+	['fee-bridge', 'held by the owner until launch is approved (2026-09-17); register in data/pages.json when /fee-bridge ships'],
 	['avatar-fidelity-program', 'internal: program goals and competitive targets'],
 	['aws-marketplace-listing-kit', 'internal: paste-ready listing copy and portal steps'],
 	['aws-builder-center-before-the-signature', 'internal: draft prepared for the AWS Builder Center'],

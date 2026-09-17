@@ -1,31 +1,11 @@
 {
-	"generated_at": "2026-09-17T04:38:40.501Z",
+	"generated_at": "2026-09-17T04:57:12.827Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
 	"entries": [
-		{
-			"date": "2026-09-17",
-			"type": "launch",
-			"title": "Docs · Fee Bridge",
-			"summary": "How the Fee Bridge pays a coin's creator fees to an X handle in USDC: routing a coin, the 80/20 conversion, claiming with X, the API, and the exactly-once safety model.",
-			"link": "/docs/fee-bridge",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-17",
-			"type": "launch",
-			"title": "Fee Bridge",
-			"summary": "Route a pump.fun coin's creator fees to any X account. Recipients sign in with X and withdraw USDC on Solana, no wallet needed up front; 20% of every converted dollar buys $THREE for the treasury.",
-			"link": "/fee-bridge",
-			"tags": [
-				"launch"
-			]
-		},
 		{
 			"date": "2026-09-17",
 			"type": "update",
@@ -45,16 +25,6 @@
 			"tags": [
 				"feature",
 				"fix"
-			]
-		},
-		{
-			"date": "2026-09-17",
-			"type": "update",
-			"title": "Fee Bridge: pay a coin's creator fees to any X account in USDC",
-			"summary": "A coin's creator fees can now go to a person by their X handle instead of a wallet address. Route the fees to the Fee Bridge from a coin's Fees & rewards panel (or register any pump.fun coin on /fee-bridge), and every ten minutes the bridge converts them to USDC: 80% is credited to the handle and 20% buys $THREE for the treasury. The handle's owner signs in with X, links a Solana wallet and withdraws, and balances over $5 are then paid automatically. Anyone can look up what a handle has earned, and every payout links to its transaction.",
-			"link": "/fee-bridge",
-			"tags": [
-				"feature"
 			]
 		},
 		{

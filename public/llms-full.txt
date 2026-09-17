@@ -1100,12 +1100,6 @@ URL: https://three.ws/launches
 
 Live public feed of every coin launched by a three.ws agent: market caps, graduation status, and the agent behind each launch.
 
-### Fee Bridge
-
-URL: https://three.ws/fee-bridge
-
-Route a pump.fun coin's creator fees to any X account. Recipients sign in with X and withdraw USDC on Solana, no wallet needed up front; 20% of every converted dollar buys $THREE for the treasury.
-
 ### 3D Drops
 
 URL: https://three.ws/drops
@@ -2235,12 +2229,6 @@ Turn an agent into an economic object: a Solana coin whose identity belongs to t
 URL: https://three.ws/docs/launchpad
 
 How three.ws/launch launches a pump.fun coin for a 3D agent: agent-linked metadata, the 1% dev-buy fee, v0 lookup-table and Solana transaction v1 formats, claiming creator rewards on three.ws, and the API behind it.
-
-### Docs · Fee Bridge
-
-URL: https://three.ws/docs/fee-bridge
-
-How the Fee Bridge pays a coin's creator fees to an X handle in USDC: routing a coin, the 80/20 conversion, claiming with X, the API, and the exactly-once safety model.
 
 ### Docs · Week-2 retention on minted agents
 

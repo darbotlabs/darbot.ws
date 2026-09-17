@@ -565,6 +565,9 @@ export function mountFeesPanel(container, opts = {}) {
 	function renderBridge(info) {
 		const b = s.bridge;
 		if (!b?.bridge_wallet || info.is_cashback_coin || info.is_holder_reward) return '';
+		// Unreleased: offer routing only once the bridge is switched on. A coin already
+		// registered still shows where its fees go.
+		if (!b.enabled && !b.registration) return '';
 		if (b.registration) {
 			return `<div class="fp-note you">Paying <b>@${esc(b.registration.handle)}</b> in USDC through the Fee Bridge.
 				${b.registration.status === 'active' ? '' : ' Fees no longer route to the bridge.'}

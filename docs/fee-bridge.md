@@ -1,5 +1,7 @@
 # Fee Bridge
 
+> **Status: held, not public.** The code is in the repo but the feature is unreleased: `/fee-bridge` has no route or build input, it is not listed in `data/pages.json` or the changelog, and the studio option stays hidden until `FEE_BRIDGE_ENABLED` is on. Launching means restoring the route (`vercel.json`), the build input (`vite.config.js`), the `data/pages.json` entries and a changelog entry, then setting the env vars below.
+
 The Fee Bridge pays a pump.fun coin's creator fees to an **X account**, in **USDC on Solana**. The person behind that handle doesn't need a wallet or a three.ws account when the coin launches. They sign in with X whenever they like and withdraw what has built up.
 
 - Page: [three.ws/fee-bridge](https://three.ws/fee-bridge)

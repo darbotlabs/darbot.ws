@@ -83,6 +83,7 @@ async function handleCoin(req, res, url) {
 	}
 	return json(res, 200, {
 		mint,
+		enabled: isEnabled() && !!address,
 		bridge_wallet: address,
 		routes_to_bridge: routed,
 		registration: row
