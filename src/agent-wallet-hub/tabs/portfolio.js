@@ -17,7 +17,7 @@
  */
 
 import { registerWalletTab } from '../registry.js';
-import { formatSol, formatUsd } from '../util.js';
+import { formatSol, formatUsd, unsignableWalletCopy } from '../util.js';
 
 const PORT_STYLE_ID = 'awh-portfolio-style';
 const PORT_STYLE = `
@@ -56,6 +56,11 @@ const PORT_STYLE = `
 .awh-paused:hover { background: color-mix(in srgb, var(--warn,#fbbf24) 20%, transparent); }
 .awh-paused:focus-visible { outline: var(--focus-ring-width,2px) solid var(--focus-ring-color,#fff); outline-offset: 2px; }
 
+.awh-port-locked { border-color: color-mix(in srgb, var(--warn,#fbbf24) 35%, transparent); background: color-mix(in srgb, var(--warn,#fbbf24) 8%, var(--surface-1, rgba(255,255,255,.03))); }
+.awh-port-locked strong { color: var(--warn,#fbbf24); }
+.awh-port-locked p { margin: 6px 0 0; color: var(--ink-dim,#aaa); font-size: var(--text-sm,.764rem); line-height: 1.5; }
+.awh-port-locked .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.awh-port-locked a.awh-btn { text-decoration: none; }
 .awh-port-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm,.764rem); }
 .awh-port-table th { text-align: right; font-weight: 500; color: var(--ink-dim,#888); font-size: var(--text-2xs,.6875rem); text-transform: uppercase; letter-spacing: .04em; padding: 0 0 8px; border-bottom: 1px solid var(--stroke, rgba(255,255,255,.08)); }
 .awh-port-table th:first-child { text-align: left; }
@@ -214,6 +219,10 @@ registerWalletTab({
 			live: false,
 			streamDown: false, // SSE permanently closed → live updates paused
 			animated: false, // entrance animation plays once, not on every live tick
+			// null until the owner wallet read answers; false only on a definite
+			// "production cannot sign for this address", which hides trade actions.
+			signable: null,
+			signableReason: null,
 		};
 
 		function pushSpark(usd) {
@@ -262,6 +271,7 @@ registerWalletTab({
 			}
 
 			panel.innerHTML = `
+				${renderLocked()}
 				${renderHeader(d)}
 				${renderHoldings(d)}
 				${renderAttribution(d)}
@@ -272,6 +282,19 @@ registerWalletTab({
 			if (!state.animated) { panel.classList.add('awh-anim-in'); state.animated = true; }
 			else panel.classList.remove('awh-anim-in');
 			wire();
+		}
+
+		// A balance that cannot be moved must never read as a live, tradeable one.
+		function renderLocked() {
+			if (state.signable !== false) return '';
+			return `<div class="awh-card awh-port-locked" role="status">
+				<strong>Trading and withdrawals are paused for this wallet.</strong>
+				<p>${escapeHtml(unsignableWalletCopy(state.signableReason))}</p>
+				<div class="row">
+					<a class="awh-btn awh-port-trade" href="/support?topic=wallet-key&agent=${encodeURIComponent(ctx.agentId)}">Contact support</a>
+					<button class="awh-btn awh-port-trade" type="button" data-go="withdraw">Details</button>
+				</div>
+			</div>`;
 		}
 
 		function renderHeader(d) {
@@ -359,7 +382,7 @@ registerWalletTab({
 					upnl = `<span class="${pnlClass(h.unrealized_sol)}">${escapeHtml(fmtSolSigned(h.unrealized_sol))}${pct}</span>`;
 				}
 				const warn = h.liquidity_warning ? `<span class="awh-port-warn" title="No live market price — value shown is unknown, never guessed.">illiquid</span>` : '';
-				const tradeBtn = h.isNative
+				const tradeBtn = h.isNative || state.signable === false
 					? ''
 					: `<button class="awh-btn awh-port-trade" type="button" data-trade="${escapeHtml(h.mint || '')}" aria-label="Trade ${sym}">Trade ↗</button>`;
 				return `<tr>
@@ -463,6 +486,7 @@ registerWalletTab({
 		}
 
 		function wire() {
+			panel.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => ctx.openTab(b.dataset.go)));
 			panel.querySelector('[data-act="resume"]')?.addEventListener('click', () => {
 				state.streamDown = false;
 				render();
@@ -490,7 +514,23 @@ registerWalletTab({
 			return j.data;
 		}
 
+		async function loadSignable() {
+			try {
+				const r = await fetch(`/api/agents/${encodeURIComponent(ctx.agentId)}/solana?network=${encodeURIComponent(ctx.getNetwork())}`, { credentials: 'include' });
+				if (!r.ok) return;
+				const j = await r.json();
+				const data = j?.data ?? j;
+				if (destroyed || typeof data?.signable !== 'boolean') return;
+				state.signable = data.signable;
+				state.signableReason = data.signable ? null : (data.signable_reason || null);
+				if (state.loaded) render();
+			} catch {
+				// Signability is advisory here; the withdraw and trade endpoints enforce it server-side.
+			}
+		}
+
 		async function reload() {
+			loadSignable();
 			state.loaded = false;
 			state.error = null;
 			render();

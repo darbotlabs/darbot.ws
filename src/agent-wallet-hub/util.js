@@ -117,3 +117,15 @@ export function explorerTxUrl(sig, network) {
 		? `https://explorer.solana.com/tx/${sig}?cluster=devnet`
 		: `https://solscan.io/tx/${sig}`;
 }
+
+// Plain-language explanation for a wallet whose stored key production cannot open
+// (`signable: false` on GET /api/agents/:id/solana). Shared so the Portfolio and
+// Withdraw tabs never tell the owner two different stories about the same balance.
+// `key_retired` wallets were sealed by a non-production server under a key the
+// production signer does not hold; docs/ops/stranded-wallets.md has the recovery path.
+export function unsignableWalletCopy(reason) {
+	if (reason === 'key_retired') {
+		return 'Its signing key was sealed under an encryption key our production signer does not hold, so withdrawals and trades cannot be authorised yet. Your balance has not moved and is still on chain at this address. We are recovering access; do not create a replacement wallet, since a new wallet gets a new address.';
+	}
+	return 'The stored key for this address could not be read, so withdrawals and trades are paused. Nothing is attempted against a wallet we cannot authorise, and your balance has not moved.';
+}

@@ -26,7 +26,7 @@ import {
 import { createSafetyPanel } from '../../shared/safety-panel.js';
 import { ensureRiskAck } from '../../shared/risk-ack.js';
 import { solToUsd } from '../../shared/usd-price.js';
-import { formatSol, timeAgo, explorerTxUrl } from '../util.js';
+import { formatSol, timeAgo, explorerTxUrl, unsignableWalletCopy } from '../util.js';
 
 const QUOTE_DEBOUNCE_MS = 450;
 const BUY_HEADROOM_SOL = 0.003; // keep fee+rent headroom out of "Max"
@@ -246,7 +246,33 @@ registerWalletTab({
 			historyError: null,
 			historyLoaded: false,
 			solPrice: null,
+			signable: null, // false only on a definite "production cannot sign for this address"
+			signableReason: null,
 		};
+
+		async function loadSignable() {
+			if (!state.isOwner) return;
+			try {
+				const r = await fetch(`/api/agents/${encodeURIComponent(ctx.agentId)}/solana?network=${encodeURIComponent(ctx.getNetwork())}`, { credentials: 'include' });
+				if (!r.ok) return;
+				const j = await r.json();
+				const data = j?.data ?? j;
+				if (typeof data?.signable !== 'boolean') return;
+				state.signable = data.signable;
+				state.signableReason = data.signable ? null : (data.signable_reason || null);
+			} catch {
+				// Advisory only: the trade endpoint still refuses an unsignable wallet server-side.
+			}
+		}
+
+		function lockedCardHtml() {
+			return `<div class="awh-card">
+				<div class="awh-tr-banner awh-tr-banner--warn" role="status">
+					<span><strong>Trading is paused for this wallet.</strong> ${esc(unsignableWalletCopy(state.signableReason))}
+					<a href="/support?topic=wallet-key&agent=${encodeURIComponent(ctx.agentId)}">Contact support</a></span>
+				</div>
+			</div>`;
+		}
 
 		// ── data loads ────────────────────────────────────────────────────────
 		async function loadHoldings() {
@@ -444,7 +470,7 @@ registerWalletTab({
 			}
 			panel.innerHTML = `
 				<div class="awh-tr">
-					${state.isOwner ? tradeCardHtml() : visitorBannerHtml()}
+					${!state.isOwner ? visitorBannerHtml() : state.signable === false ? lockedCardHtml() : tradeCardHtml()}
 					${holdingsCardHtml()}
 					${historyCardHtml()}
 				</div>`;
@@ -935,7 +961,7 @@ registerWalletTab({
 				if (firstShow) {
 					firstShow = false;
 					loadSolPrice();
-					await Promise.all([loadHoldings(), loadHistory()]);
+					await Promise.all([loadHoldings(), loadHistory(), loadSignable()]);
 					if (!destroyed) renderAll();
 				}
 			},

@@ -19,7 +19,7 @@
  */
 
 import { registerWalletTab } from '../registry.js';
-import { formatUsd, explorerTxUrl } from '../util.js';
+import { formatUsd, explorerTxUrl, unsignableWalletCopy } from '../util.js';
 import { consumeCsrfToken } from '../../api.js';
 import { ensureRiskAck } from '../../shared/risk-ack.js';
 
@@ -269,20 +269,17 @@ registerWalletTab({
 			return `
 				<div class="awh-card">
 					<div class="awh-err" role="alert" style="margin-bottom:0;">
-						<strong>This wallet can no longer be signed for.</strong>
+						<strong>Withdrawals from this wallet are paused.</strong>
 						<div class="why" style="text-transform:none; margin-top:6px; line-height:1.5;">
-							${retired
-								? 'It was created under an earlier encryption key that the platform no longer holds, so withdrawals and trades from this address cannot be authorised. The balance is real and still on chain, it simply cannot be moved from here. Retrying will not help.'
-								: 'The stored key for this address could not be read. Withdrawals are blocked until that is resolved so nothing is attempted against a wallet we cannot authorise.'}
+							${esc(unsignableWalletCopy(state.signableReason))}
 						</div>
 					</div>
 					<p class="awh-note" style="margin-top:12px;">
-						Contact support with this agent id before provisioning a replacement wallet:
-						a new wallet gets a new address, and the balance at the old one stays where it is.
+						Contact support with this agent id so we can tell you when access is restored.
 					</p>
 					<div class="awh-chips" style="margin-top:12px;">
 						<span class="awh-chip">Agent ${esc(String(ctx.agentId).slice(0, 8))}</span>
-						<span class="awh-chip">${retired ? 'key retired' : 'key unreadable'}</span>
+						<span class="awh-chip">${retired ? 'key sealed' : 'key unreadable'}</span>
 					</div>
 					<div class="awh-actions">
 						<a class="awh-btn" href="/support?topic=wallet-key&agent=${encodeURIComponent(ctx.agentId)}">Contact support</a>
