@@ -22,6 +22,9 @@ This directory is the operational layer above the repo's deeper source material:
   evidence, and dispatch instructions for the first two high-intent directories.
 - [90-day campaigns](./campaigns.csv): one row per campaign, with channel, CTA, partner ask,
   KPI, date, and status.
+- [Anchor campaign proof](./proof/README.md): desktop, X, and mobile stills plus 15-second
+  clips of every anchor campaign's three.ws surface, captured from production by
+  `scripts/capture-campaign-proof.mjs`, with the defects seen at capture.
 - [Opportunity tracker](./opportunities.csv): the machine-readable pipeline. This is where
   a status or next action changes first.
 - [Measurement](./measurement.md): the UTM convention, campaign scorecard, and weekly review.

@@ -1,0 +1,69 @@
+# Anchor campaign proof
+
+Every anchor campaign in [`campaigns.csv`](../campaigns.csv) leads with visible proof (see
+"The campaign format" in the [command center](../README.md)). This folder holds that proof,
+captured from the live production site in a real Chromium, so nobody has to take screenshots
+by hand on posting day.
+
+## Regenerate
+
+```bash
+node scripts/capture-campaign-proof.mjs                              # every anchor row
+node scripts/capture-campaign-proof.mjs --only MKT-2026-10-NVIDIA-DH # one campaign
+node scripts/capture-campaign-proof.mjs --no-video                   # stills only
+node scripts/capture-campaign-proof.mjs --base http://localhost:3000 # the working tree
+```
+
+The script reads the anchor rows of `campaigns.csv`, opens each three.ws `anchor_proof` URL,
+waits for the network to settle and any WebGL canvas to paint, and writes into
+`<campaign_id>/`:
+
+| File | What it is | Use it for |
+| --- | --- | --- |
+| `desktop@2x.png` | 1600x900 viewport at 2x (3200x1800), lossless | Partner-domain articles, decks, press |
+| `x-1600x900.jpg` | The same frame at exactly 1600x900, JPEG under 5 MB | The X anchor post and Telegram |
+| `mobile@3x.png` | 390x844 phone viewport at 3x (1170x2532) | LinkedIn, community posts, mobile proof |
+| `motion-15s.mp4` | 15 seconds of the running surface, H.264, faststart, under 8 MB | Social clips on surfaces that move |
+
+Floating site chrome (the getting-started stack, the walking companion, the language
+button) is hidden so the product surface fills the frame. Nothing on the surface is edited.
+Each campaign's recipe (what it shows, whether it records a clip, how it is framed) lives in
+the `RECIPES` table at the top of the script; a new anchor row needs one entry there.
+
+[`manifest.json`](./manifest.json) records every file's byte size, sha256, dimensions,
+duration, source URL, and capture time. The tables below are generated from it.
+
+## Commit gate
+
+three.ws only promotes $THREE. When a captured frame shows the name of another coin or token,
+the script marks the file `gated` in the manifest and prints the terms it saw. Those files stay
+on disk but are not committed until the owner approves that specific content. They are listed
+below as held, without links.
+
+## Assets
+
+<!-- assets:start -->
+| Campaign | File | Dimensions | Duration | Size | Captured URL | Capture date | What it shows |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| MKT-2026-10-AWS-MARKET | `desktop@2x.png` (held for owner approval, not committed) | 3200x1800 | still | 0.24 MB | https://three.ws/aws | 2026-09-17 | Desktop hero at 1600x900 (2x): The three.ws on AWS page: the AWS Partner software path and procurement story |
+| MKT-2026-10-AWS-MARKET | `x-1600x900.jpg` (held for owner approval, not committed) | 1600x900 | still | 0.07 MB | https://three.ws/aws | 2026-09-17 | X post still, 16:9 JPEG under 5 MB: The three.ws on AWS page: the AWS Partner software path and procurement story |
+| MKT-2026-10-AWS-MARKET | `mobile@3x.png` (held for owner approval, not committed) | 1170x1992 | still | 0.16 MB | https://three.ws/aws | 2026-09-17 | Mobile at 390x844 (3x): The three.ws on AWS page: the AWS Partner software path and procurement story |
+<!-- assets:end -->
+
+## Findings at capture
+
+Console errors, uncaught exceptions, failed same-origin requests, error or empty pages, and
+WebGL canvases that never painted, as observed on production at capture time.
+
+<!-- findings:start -->
+| Campaign | Captured URL | Finding |
+| --- | --- | --- |
+| MKT-2026-10-AWS-MARKET | https://three.ws/aws | No defect observed at capture |
+<!-- findings:end -->
+
+## Anchors without a three.ws capture
+
+<!-- external:start -->
+| Campaign | Proof URL | Why no capture |
+| --- | --- | --- |
+<!-- external:end -->

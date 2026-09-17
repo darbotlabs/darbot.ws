@@ -1,0 +1,46 @@
+{
+	"generatedBy": "scripts/capture-campaign-proof.mjs",
+	"source": "marketing/growth/campaigns.csv",
+	"campaigns": [
+		{
+			"campaign": "MKT-2026-10-AWS-MARKET",
+			"publishDate": "2026-10-20",
+			"partner": "AWS",
+			"url": "https://three.ws/aws",
+			"capturedAt": "2026-09-17T03:25:19.828Z",
+			"files": [
+				{
+					"file": "MKT-2026-10-AWS-MARKET/desktop@2x.png",
+					"bytes": 247834,
+					"sha256": "88f8cbe19feee88770703c5b13c58be18630457010da63e3f6c7e7aa94b6cd80",
+					"kind": "desktop",
+					"width": 3200,
+					"height": 1800,
+					"gated": true,
+					"shows": "Desktop hero at 1600x900 (2x): The three.ws on AWS page: the AWS Partner software path and procurement story"
+				},
+				{
+					"file": "MKT-2026-10-AWS-MARKET/x-1600x900.jpg",
+					"bytes": 77400,
+					"sha256": "1d018775cfe654d2ebbe17e3ec651eade1624896c46c229bc83cd324e2520299",
+					"kind": "x",
+					"width": 1600,
+					"height": 900,
+					"gated": true,
+					"shows": "X post still, 16:9 JPEG under 5 MB: The three.ws on AWS page: the AWS Partner software path and procurement story"
+				},
+				{
+					"file": "MKT-2026-10-AWS-MARKET/mobile@3x.png",
+					"bytes": 167998,
+					"sha256": "3261aa79a9f9cc2b91fed4cc988ae9167f7e282968a3edb49ca1ec846e094c74",
+					"kind": "mobile",
+					"width": 1170,
+					"height": 1992,
+					"gated": true,
+					"shows": "Mobile at 390x844 (3x): The three.ws on AWS page: the AWS Partner software path and procurement story"
+				}
+			],
+			"defects": []
+		}
+	]
+}
