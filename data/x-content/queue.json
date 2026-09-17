@@ -243,6 +243,89 @@
 			"mentions": {
 				"@awscloud": "The article is published on the AWS Builder Center under the three.ws byline, as an AWS Partner."
 			}
+		},
+		{
+			"id": "three-token-mcp",
+			"status": "review",
+			"kind": "post",
+			"lane": "token",
+			"pattern": "mechanism",
+			"notBefore": "2026-09-18T16:00:00Z",
+			"source": {
+				"path": "docs/announcements/three-token-mcp.md"
+			},
+			"posts": [
+				{
+					"text": "An MCP server that lets an AI burn $THREE on @solana. three_burn is flagged irreversible and by default won't sign without confirm: true. three.ws/mcp-tools?server=three-token-mcp",
+					"textFrom": "docs/announcements/three-token-mcp.post.txt",
+					"media": [
+						{
+							"path": "public/announce/img/three-token-mcp-hero.webp",
+							"alt": "The three.ws MCP Tool Catalog filtered to the @three-ws/three-token-mcp server: 3 of 321 tools, with three_balance and three_price labelled read-only and three_burn labelled irreversible, all free"
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "burn $THREE on @solana",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/mcp-tools?server=three-token-mcp&tool=three_burn",
+							"contains": "Burn $THREE on-chain"
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/mcp-tools?server=three-token-mcp&tool=three_burn",
+							"contains": "signs and broadcasts on Solana mainnet"
+						},
+						{
+							"type": "file",
+							"path": "packages/three-token-mcp/src/lib/token.js",
+							"contains": "export function assertCanonicalThree(config)"
+						}
+					]
+				},
+				{
+					"says": "flagged irreversible",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/mcp-tools?server=three-token-mcp&tool=three_burn",
+							"contains": "Irreversible. Cannot be undone once it runs."
+						},
+						{
+							"type": "file",
+							"path": "packages/three-token-mcp/src/tools/three-burn.js",
+							"contains": "destructiveHint: true"
+						}
+					]
+				},
+				{
+					"says": "by default won't sign without confirm: true",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/mcp-tools?server=three-token-mcp&tool=three_burn",
+							"contains": "IRREVERSIBLE: pass confirm:true"
+						},
+						{
+							"type": "file",
+							"path": "packages/three-token-mcp/src/tools/three-burn.js",
+							"contains": "if (REQUIRE_CONFIRM && confirm !== true)"
+						},
+						{
+							"type": "file",
+							"path": "packages/three-token-mcp/src/config.js",
+							"contains": "if (raw === undefined) return true;"
+						}
+					]
+				}
+			],
+			"mentions": {
+				"@solana": "three_burn signs and broadcasts one Solana mainnet transaction (packages/three-token-mcp/src/lib/token.js); $THREE is an SPL token and Solana is the platform's home chain."
+			}
 		}
 	]
 }
