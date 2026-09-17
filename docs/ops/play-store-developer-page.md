@@ -8,8 +8,19 @@ hand. Regenerate the images with:
 npm run build:play-assets
 ```
 
-That runs [`scripts/render-play-assets.mjs`](../../scripts/render-play-assets.mjs)
-and writes both files into `public/brand/play/`.
+That runs [`scripts/render-play-assets.mjs`](../../scripts/render-play-assets.mjs),
+which writes four images to two destinations. The developer-page pair is brand
+material and lands in `public/brand/play/`; the store-listing pair
+(`icon-512.png`, `feature-1024x500.png`) lands in
+`solana-mobile/publish-play/media/`, under the exact filenames
+[`solana-mobile/publish-play/config.yaml`](../../solana-mobile/publish-play/config.yaml)
+names, so the listing worksheet never points at a file that does not exist. Pass
+`--out=<dir>` to send all four to one directory instead, which is what to use
+for a throwaway preview:
+
+```bash
+node scripts/render-play-assets.mjs --out=/tmp/play
+```
 
 ## What Play asks for, and what to upload
 
@@ -52,8 +63,8 @@ Play rejects an upload outright when a constraint is missed, and the two easy
 ones to miss are both invisible in a preview:
 
 - **24-bit, not transparent.** A PNG written by a canvas is always 32-bit RGBA,
-  so the alpha channel has to be stripped deliberately. Both files are asserted
-  to be 3-channel before they are written.
+  so the alpha channel has to be stripped deliberately. All four files are
+  asserted to be 3-channel before they are written.
 - **1 MB ceiling.** Asserted on the actual byte length, not estimated.
 
 Dimensions are asserted too. A wrong file fails in the terminal instead of in

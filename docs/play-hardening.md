@@ -111,6 +111,14 @@ The URL rewrite that follows puts the resolved identity back on the address bar,
 
 These two methods were *called* on every drop but never *defined*, so a reconnect threw a `TypeError` and ghosts accumulated: two drops in a ten-person world left thirty avatars on screen, twenty of them frozen, with the online count reporting triple the truth. If you rename or move them, update both call sites and [scripts/play-desktop-audit.mjs](../scripts/play-desktop-audit.mjs), which asserts they are callable in a real browser.
 
+### 4a. The join snapshot waits for a listener
+
+**Invariant: the client announces `ready` once its handlers are attached, and the room re-sends the join snapshot.**
+
+Everything `WalkRoom` pushes during `onJoin` (the guest token, the profile, quests, build permissions, the King of the Totem sync) goes out while the client is still inside `await joinRoomWithTimeout`, before a single `onMessage` handler exists. Colyseus drops a message nothing is listening for, so a guest lost the very token section 7 makes their credential and the HUD came up with no purse.
+
+`_announceReady()` in [src/game/community-net.js](../src/game/community-net.js) closes that window. Two details keep it safe and must survive any refactor: it is gated on the room advertising `acceptsReady` on its schema, because an older room build answers an unknown message type by closing the socket with 4002 and would kick every player during a client-before-server deploy; and it runs from the FIRST state sync, not the end of `connect()`, because the flag lives on the schema and reading it earlier finds `undefined`. Every re-sent payload is a full snapshot, so arriving twice is a repaint, never a double grant.
+
 Related: the death overlay hides on a `respawn` notice, but a reconnect re-sends the authoritative profile without any notice. `_applyVitals()` in [src/game/combat-system.js](../src/game/combat-system.js) clears the overlay whenever the server says `hp > 0`, so nobody rejoins a live world stuck behind "You died".
 
 ## 5. The world frees what it loads

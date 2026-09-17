@@ -42,7 +42,7 @@ The platform is intentionally composed of small, independently deployable servic
 
 **Workers (`workers/`).** Everything that doesn't fit in a serverless function. Two distinct kinds live here:
 
-- **The Pump.fun MCP worker** (`workers/pump-fun-mcp/`), the one Cloudflare Worker in the tree. It maintains live websocket connections to the Pump.fun program, which Vercel functions can't hold cheaply.
+- **The Pump.fun MCP worker** (`workers/pump-fun-mcp/`), the one Cloudflare Worker under `workers/`. It maintains live websocket connections to the Pump.fun program, which Vercel functions can't hold cheaply.
 - **GPU model workers** (`workers/model-trellis/`, `workers/rig/`, `workers/remesh/`, and about two dozen more), containers that run 3D generation, rigging, and mesh processing. Each deploys from its own `cloudbuild.yaml` and is only needed if you want the Forge feature it backs.
 
 Model-provider traffic does *not* go through a worker: Anthropic and OpenAI are called directly from the serverless functions, with the keys held in the deployment env.
@@ -216,7 +216,17 @@ Do **not** commit `.env.development`. It's in `.gitignore` already; double-check
 npm run dev
 ```
 
-This boots Vite on port 3000 with the API functions proxied through Vercel's local dev (the project uses Vite's dev server alongside Vercel's function emulator via `vercel dev`-style integration baked into the dev script).
+`npm run dev` is `vite --port 3000`. Vite serves the front-end, and every `/api/*` request is **proxied** to `DEV_API_PROXY`, which defaults to `https://three.ws` (see the proxy block in `vite.config.js`). That default is what makes a front-end-only change easy, and it is exactly what you do not want here: it would exercise the hosted platform's database, not the one you just provisioned.
+
+So run your own backend beside it. The repo's server is the same Express container production runs, and it reads your `api/` handlers and the `vercel.json` route table directly:
+
+```bash
+# Terminal 1: your API, on :8080
+node --env-file=.env.development server/index.mjs
+
+# Terminal 2: the front-end, pointed at it
+DEV_API_PROXY=http://localhost:8080 npm run dev
+```
 
 In another terminal, sanity-check the API:
 
@@ -242,7 +252,7 @@ If the avatar loads and you can send a chat message that gets a real model respo
 
 **There is no LLM proxy worker to deploy.** Model traffic is served by the platform's own serverless functions: `api/chat.js` and `api/brain/chat.js` route through `api/_lib/llm.js` and `api/llm/anthropic.js`, reading `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` from the deployment env. Keys stay server-side, rate limiting is enforced by `api/_lib/rate-limit.js` (Step 13), and streaming is handled in the function. Setting those two keys in Step 5 is all the wiring the chat path needs, so this step is optional.
 
-The one Cloudflare worker in the tree is the Pump.fun MCP worker, which exists because Vercel functions cannot hold long-lived websockets cheaply. Deploy it only if you want the Pump.fun live feed:
+The one Cloudflare worker under `workers/` is the Pump.fun MCP worker, which exists because Vercel functions cannot hold long-lived websockets cheaply. Deploy it only if you want the Pump.fun live feed:
 
 ```bash
 cd workers/pump-fun-mcp
@@ -281,7 +291,7 @@ This builds:
 - The `<agent-3d>` embed bundle into `dist-lib/agent-3d.js` (ES module; `npm run build:lib:full` adds the UMD build)
 - The chat sub-app into `dist/chat/` (via `npm run build:chat`)
 
-Look at `dist/`. There should be an `index.html`, hashed bundles, and the various sub-apps, with the embed bundle in `dist-lib/`. Nothing about the API origin is baked in at build time, so the same `dist/` is valid on preview and production alike; the bundle resolves its origin at runtime (Step 11). The handful of `VITE_*` vars that *are* read at build time are third-party client IDs (`VITE_PRIVY_APP_ID`, `VITE_WALLETCONNECT_PROJECT_ID`, `VITE_AVATURN_DEVELOPER_ID`), and each only gates the feature it belongs to. Set the ones whose features you want before re-running the build.
+Look at `dist/`. There should be an `index.html`, hashed bundles, and the various sub-apps, with the embed bundle in `dist-lib/`. Nothing about the API origin is baked in at build time, so the same `dist/` is valid on preview and production alike; the bundle resolves its origin at runtime (Step 11). The handful of `VITE_*` vars that *are* read at build time are third-party client IDs (`VITE_PRIVY_APP_ID`, `VITE_WALLETCONNECT_PROJECT_ID`) plus `VITE_CHARACTER_STUDIO_URL`, and each only gates the feature it belongs to. Set the ones whose features you want before re-running the build.
 
 ---
 

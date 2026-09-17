@@ -14,8 +14,8 @@ If you just want to use your wallet rather than script it, **[/wallet](https://t
 
 Three things about that page are worth knowing before you use it:
 
-- **Depositing is scan-to-fund.** The **Add funds** sheet (`src/wallet-deposit.js`) renders a payment-request QR, not a bare address: a Solana Pay URI (`solana:<addr>?amount=&spl-token=`) or, for Base USDC, an EIP-681 transfer link, so a scanning wallet opens with the recipient, token, and amount pre-filled. While the sheet is open, a watcher re-reads the wallet's real balances against a baseline and announces the exact on-chain delta the moment the deposit lands; it backs off over time, suspends while the tab is hidden, and gives up rather than polling forever.
-- **Moving money out is two-step by design.** When you submit the send form or the fund-agent form, the page does not sign anything. It calls the route with `simulate: true`, which runs the real balance, rent, and fee checks on the server and returns what the transfer would actually cost. Only after you read back the amount, recipient, asset, and network, and press **Confirm and send**, does anything get signed and broadcast. A transfer cannot be reversed, so nothing leaves your wallet without you seeing the final numbers.
+- **Depositing is scan-to-fund, after you sign.** The address is revealed only once the real-funds agreements are signed; the first **Add funds** press opens the signing dialog, and declining it means the sheet never opens. The **Add funds** sheet (`src/wallet-deposit.js`) renders a payment-request QR, not a bare address: a Solana Pay URI (`solana:<addr>?amount=&spl-token=`) or, for Base USDC, an EIP-681 transfer link, so a scanning wallet opens with the recipient, token, and amount pre-filled. While the sheet is open, a watcher re-reads the wallet's real balances against a baseline and announces the exact on-chain delta the moment the deposit lands; it backs off over time, suspends while the tab is hidden, and gives up rather than polling forever.
+- **Moving money out is two-step by design.** When you submit the send form or the fund-agent form, the page does not sign anything. It calls the route with `simulate: true`, which runs the real balance, rent, and fee checks on the server and returns what the transfer would actually cost. Only after you read back the amount, recipient, asset, and network, and press **Confirm and send**, does anything get signed and broadcast, and that press prompts the real-funds agreements first if they are not already signed. A transfer cannot be reversed, so nothing leaves your wallet without you seeing the final numbers.
 - **It is the same API documented below.** The page has no privileged path: it is a session-authenticated client over these four endpoints, so anything it can do, the `curl` examples on this page can do too.
 
 Page code: `pages/wallet.html`, `src/master-wallet.js` (controller), `src/wallet-api.js` (the client), `src/wallet-deposit.js` (the deposit sheet), `public/master-wallet.css`. Not to be confused with `src/wallet.js`, which connects an **external** wallet such as Phantom and has nothing to do with the custodial master wallet.
@@ -40,6 +40,7 @@ Funds flow one way through the platform's plumbing: master wallet to agent walle
 ## Auth model: session plus CSRF
 
 - Every route requires a signed-in **session cookie**. Without one: `401 unauthorized`. There is no bearer or API-key path on these four routes, unlike most of the API.
+- Every write that moves funds additionally requires that your account has **signed the real-funds agreements** (Terms of Service, Risk Disclosure, Agent Wallet Agreement). Without a current signature the route answers `403 risk_ack_required` and nothing is sent; sign once at [/legal/agreements](https://three.ws/legal/agreements). A `simulate: true` preview is exempt, as is reading. See [risk-acknowledgment.md](risk-acknowledgment.md).
 - Every write (`POST`) additionally requires a one-time CSRF token in `X-CSRF-Token`, obtained from `GET /api/csrf-token`. The token is bound to your user id, single-use, and expires after an hour. Missing: `403 csrf_missing`. Stale or wrong: `403 csrf_invalid`. Fetch a fresh token per write.
 - Reads are rate limited at 60 per minute per user. Writes that move funds are limited to **5 per day per user**, and that limiter is critical: if its backend is unreachable in production the write is refused rather than uncapped. A `simulate: true` preview does **not** draw on that daily budget; previews have their own ceiling of 30 per minute per user, so pricing a transfer a few times can never lock you out of sending. Both money-moving routes are additionally limited per IP, as is wallet creation.
 
@@ -172,7 +173,7 @@ curl -sX POST https://three.ws/api/user/wallet/send \
 
 `usd_value` is populated for SOL (from the price feed) and for USDC (one to one); for any other mint it is `null`. Send is mainnet only.
 
-Error shapes worth handling: `404 not_found` (no master wallet yet), `400 invalid_destination`, `400 invalid_amount`, `400 invalid_asset`, `400 insufficient_balance`, `400 insufficient_sol_for_fees`, `502 rpc_error` (balance or blockhash read failed, nothing signed), `502 send_failed` (the network rejected the transaction), `429` when the 5-per-day ceiling is spent.
+Error shapes worth handling: `403 risk_ack_required` (the agreements are unsigned; nothing was sent), `404 not_found` (no master wallet yet), `400 invalid_destination`, `400 invalid_amount`, `400 invalid_asset`, `400 insufficient_balance`, `400 insufficient_sol_for_fees`, `502 rpc_error` (balance or blockhash read failed, nothing signed), `502 send_failed` (the network rejected the transaction), `429` when the 5-per-day ceiling is spent.
 
 ## Funding an agent from the master wallet (this spends real funds)
 
@@ -258,7 +259,7 @@ Two routes move real funds, irreversibly, the moment they return success:
 | `POST /api/user/wallet/send` | SOL or any SPL token, to **any address you name**. No allowlist. |
 | `POST /api/user/wallet/fund-agent` | USDC or SOL, to **an agent you own**. |
 
-As coded, the server-side protections are: a signed-in session (no API key can reach these), a single-use CSRF token per call, a hard ceiling of 5 outbound transactions per user per day, on-curve destination validation, and rent and fee reserves that prevent a sweep from bricking the account. That is the entire list. **There is no per-transaction cap, no daily USD cap, no destination allowlist, no freeze switch, no approval step, and no undo.** `simulate: true` on `send` and `fund-agent` is a preview, not a confirmation gate: a plain call skips it entirely.
+As coded, the server-side protections are: a signed-in session (no API key can reach these), a signed set of real-funds agreements on the account, a single-use CSRF token per call, a hard ceiling of 5 outbound transactions per user per day, on-curve destination validation, and rent and fee reserves that prevent a sweep from bricking the account. That is the entire list. **There is no per-transaction cap, no daily USD cap, no destination allowlist, no freeze switch, no approval step, and no undo.** `simulate: true` on `send` and `fund-agent` is a preview, not a confirmation gate: a plain call skips it entirely.
 
 So the confirmation has to come from your client, before the call:
 

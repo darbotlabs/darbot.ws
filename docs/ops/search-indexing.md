@@ -166,14 +166,38 @@ every page under them already carried `<meta name="robots" content="noindex">`.
 A crawler that is not allowed to fetch the page never sees the noindex, so the
 URL stays in the index as a bare link. The two directives cancel each other out.
 
-Crawling is what removes them, so those three prefixes are now open in
-robots.txt and the `noindex` does the work. `pages/dashboard-next/data-api.html`,
-`developers.html` and `billing.html` were missing the tag and now carry it.
+Crawling is what removes them, so those three prefixes are now open to
+`User-agent: *` in robots.txt and the `noindex` does the work.
+`pages/dashboard-next/data-api.html`, `developers.html` and `billing.html` were
+missing the tag and now carry it. They stay disallowed for one group only, the
+assistants that fetch on behalf of a live user (ChatGPT-User, Claude-User,
+Perplexity-User and their siblings), because those do not index and the point
+there is to keep a signed-in surface out of an assistant's reach, not out of a
+SERP.
 
 **Rule: pick one.** `Disallow` keeps a page out of the crawl; `noindex` keeps it
 out of the index. Never both on the same URL.
 
 ---
+
+## Truncated Unicode breaks structured data
+
+A page can be served perfectly and still be dropped for a reason that never
+shows up as an indexing state. The news archive trimmed a publisher description
+to 240 UTF-16 code units with a plain `slice()`. A summary opening with an emoji
+got cut between the halves of a surrogate pair, `JSON.stringify` wrote the
+surviving half into the story page's JSON-LD as a literal `\ud83d` escape, and
+Search Console rejected the page with "Unparsable structured data: truncated
+Unicode character" and pulled it from rich results (2026-09-06).
+
+[`api/_lib/safe-text.js`](../../api/_lib/safe-text.js) is the fix: it truncates
+on `Intl.Segmenter` grapheme boundaries, so a flag, a skin-tone modifier or a ZWJ
+sequence is never halved, and it guarantees well-formed output even when the
+input already carried a lone surrogate. Every JSON-LD block, meta tag, embedded
+seed and excerpt on the news and SEO paths goes through it, including `esc()` in
+`api/_lib/crawler-page.js`, because entity names come from user input. Anything
+new that emits JSON-LD or a meta tag from stored text uses it too; do not
+hand-roll a `slice()`.
 
 ## Soft 404s from SPA shells
 

@@ -252,7 +252,7 @@ below exists, and anything that does not exist says so.
 | The `/api/home/*` surface: REST, SSE stream, the error contract | [`api/home/`](../api/home) |
 | Agent tools and the confirmation protocol | [`api/_lib/home/tools.js`](../api/_lib/home/tools.js), [`confirm.js`](../api/_lib/home/confirm.js), wired into `api/chat.js` and `api/_mcp/tools/home.js` |
 | The connect flow and the household page | `/smart-home` ([`pages/smart-home.html`](../pages/smart-home.html), [`src/home/`](../src/home)) |
-| The live 3D home | [`src/home/scene-render.js`](../src/home/scene-render.js), [`scene-model.js`](../src/home/scene-model.js) |
+| The live 3D home, with the visitor's own agent standing in it (the platform body until their active-agent record arrives, and again if they have no published avatar) | [`src/home/scene-render.js`](../src/home/scene-render.js), [`scene-model.js`](../src/home/scene-model.js), [docs/home-scene.md](home-scene.md) |
 | Households: roles, per-member scopes, invites | [`api/_lib/home/members.js`](../api/_lib/home/members.js), [docs/home-households.md](home-households.md) |
 | Privacy, retention, export and deletion | [`api/_lib/home/privacy.js`](../api/_lib/home/privacy.js), [docs/home-privacy.md](home-privacy.md) |
 | The dial-out relay for LAN-only houses | [`services/home-relay/`](../services/home-relay/README.md) plus [`home-assistant-integration/`](../home-assistant-integration) |
@@ -328,6 +328,14 @@ Importing the root here would have shipped both to every visitor for two pure st
 Everything a house supplies (a label, an entity id, an area name) is rendered with
 `textContent`. These are strings a stranger or a compromised integration can influence, they
 flow into a page and into a model prompt, and there is a physical actuator on the other end.
+
+**Every reader-facing string on this surface is translated, and none of the house's own words
+are.** Connect, the manage panel, the floorplan editor, the live house and the voice panel all
+assemble their copy through [`src/home/i18n-home.js`](../src/home/i18n-home.js), so a refusal, a
+confirmation or the age of a reading arrives in the reader's own language. A room name, an area
+name, a scene name and a device name are passed as interpolated values and never as part of a
+translatable string, because they are the user's words and nobody's to machine-translate. The
+rule and the key-extraction command are in [i18n.md](i18n.md).
 
 ### Not shipped
 

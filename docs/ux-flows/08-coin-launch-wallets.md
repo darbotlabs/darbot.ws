@@ -13,66 +13,57 @@ real Solana/EVM RPC, pump.fun, and x402 — no mocks.
 ---
 
 ### Launch a Coin — `/launch`
-- **Source:** `pages/launch.html` (inline module imports `/launch/launch.js`) → `public/launch/launch.js` (`mountLaunchCoin`) → `public/studio/launch-panel.js` (`mountLaunchPanel`, the real flow) → `public/studio/fees-panel.js` (`mountFeesPanel`, post-launch). Vanity stamp: `src/solana/vanity/grinder.js` + `src/solana/vanity/brand.js` (`THREE_WS_VANITY`).
-- **Entry point:** `#launch-root` mounts a two-column shell: agent picker (left, `launch.js`) + launch panel (right, `launch-panel.js`).
+- **Source:** `pages/launch.html` → `src/launch/launch-page.js` (the whole flow), with the pure form/cost logic in `src/launch/launch-model.js`, wallet connect/link/sign in `src/launch/launch-wallet.js`, styles in `src/launch/launch-page.css`. A Launch Studio recipe link (`?reward=`) mounts `public/studio/launch-panel.js` instead, because the fee-split handoff lives there. Reference doc: [the /launch launchpad](../launchpad.md).
+- **Entry point:** `#launch-app` mounts two tabs, **Create** and **My coins**. Create is a four-card form (link an agent, coin details, image, launch settings) beside a rail holding the live preview, the cost panel, the wallet card and the Launch button.
 - **Prerequisites / gates:**
-  - Account/session required to actually launch (`GET /api/auth/me`). Signed-out users see the guided empty state; the launch button reads "Sign in to launch."
-  - A non-demo agent/avatar must be selected (panel refuses `__demo__`).
-  - Wallet source: either a connected Solana wallet (Phantom/Backpack/Solflare/backpack) that is SIWS-**linked** to the account, OR a custodial agent wallet.
-  - SOL balance ≥ estimated cost (`PUMP_BASE_COST` 0.022 SOL + initial buy). USDC coin type debits the buy from the wallet's USDC ATA instead of SOL.
+  - Account/session required to launch (`GET /api/auth/me`). Signed out, the agent card offers Sign in / Create an agent and the button reads "Sign in to launch."
+  - One of the account's 3D agents must be selected; the coin is linked to it and its page becomes the coin's website.
+  - Signer: either an injected Solana wallet (Phantom/Solflare/Backpack) linked to the account, or the agent's custodial wallet.
+  - Balance: the create cost and rent (about 0.022 SOL) plus the dev buy and the **1% three.ws launch fee** on that dev buy. A USDC-paired coin pays the dev buy and fee in USDC and still needs the SOL for rent and network fees.
+  - The real-funds agreements must be signed (`ensureRiskAck`, context `launch`) before anything is built. Every launch here is mainnet.
 - **Steps (N):**
-  1. Page boots: `fetchMe()` then `fetchAvatars()` (`GET /api/avatars?limit=100`). Picker shows 3 shimmer skeletons while loading.
-  2. Picker renders agent cards; `?avatar=<id|slug>` deep link is honored, else the first agent is auto-selected. Panel pre-fills name/symbol/description from the avatar.
-  3. Panel auto-checks for an existing mint for the selected agent (`GET /api/pump/by-agent?agent_id=|avatar_id=`). If one exists, it shows the "Token already launched" card with stats + Fees & rewards panel (skip to step 16) unless the user clicks "Launch a new token."
-  4. (optional) User edits the **token image**: click/drag-drop an image file, or "📸 Use 3D view" to snapshot the preview canvas (only when a preview viewer is present, i.e. studio mount). Files over ~3 MB are downscaled in the browser (1024px max, PNG then JPEG fallback) instead of rejected; only an unshrinkable image errors ("Could not shrink that image under 4 MB").
-  5. User edits **name** (≤32 chars), **symbol** (≤10 codepoints, any chars incl. emoji; auto-derived from name until edited), **description** (≤500).
-  5b. User picks a **launch lane**: pump.fun (default, the reach lane) or the **three.ws native bonding curve** (the economics lane). The native toggle only renders when `GET /api/native-launch/config` returns a pinned curve config for the network; its fee split and graduation target are rendered from that server config. The native lane is SOL-quoted, takes the base fields only (no coin variants, no buyback binding), and forces the connected-wallet signer (no custodial path yet).
-  6. User picks a **coin type** (pump.fun lane): Regular / Mayhem / Agent (default, buyback-bound) / USDC / Reward.
-  7. (optional, Agent/USDC only) User sets the **buyback share** slider (0–50%, `buybackBps` 0–5000).
-  8. (optional) User sets an **initial buy** (SOL, max 50; or USDC, max 1,000,000). Live cost line in the wallet bar updates as they type.
-  9. User picks **wallet source** via the tab toggle: "Connected wallet" or "Agent wallet (custodial · server-signed)."
-  10a. **Connected-wallet path:** if no wallet detected → "Install Phantom" opens phantom.app. If detected but not connected → "Connect" calls `wallet.connect()`. Balance polls every 30s via `/api/solana-rpc`. (optional) "Deposit" opens a modal with a Solana Pay QR + copyable address.
-  10b. If the connected wallet is not SIWS-linked → "Link wallet" button runs the link ceremony: `POST /api/auth/wallets/nonce-solana` → `provider.signMessage` → `POST /api/auth/wallets/link-solana`. A 409 (`address_in_use`) flips to a "Transfer wallet to this account" confirmation that re-signs with `takeover:true`.
-  10c. **Agent-wallet path:** `POST /api/pump/agent-wallet` provisions/resolves the custodial wallet, returns address + lamports/sol. (optional) "Fund" opens a deposit modal (QR + address); balance polls every 30s.
-  11. User clicks **Launch $SYMBOL**. The button's `data-action` routes: sign-in / focus-first-missing-field / connect / link / agent-fund / agent-retry / launch.
-  12. **Build metadata** (both paths): phase `building` — if image present, `fileToDataUrl`, then `POST /api/pump/build-metadata` → `metadata_url` (cached by name|symbol|desc|hasImage key).
-  13a. **Connected-wallet launch:** phase `stamping`: client grinds the `3ws` mint keypair via `grindVanity(THREE_WS_VANITY)` with live k/s + ETA progress. Then phase `signing` → `POST /api/pump/launch-prep` (pump.fun lane; sends `wallet_address`, `mint_address` = ground pubkey, coin_type, buyback_bps, buy-in, network=mainnet) or `POST /api/native-launch/launch-prep` (native lane; base fields + `sol_buy_in` only) → returns `tx_base64` + `prep_id`. Deserialize `VersionedTransaction`, `wallet.signTransaction`, then co-sign with the ground mint keypair.
-  13b. Phase `confirming`: `conn.sendRawTransaction(skipPreflight:false)` over `/api/solana-rpc`, then `pollConfirmation` (75s, 2s interval). On confirm → `finalizeConfirm`: `POST /api/pump/launch-confirm` (or `/api/native-launch/launch-confirm` on the native lane) with `prep_id` + `tx_signature` → echoes `pump_agent_mint.mint`.
-  14a. **Agent-wallet launch:** phase `stamping` (server stamps `3ws`), then phase `confirming` → `POST /api/pump/launch-agent` (server signs + submits with the custodial key, ~10s) → returns `mint`. Agent balance refreshes.
-  15. Phase `success` — success card shows the stamped mint (with the `3ws` mark visually emphasized), "✓ three.ws coin" badge, links to pump.fun / Solscan / the agent page, "Copy launch announcement," and "Launch another token."
-  16. (existing-token branch) Fees & rewards panel mounts against the mint for claim/delegation management.
+  1. Boot: `GET /api/pump/launch-config` (live launch-fee bps, create-cost estimate, whether Solana transaction v1 is active) alongside `GET /api/auth/me` and `GET /api/avatars?limit=100`. Agent cards shimmer while loading. Deep-link params prefill: `?avatar=`, `?name=`, `?symbol=`, `?description=`, `?initialBuy=`, `?image=`, `?imageSession=1`, `?tab=coins`.
+  2. Pick the agent from an arrow-key navigable radio grid (a search box appears once the account has more than eight agents). The preview rail renders that agent and the coin card as you type.
+  3. Coin details: name (32 chars), ticker (2 to 10 letters or digits, suggested from the name until edited), optional description (500), optional website / X / Telegram behind a disclosure.
+  4. (optional) Image: defaults to the agent's portrait. Upload or drop a PNG, JPG, GIF or WebP up to 4 MB; a larger file is downscaled to 1024 px in the browser rather than rejected.
+  5. Launch settings: **Launch from** your wallet or the agent's wallet; **Pair with** SOL or USDC; **Creator rewards go to** the creator or holders; optional **dev buy** with presets; **Mayhem mode**; and, under a disclosure, the **transaction format** (Auto / v0 / v1).
+  6. The cost panel updates on every keystroke: create + rent, dev buy, a `three.ws fee` row at the live rate, and the total. The checklist beneath it lists whatever still blocks the launch, each item focusing its field when clicked.
+  7. Click **Launch $TICKER**. The button routes in order: sign in, connect a wallet, fix the first blocking field, then launch. `ensureRiskAck` runs last before any request.
+  8. **Connected-wallet launch** opens a step dialog: `POST /api/pump/build-metadata` (image + metadata pinned and linked to the agent) → `POST /api/pump/launch-prep`, which grinds the `3ws` mint mark server-side, pre-signs the mint, puts the fee in the same transaction and reports the version and byte count → one wallet signature, broadcast through `/api/solana-rpc` → confirmation polled for 75 s → `POST /api/pump/launch-confirm` records it (retried while the confirming RPC is a slot ahead and answers `tx_not_found`).
+  9. **Agent-wallet launch** is two steps: metadata, then `POST /api/pump/launch-agent`, which signs, sends and confirms with the custodial key. No wallet prompt.
+  10. Success card: "$TICKER is live" with the coin image, the mint and Copy CA, and links to the coin page (`/launches/<mint>`), pump.fun, the agent page, the transaction on Solscan, a prefilled Share on X post, and Launch another.
+  11. (optional) **My coins** tab: `GET /api/pump/my-coins` groups your coins by the wallet that earns their rewards and reads the live unclaimed balance per quote mint. Claim runs `POST /api/pump/collect-creator-fee-prep` (your wallet signs, `all_quotes: true`) or `POST /api/pump/collect-creator-fee-agent` (the agent wallet signs server-side), each behind its own `ensureRiskAck` (context `claim`).
 - **Decision points / branches:**
-  - Existing mint found → existing-token card vs. "force new."
-  - Launch lane: pump.fun (default; coin types + custodial path available) vs. three.ws native curve (only offered when a curve config is deployed for the network; connected-wallet signer only; base fields only).
-  - Coin type: Regular / Mayhem (high-volatility, no buyback) / Agent (SOL buyback+burn) / USDC (stablecoin-paired agent) / Reward (delegated creator fees; launches as a plain coin, fees split post-graduation). USDC & Reward both remap server-side (`coin_type: 'agent'` / `'regular'`).
-  - Wallet source: connected (client-grinds mark, client-signs) vs. agent (server-grinds, server-signs).
-  - Connected path may require a one-time SIWS link, and a link may hit a takeover branch.
-  - Confirmation timeout → escape-hatch screen ("Finalize once confirmed" re-checks signature status, "Start over").
-- **External calls / dependencies:** `/api/auth/me`, `/api/avatars`, `/api/pump/by-agent`, `/api/auth/wallets`, `/api/auth/wallets/nonce-solana`, `/api/auth/wallets/link-solana`, `/api/pump/agent-wallet`, `/api/pump/build-metadata`, `/api/pump/launch-prep`, `/api/pump/launch-confirm`, `/api/pump/launch-agent`, `/api/native-launch/config`, `/api/native-launch/launch-prep`, `/api/native-launch/launch-confirm`, `/api/solana-rpc` (Connection RPC). External: `@solana/web3.js@1.98.4` and `qrcode@1.5.3`, both loaded through `/load-module.js` (the pinned version on esm.sh, then jsdelivr, then unpkg, each under a deadline; if all three miss the panel says "<what> could not be loaded (<hosts> unreachable or blocked). Check your connection or ad blocker and try again."; `fees-panel.js` loads web3.js the same way), pump.fun (mint target), Solscan (links).
-- **Success state:** `lp-ok` card — stamped mint, verified badge, pump.fun/Solscan/agent-page links, share-announcement copy, relaunch button. The coin appears in `/launches` within 60s via live refresh.
-- **Empty / error states:** signed-out / no-avatar guided onboarding (4-step explainer + coin-type legend + cost note); "Checking for existing token…"; per-phase `lp-phase` status line; `friendlyError()` maps rejections/insufficient SOL/no-wallet/rate-limit to plain copy; confirmation-timeout escape hatch; agent-wallet error/retry/provision states; insufficient-balance "Fund" CTA.
-- **Step count:** 15 required (+5 optional)
+  - Launch from your wallet (you sign, you claim the rewards) vs the agent's wallet (it signs and earns).
+  - SOL vs USDC pairing; creator vs holder rewards (holder rewards and Mayhem mode exclude each other and each disables the other control).
+  - Transaction format: Auto picks the smallest that fits, v0 signs everywhere, v1 is offered only while the feature is active and the connected wallet advertises it through Wallet Standard.
+  - Connecting a wallet that is linked to another account surfaces a "Move wallet here" takeover that re-signs the link with `takeover: true`.
+  - Confirmation still pending after 75 s: the dialog keeps the signature, links it on Solscan and offers "Check again" rather than declaring failure.
+  - A `?reward=` recipe link mounts the studio launch panel instead of this flow.
+- **External calls / dependencies:** `/api/pump/launch-config`, `/api/auth/me`, `/api/avatars`, `/api/pump/build-metadata`, `/api/pump/launch-prep`, `/api/pump/launch-confirm`, `/api/pump/launch-agent`, `/api/pump/agent-wallet`, `/api/pump/my-coins`, `/api/pump/collect-creator-fee-prep`, `/api/pump/collect-creator-fee-agent`, `/api/auth/wallets` (+ `/nonce-solana`, `/link-solana`), `/api/solana-rpc`. External: the pump.fun program (mint target), Solscan (links), x.com (share intent).
+- **Success state:** the live-coin dialog above, plus the coin appearing on `/launches` and its own `/launches/<mint>` page, and its creator rewards accruing under My coins.
+- **Empty / error states:** agent list loading skeletons, load failure with Try again ("Nothing was launched"), signed-out and no-agent empty states with their own CTAs; per-field counters and the blocker checklist; wallet card states for not installed / connect / connecting / conflicting account / connected (with a v0 or v1 badge) and the agent wallet's loading, error-with-retry and balance-unavailable forms; a blocking "needs ~X more SOL" line; in-dialog step errors written by `friendlyLaunchError` (cancelled signature, insufficient funds, unlinked wallet, expired session, rate limit, expired blockhash, unreachable RPC) with Close and Try again; the pending-confirmation recheck; a warning when the coin launched but the separate fee transfer did not (nothing was charged); My coins load error with retry and a "No coins yet" empty state.
+- **Step count:** 5 required (+5 optional)
 
 ---
 
 ### Launch Feed — `/launches`  (and `/launches/:mint` detail)
 - **Source:** `pages/launches.html` → `src/launches.js`. Imports `src/pump/coin-status-card.js` (`mountCoinStatus`), `src/shared/agent-wallet-chip.js` (`walletChipEl`).
-- **Entry point:** `#lx-feed` (card grid), hero stats, network/oracle filter buttons, marquee ticker, ambient particle canvas.
+- **Entry point:** `#lx-feed` (card grid), hero stats, network filter buttons, marquee ticker, ambient particle canvas.
 - **Prerequisites / gates:** None — fully public, read-only.
 - **Steps (N):**
-  1. Boot reads URL params: `network` (mainnet|devnet), `agent_id` (UUID), `oracle_tier` (prime|strong|lean). Starts the particle field; renders 8 skeletons.
-  2. `loadPage()` → `GET /api/pump/launches?network=&offset=&limit=24[&agent_id=&min_tier=]`. Registry rows render immediately as cards.
-  3. Per mainnet card, `mountCoinStatus` fetches `GET /api/pump/coin?mint=` and streams price / logo / market cap / graduation over the seeded identicon placeholder. Devnet cards show a static identity line.
-  4. After each page, `enrichCardsWithOracle` batch-fetches `GET /api/oracle/batch?mints=…&network=mainnet` (≤20/req) and paints a conviction tier badge.
-  5. (optional) User toggles **network**, picks an **Oracle tier**, or applies an **agent filter** (chip resolved via `GET /api/agents/:id`) — each resets and reloads the feed; URL is kept in sync.
-  6. (optional) User clicks **Load more** (offset paginates) or stars a coin (localStorage `ld_watchlist`).
-  7. Live refresh every 60s re-checks page zero and prepends genuinely new launches.
-  8. (optional) Per card: open coin detail (`/launches/:mint`), pump.fun, 3D view (`/coin3d?mint=`), 3D world (`/communities/:mint`), or the launching agent's profile.
+  1. Boot reads URL params: `network` (mainnet|devnet) and `agent_id` (UUID). Starts the particle field; renders 8 skeletons.
+  2. `loadPage()` → `GET /api/pump/launches?network=&offset=&limit=24[&agent_id=]`. Registry rows render immediately as cards.
+  3. Per mainnet card, `mountCoinStatus` fetches `GET /api/pump/coin?mint=` and streams price / logo / market cap / graduation over the seeded identicon placeholder. Devnet cards show a static identity line. The feed stays neutral: it scores nobody's coin, so no conviction tier is painted here (`oracle: false`).
+  4. (optional) User toggles **network** or applies an **agent filter** (chip resolved via `GET /api/agents/:id`); each resets and reloads the feed, and the URL is kept in sync.
+  5. (optional) User clicks **Load more** (offset paginates) or stars a coin (localStorage `ld_watchlist`).
+  6. Live refresh every 60s re-checks page zero and prepends genuinely new launches.
+  7. (optional) Per card: open coin detail (`/launches/:mint`), pump.fun, 3D view (`/coin3d?mint=`), 3D world (`/communities/:mint`), or the launching agent's profile.
 - **Decision points / branches:** mainnet vs devnet (devnet → Explorer link, no market data); filtered vs. unfiltered empty state; watchlist toggle.
-- **External calls / dependencies:** `/api/pump/launches`, `/api/pump/coin`, `/api/oracle/batch`, `/api/agents/:id`. External: pump.fun, Solscan, Solana explorer (links).
+- **External calls / dependencies:** `/api/pump/launches`, `/api/pump/coin`, `/api/agents/:id`. External: pump.fun, Solscan, Solana explorer (links).
 - **Success state:** populated card grid with live market data, ticker, hero stats (count / latest / network).
 - **Empty / error states:** "No launches yet" (with Create-agent / Forge CTAs) or "No matching launches" (Clear-filters) for filtered views; devnet-specific copy; `renderError` with Retry; per-card identicon fallback when pump.fun art is missing.
-- **Step count:** 4 required (+4 optional)
+- **Step count:** 3 required (+3 optional)
 
 ---
 
@@ -264,7 +255,7 @@ real Solana/EVM RPC, pump.fun, and x402 — no mocks.
 
 ## Source-coverage notes
 - All routes resolved and traced to real source. No missing source.
-- `/launch` HTML loads its module by URL (`/launch/launch.js`) — the real source is `public/launch/launch.js`; the launch engine is `public/studio/launch-panel.js` (shared with `/studio` and the avatar page).
+- `/launch` is a bundled page: `pages/launch.html` loads `src/launch/launch-page.js`, which owns the flow. `public/studio/launch-panel.js` is still the engine behind `/studio`, the avatar page, and any `/launch?reward=` recipe link.
 - `/vanity-wallet`, `/eth-vanity`, `/evm-wallet`, `/threews/claim`, `/three-live`, `/avatar-wallet-chat` are served from prebuilt HTML (`public/*.html` or `pages/*.html`) with self-contained inline modules; their crypto workers live under `src/solana/vanity/` and `src/eth/vanity/`.
 - `/threews/claim` rewrites to `threews-claim.html` (no `pages/threews/` dir).
 - `src/agent-eth-vanity-card.js` and `src/agent-vanity-grinder.js` are the embedded-card variants of the standalone vanity tools, mounted on agent home/dashboard pages rather than the standalone routes above.

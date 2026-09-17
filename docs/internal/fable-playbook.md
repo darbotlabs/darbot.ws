@@ -235,9 +235,13 @@ of the map is already a dependency.
 1. **Distribution beats features from here.** The platform out-builds its
    awareness. `llms.txt`, the sitemap and the changelog rails exist; the missing
    piece is the loop that turns every artifact into a share. Wire sharing into
-   artifacts (§3.3, §3.4) rather than adding surfaces. Note that the X lane is
-   retired and the toolkit that drove it is no longer vendored here: it lives at
-   `nirholas/XActions` and on npm (see `STRUCTURE.md`).
+   artifacts (§3.3, §3.4) rather than adding surfaces. Note that the changelog's automatic X delivery
+   stays retired and the toolkit that drove it is no longer vendored here: it
+   lives at `nirholas/XActions` and on npm (see `STRUCTURE.md`). The X surface
+   that does exist is the reviewed @trythreews content queue
+   (`/api/cron/x-content` every 15 minutes, [docs/x-content-pipeline.md](../x-content-pipeline.md)),
+   and it only previews: nothing is sent until an item is `approved` and
+   `X_CONTENT_AUTO_PUBLISH=true` is set on the service, which it is not today.
 2. **Trust is a sellable feature.** We run a hash-chained economy ledger, breach
    monitoring, risk-acknowledgment gating, spend guards, and fail-closed trading
    rules. "Agents that touch real money, auditable by design" is positioning

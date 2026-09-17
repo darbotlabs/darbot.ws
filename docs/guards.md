@@ -135,7 +135,7 @@ Run `npm run audit:guards` to print the current count and per-stage breakdown. T
 
 | Guard | Command | Protects |
 |---|---|---|
-| Documentation integrity | `npm run audit:docs` | No dead relative link, no command naming a missing script, no package without a README. |
+| Documentation integrity | `npm run audit:docs` | No dead relative link, no site link that matches no route, no command naming a missing script, no `packages/*` or `workers/*` directory without a README, and no public doc that is live but unregistered in `data/pages.json` (or declared there with no article behind it). |
 | Upstream resilience ratchet | `npm run audit:upstreams` | No new call to a third-party service without a deadline, and no existing one quietly getting weaker. |
 | Tutorial reachability | `npm run check:tutorials` | Every tutorial appears in the library manifest, has its markdown on disk, and is registered in `data/pages.json`. |
 | Home lane translation keys | `npm run i18n:home` | Every string the connected home speaks from JS has a key in `public/locales/en.json` whose English matches the code exactly, and no source value bakes a user's own room or device name into a translatable sentence. |

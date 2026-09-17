@@ -78,15 +78,19 @@ Around both modes:
 - **Reduced motion**: no auto-rotate, camera moves become effectively
   instant, and auto-play steps briskly instead of gliding.
 - **Loading and errors**: a spinner while the data loads; a failed fetch
-  shows a designed error state with a Retry button.
+  shows a designed error state with a Retry button, and a dataset that parses
+  but holds no events says so ("No milestones have been published yet")
+  instead of blaming the connection.
 
 ## Adding a milestone
 
 Append an object to the `events` array in
 [`data/timeline.json`](../data/timeline.json), keeping the array in
 chronological order (markers are laid out in array order, not re-sorted).
-There is no build step: the file is fetched at runtime from
-`/data/timeline.json`.
+The page fetches `/data/timeline.json` at runtime, so the only build step is
+the copy: the `copy-timeline-data` hook in
+[`vite.config.js`](../vite.config.js) writes the file into `dist/data/` and
+`npm run check:dist` fails a build that lacks it.
 
 ```json
 {

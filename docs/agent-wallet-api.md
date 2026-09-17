@@ -58,6 +58,16 @@ Every state-changing request passes through [`api/_lib/csrf.js`](../api/_lib/csr
 
 Failures are `403 csrf_missing` (header absent) and `403 csrf_invalid` (wrong user, expired, or already consumed).
 
+### Signed real-funds agreements
+
+Arming or running anything that can move real funds additionally requires that the caller's account has signed the three real-funds agreements (Terms of Service, Risk Disclosure, Agent Wallet Agreement). The check is server-side in [`api/_lib/real-funds-agreement.js`](../api/_lib/real-funds-agreement.js) and applies to bearer callers exactly as it does to cookie callers.
+
+- Refusal is `403 risk_ack_required`. The body carries `context`, the current `version`, a `sign_url`, and the `documents` to sign. Nothing is armed and nothing is sent.
+- Devnet is exempt, so `?network=devnet` writes pass without a signature.
+- Only the arming direction is gated. Reads, previews, simulations, pausing, disarming, the kill switch, and deleting never ask for it: stopping an agent must always be possible.
+- Sign once at [/legal/agreements](https://three.ws/legal/agreements). See [risk-acknowledgment.md](risk-acknowledgment.md).
+- Where the agreement and CSRF both apply, the agreement is checked first, so a refusal does not consume the caller's single-use CSRF token.
+
 ### Network selection
 
 Solana is the home chain and mainnet is the default. Append `?network=devnet` to switch a read or a write to devnet; any other value falls back to mainnet. Capabilities are network-independent and ignore the parameter.
@@ -350,6 +360,8 @@ A condition is one level deep, with no expressions and no code: `{ "all": [leaf,
 
 ### POST /orders
 
+A live order trades from the agent wallet on its own when it fires, so this route requires a signed real-funds agreement: an unsigned account gets `403 risk_ack_required` and no order is created.
+
 Returns `201` with `{ "data": { "order": … } }`. Validation failures are `422` and carry the specific code from the normalizer: `invalid_order`, `invalid_type`, `invalid_side`, `invalid_mint`, `invalid_size`, `invalid_price`, `invalid_trail`, `invalid_schedule`, `invalid_expiry`, or `invalid_condition`, each with a human-readable `error_description`. A malformed body is `400 bad_request`, a wrong content type is `415`, and a database failure is `500 create_failed`.
 
 DCA and TWAP orders are created with `next_fire_at` set to now, so the first slice fires on the next worker sweep.
@@ -459,7 +471,7 @@ Each fill carries a `custody_event_id`, which is the join back into the custody 
 
 Only a bounded set of fields can change, and `type`, `side`, and `mint` are immutable (cancel and recreate instead). Accepted keys: `limit_price` (on a `limit` order), `stop_price` (on a `stop`), `trail_pct` (on a `trailing`), `slippage_bps`, `expires_at`, and `paused`.
 
-`paused: true` parks the order in a non-evaluated state without losing fill progress. `paused: false` returns it to `partial` if it has fills, otherwise `active`. An empty patch is a no-op that returns the unchanged order.
+`paused: true` parks the order in a non-evaluated state without losing fill progress. `paused: false` returns it to `partial` if it has fills, otherwise `active`, and because that re-arms the order it is the one patch that requires a signed real-funds agreement (`403 risk_ack_required` without one). An empty patch is a no-op that returns the unchanged order.
 
 Errors: `404 not_found` for an unknown order, `422 immutable` for a filled, cancelled, or expired order, `422 invalid_price`, `422 invalid_trail`, `422 invalid_expiry`, and `500 update_failed`.
 
@@ -598,13 +610,13 @@ curl -s -X POST "https://three.ws/api/agents/$AGENT_ID/intents/compile" \
 
 Body: `{ "intent": { … }, "source_text": "…", "public_trait": false }`. `intent` is required and is re-validated server-side, so a client cannot arm something the compiler would have rejected. A resolved `destination`, `destination_label`, `to_tipper`, and `mint` from the compile step are preserved through re-validation. `source_text` is stored (truncated to 1000 characters) so the owner can see the sentence the rule came from. `public_trait: true` publishes the rule as a visible agent trait.
 
-Success is `201` with `{ "data": { "intent": … } }`. A missing intent object is `400 validation_error`, an invalid one is `422`, and a write failure is `500 create_failed`.
+Success is `201` with `{ "data": { "intent": … } }`. A missing intent object is `400 validation_error`, an invalid one is `422`, and a write failure is `500 create_failed`. A rule whose action is anything other than `freeze` or `notify` can move funds, so arming it needs a signed real-funds agreement (`403 risk_ack_required` without one).
 
 ### POST /intents/run
 
 Body: `{ "intent_id": "<uuid>", "dry_run": true }`. **`dry_run` defaults to `true`**: it is only a real run when you explicitly send `"dry_run": false`. A missing or non-UUID `intent_id` is `400 validation_error`.
 
-A real run honors the freeze, the wallet spend policy, and the intent's own caps exactly like the scheduler, and claims an idempotent custody row so one event can never fire the same intent twice.
+A real run honors the freeze, the wallet spend policy, and the intent's own caps exactly like the scheduler, and claims an idempotent custody row so one event can never fire the same intent twice. A real run also requires a signed real-funds agreement; a dry run does not.
 
 ```json
 {
@@ -654,7 +666,7 @@ The real numbers are gathered first (live balance, plus 30 days of tips in, spen
 
 ### PUT and DELETE /intents/:intentId
 
-`PUT` accepts any of `enabled`, `public_trait`, `title`, and `intent` (a full replacement rule, re-validated). `404 not_found` for an unknown id, `422` with the normalizer's code for an invalid replacement. `DELETE` returns `{ "data": { "deleted": true } }`.
+`PUT` accepts any of `enabled`, `public_trait`, `title`, and `intent` (a full replacement rule, re-validated). Enabling a rule or rewriting what it does re-arms autonomous spending and needs a signed real-funds agreement; disabling, renaming, and publishing do not. `404 not_found` for an unknown id, `422` with the normalizer's code for an invalid replacement. `DELETE` returns `{ "data": { "deleted": true } }`.
 
 ```bash
 curl -s -X PUT "https://three.ws/api/agents/$AGENT_ID/intents/$INTENT_ID" \
@@ -773,7 +785,7 @@ Body: `{ "text": "…", "sweep_destination": "<base58>" }`. An invalid `sweep_de
 
 A patch, not a replacement. Accepted keys: `rules` (array; a non-array is `400 bad_request`), `buffer_sol`, `sweep_destination` (validated, `400 invalid_address` on a bad one, `null` to clear), `source_text`, `armed`, and `kill_switch`.
 
-Arming is treated as explicit consent: sending `"armed": true` stamps `approved_at` and `compiled_at` server-side at the current time. Returns `{ "data": { "policy": … } }` with the newly normalized policy. Ownership is re-verified inside the write, so a `403 forbidden` or `404 not_found` can still surface here.
+Arming is treated as explicit consent: sending `"armed": true` stamps `approved_at` and `compiled_at` server-side at the current time, and is the one key in this patch that requires a signed real-funds agreement. Disarming and the kill switch never do. Returns `{ "data": { "policy": … } }` with the newly normalized policy. Ownership is re-verified inside the write, so a `403 forbidden` or `404 not_found` can still surface here.
 
 ```bash
 curl -s -X PUT "https://three.ws/api/agents/$AGENT_ID/autopilot" \
@@ -784,7 +796,7 @@ curl -s -X PUT "https://three.ws/api/agents/$AGENT_ID/autopilot" \
 
 ### POST /autopilot/run
 
-Body: `{ "dry_run": true }`. **The default is a real cycle.** Unlike `/intents/run`, this endpoint only simulates when you explicitly send `"dry_run": true`; an empty body executes for real. Send the dry run first if you are exploring.
+Body: `{ "dry_run": true }`. **The default is a real cycle.** Unlike `/intents/run`, this endpoint only simulates when you explicitly send `"dry_run": true`; an empty body executes for real. Send the dry run first if you are exploring. A real cycle requires a signed real-funds agreement; a dry run does not.
 
 A run honors the kill switch, the disarmed state, the freeze, and the spend policy exactly like the scheduler, and refuses rather than guessing when it cannot trust its inputs:
 

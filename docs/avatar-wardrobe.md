@@ -158,6 +158,15 @@ live catalog is deliberately NOT checked at save time — a garment retired from
 the catalog later degrades to "not worn" on the next load/bake instead of
 bricking the avatar.
 
+The record is the only place an outfit lives, which is why a surface that
+exports the live scene as a new avatar's **base** model has to strip the
+garments off first. Avatar Studio's create-mode save does exactly that through
+`GarmentCloset#withGarmentsOff()`: it detaches every worn piece scene-side, lifts
+the skin occlusion they impose, exports, then re-attaches from the closet's own
+byte cache (a parse, not a download). `working.garments` is never touched,
+because that array is precisely what the server bake replays onto the base. Skip
+the strip and every garment is applied twice.
+
 ## Failure posture
 
 - Garment can't reach the skeleton → refused with the measured coverage in the

@@ -60,7 +60,7 @@ curl -X POST 'https://three.ws/api/clash/enlist' \
   -d '{"token":"<FACTION_MINT>","wallet":"<YOUR_WALLET>"}'
 ```
 
-The Coin Clash state and leaderboard are also exposed read-only over MCP through `@three-ws/clash-mcp` (`get_clash_state`, `get_clash_leaderboard`).
+Coin Clash is also driveable over MCP through `@three-ws/clash-mcp`: `get_clash_state` and `get_clash_leaderboard` read the bracket and the records, and `enlist_faction` and `rally_faction` run the same wallet-signed enlist and rally an agent would run against the API (`enlist_faction` signs the challenge locally with the wallet's Solana key and returns the war pass; `rally_faction` spends taps with that pass, or auto-enlists first from a mint). No funds move in either.
 
 ## States and limits
 
@@ -75,5 +75,5 @@ The Coin Clash state and leaderboard are also exposed read-only over MCP through
 - [Token-gated 3D embeds](./token-gated-3d-embeds.md): the same real on-chain balance gate, applied to embeds
 - [Hold to access](./hold-to-access.md): the platform's broader hold-do-not-spend membership thesis
 - [The social layer](./social-layer.md): platform-wide feed, follows, and leaderboards
-- [MCP tools](./mcp.md): the read-only Clash MCP server
+- [MCP tools](./mcp.md): the Clash MCP server, read tools plus the wallet-signed enlist and rally
 - Pages: [/clash](https://three.ws/clash) · [/communities](https://three.ws/communities)

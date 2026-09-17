@@ -48,13 +48,21 @@ Grotesk display face).
   - **CoinGecko** — the native line chart (always available).
   - **TradingView** — the advanced candlestick widget (indicators, drawing
     tools), for any coin with a ticker symbol.
-  - **DexScreener** — the on-chain terminal keyed by the token's contract
-    address, for coins with a Solana mint or a supported EVM contract.
-  - **GeckoTerminal** — the on-chain terminal keyed by the token's most-liquid
+  - **DexScreener**, **Birdeye**, **GMGN**: on-chain charts keyed by the token's
+    contract address, for coins with a Solana mint or a supported EVM contract
+    (GMGN indexes Solana, Ethereum, Base and BSC only, so it is offered only
+    there).
+  - **GeckoTerminal**: the on-chain chart keyed by the token's most-liquid
     pool, resolved server-side via `GET /api/coin/pool` (below).
 
   The picked source is remembered across coins and visits (localStorage
   `tws_coin_chart_source`), and the embeds follow the site's light/dark theme.
+  Every embed URL shape lives once in
+  [`src/shared/chart-embeds.js`](../src/shared/chart-embeds.js), so this page and
+  the launch coin page `/launches/<mint>` build identical embeds and a provider
+  changing its format is a one-file fix. Providers that refuse cross-origin
+  framing or need a key are left out rather than offered as a tab that can only
+  fail.
 
   A third-party terminal that never renders is caught, not left as an empty
   box: [`src/shared/embed-guard.js`](../src/shared/embed-guard.js) gives each
@@ -259,10 +267,11 @@ third-party gas API, no key.
 ### `/screener`: the Token Screener
 
 A live filtering workbench over the **top 250 coins by market cap**. The page
-loads the whole set once (`/api/coin/markets?page=1&per_page=250`, the same
-cached endpoint behind the markets table, so no new endpoint), then every
-keystroke, filter change, and sort runs instantly in the browser with no
-further network traffic.
+loads the whole set once (`/api/coin/markets?page=1&per_page=250&sparkline=0`,
+the same cached endpoint behind the markets table, so no new endpoint; the
+screener draws no sparkline column, and dropping the 7-day series cuts that
+250-row response from roughly 215 KB to 70 KB), then every keystroke, filter
+change, and sort runs instantly in the browser with no further network traffic.
 
 The filter controls, all composable (a coin must pass every active one):
 
@@ -275,9 +284,12 @@ The filter controls, all composable (a coin must pass every active one):
 - **Reset** restores every control and the default sort in one click (the
   zero-results empty state offers the same reset inline).
 
-The results table reuses the shared `cv-table` pattern from the markets index:
-rank, coin (icon, name, symbol), price, 24h %, 7d %, market cap, and 24h
-volume. **Every column sorts**: click a header, or focus it and press
+The results table renders through the shared market-table primitives
+([`src/shared/market-table.js`](../src/shared/market-table.js)), the same rows,
+columns, sorting and row navigation the markets index, the token page and the
+coin lobby use, so those surfaces cannot disagree about what a row or a stale
+value looks like: rank, coin (icon, name, symbol), price, 24h %, 7d %, market
+cap, and 24h volume. **Every column sorts**: click a header, or focus it and press
 Enter/Space (headers are keyboard-reachable and announce `aria-sort`). The
 first activation sorts name and rank ascending and every numeric column
 descending; activating the already-active column flips the direction. Rows
@@ -296,8 +308,9 @@ Files: [`pages/screener.html`](../pages/screener.html) (shell, controls, SEO),
 [`src/screener.js`](../src/screener.js) (state, filtering, sorting,
 rendering), [`src/filter-controls.css`](../src/filter-controls.css) (the
 labelled filter row, shared with `/yields`), with shared formatters
-from [`src/shared/coin-format.js`](../src/shared/coin-format.js) and the table
-pattern from [`src/coins-index.js`](../src/coins-index.js).
+from [`src/shared/coin-format.js`](../src/shared/coin-format.js) and the rows,
+columns and sorting from
+[`src/shared/market-table.js`](../src/shared/market-table.js).
 
 ### `/compare` — side-by-side comparison
 
@@ -323,8 +336,8 @@ Three details the table and chart depend on:
 
 ## More market tools
 
-Eight further tools round out the suite, same design system, same "real key-free
-data" rule:
+Thirteen further tools round out the suite, same design system, same "real
+key-free data" rule:
 
 - **`/screener`**: filter the top 250 coins by search, gainers/losers, minimum
   market cap, and minimum 24h volume; every column sorts. Reuses
@@ -611,6 +624,7 @@ text before they reach the client.
 | News archive                | [`pages/news-archive.html`](../pages/news-archive.html) + [`src/news-archive.js`](../src/news-archive.js)                                |
 | News engine + sources       | [`api/_lib/news.js`](../api/_lib/news.js) + [`api/_lib/news-sources.js`](../api/_lib/news-sources.js), endpoints in [`api/news/`](../api/news) |
 | Shared news renderers       | [`src/shared/news-render.js`](../src/shared/news-render.js); table primitives in [`src/shared/market-table.js`](../src/shared/market-table.js) |
+| Shared chart embeds         | [`src/shared/chart-embeds.js`](../src/shared/chart-embeds.js): the third-party embed URLs `/coin/:id` and `/launches/<mint>` both build from |
 | Shared design system        | [`src/coin-pages.css`](../src/coin-pages.css) (Inter, Space Grotesk, JetBrains Mono self-hosted in `public/fonts/`)                      |
 | Shared formatters           | [`src/shared/coin-format.js`](../src/shared/coin-format.js) — unit-tested in [`tests/coin-format.test.js`](../tests/coin-format.test.js) |
 | API proxies                 | [`api/coin/`](../api/coin): one file per `/api/coin/*` endpoint in the table above (`detail.js`, `ohlc.js`, `pool.js`, `markets.js`, `tickers.js`, `categories.js`, `category.js`, `exchanges.js`, `exchange.js`, `derivatives.js`, `rates.js`, `trending.js`, `global.js`, `fear-greed.js`, `gas.js`, `news.js`, `liquidations.js`) |

@@ -97,7 +97,7 @@ The same batch also carries any achievement thresholds the runtime crossed this 
 
 ### What feeds the board today
 
-Only the walk runtime in [src/walk.js](../src/walk.js) flushes metrics, so the board is fed by the pages that load it: `/temporary` (including the `/wk/:avatar` short link, which redirects there) and `/marketplace-walk`. The chrome-less embed runtime, [src/walk-embed.js](../src/walk-embed.js), is a deliberate fork of the same engine for iframes and does not currently flush, so `/walk/app` and the iframe embeds on the `/walk` landing page do not accrue leaderboard distance.
+Only the walk runtime in [src/walk.js](../src/walk.js) flushes metrics, so the board is fed by the pages that load it: `/temporary` (including the `/wk/:avatar` short link, which redirects there) and `/marketplace-walk`. The chrome-less embed runtime, [src/walk-embed.js](../src/walk-embed.js), is a deliberate fork of the same engine for iframes and does not currently flush, so `/walk/app`, the iframe embeds on the `/walk` landing page, and `/pocket` (the handheld console whose screen is a `/walk-embed` iframe) do not accrue leaderboard distance.
 
 ---
 

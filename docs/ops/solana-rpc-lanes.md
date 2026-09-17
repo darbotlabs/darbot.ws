@@ -257,7 +257,11 @@ itself: read these before concluding the tier is dead.
   blows. A reserve must appear in `SOLANA_RPC_LAST_RESORT_URLS` and nowhere else.
 - **`ALCHEMY_API_KEY` is not the Solana Alchemy lane.** The Solana URL lives inside
   `SOLANA_RPC_FALLBACK_URLS`; `ALCHEMY_API_KEY` stays load-bearing for EVM and NFT paths
-  even when Solana capacity is spent, so do not remove it to "clean up".
+  even when Solana capacity is spent, so do not remove it to "clean up". Since 2026-09-09
+  the EVM balance read in [api/\_lib/balances.js](../../api/_lib/balances.js) has a keyless
+  rung behind it (public EVM RPC for native value, Blockscout for token discovery), so a
+  spent Alchemy quota degrades a portfolio instead of answering 503, but the key is still
+  the fast path and the only one that covers every chain.
 - **Update single keys with `--update-env-vars`.** `--set-env-vars` replaces the entire
   env set on the service.
 

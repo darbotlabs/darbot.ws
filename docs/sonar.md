@@ -52,6 +52,8 @@ sensor.stop();
 
 Methods: `start()`, `stop()`, `setTone(hz)`, `setAmplitude(0..1)`, `recalibrate()`.
 
+`start()` is not instant: it awaits the microphone prompt and then measures a carrier against this machine's own speakers, about a second together. A `stop()` that lands inside that window wins. The late-resolving start tears itself down instead of arming, releasing the microphone track and the carrier, which is what puts the browser's recording indicator out.
+
 Why `autoTone` exists: laptop speakers roll off hard near the top of their range, and every model rolls off somewhere different. A carrier the speakers cannot actually project reads exactly like a room with nothing moving in it, which is indistinguishable from a broken sensor. Measuring first turns a mystery into a number.
 
 ### The `Reading`
@@ -158,6 +160,12 @@ so an embed that never uses it pays nothing for the capability. The attribute,
 the methods and the event detail are specified in
 [Web component](./web-component.md#hand-control-no-camera).
 
+[`examples/sonar-hand-control.html`](../examples/sonar-hand-control.html) is the
+runnable version of both halves: the built-in response on the left, and on the
+right the same `sonar-gesture` events taken over with `preventDefault()` to move
+the page's own cards while the agent stays put. Open it at
+`http://localhost:3000/examples/sonar-hand-control.html`.
+
 ---
 
 ## The shared controller
@@ -180,7 +188,7 @@ await sonar.start();
 
 | Member | Purpose |
 | --- | --- |
-| `start()` / `stop()` | Open and release the microphone. `stop()` is safe when nothing is running. |
+| `start()` / `stop()` | Open and release the microphone. `stop()` is safe when nothing is running, and safe mid-`start()`: it supersedes a start still waiting on the microphone rather than letting it arm behind the viewer's back. |
 | `setMode(mode)` | `'swipe'`, `'push'`, `'lift'` or `'all'`. Drops the stroke in flight, so a half-formed gesture cannot complete under the new mapping. |
 | `setReversed(gesture, on)` | Flip a gesture's direction. `'lift'` reverses through the motion itself, so a held turn stops rather than snapping the other way. |
 | `recalibrate()` | Re-measure the still room without restarting the microphone. |

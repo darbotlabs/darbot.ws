@@ -317,7 +317,10 @@ npx vitest run tests/home-security.test.js
 # command, and it is the only instance any live home test should use.
 eval "$(node scripts/home-test-instance.mjs --up --onboard --seed --name sec11 --env)"
 npx vitest run tests/home-security.test.js
-node scripts/home-test-instance.mjs --down --name sec11
+# --force because the teardown follows the run: since 2026-09-09 --down refuses a
+# house any run took in the last 30 minutes, so a peer's live house cannot be
+# removed out from under it by someone passing its lane name.
+node scripts/home-test-instance.mjs --down --name sec11 --force
 ```
 
 **The model half is a real requirement, not a nicety.** Check 4's real arm asks the

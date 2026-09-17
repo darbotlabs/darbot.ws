@@ -89,6 +89,15 @@ Rules the helper and its call sites follow:
   in their own wallet (self-custody launches, swaps, token pay) are gated by the
   dialog; the platform never holds those keys.
 
+Some money paths are gated on the server only, because they have no
+single-click dialog of their own: opening, resuming, depositing into,
+redeeming from, owner-trading and fee-claiming a [USDC vault](./vaults.md)
+(`vault-open`, `vault-resume`, `vault-deposit`, `vault-redeem`, `vault-trade`,
+`vault-claim-fees`), creating or resuming a programmable order
+(`order-create`, `order-resume`), and hiring another agent for a paid skill
+(`a2a-hire`). Pausing an order, like every other way of turning spending off,
+is not gated.
+
 Positive lookups are cached in-process for 10 minutes (signatures are append-only
 and the required version only changes on deploy); negative results are never
 cached, so a fresh signature takes effect on the next request.
@@ -208,6 +217,7 @@ keeps the sign-in clickwrap record in step with the Terms version.
 | Oracle arm (live mode only) | `src/arm.js` | `oracle-arm` |
 | Jupiter swap modal | `src/swap-jupiter.js` | `swap` |
 | pump.fun token launch | `src/pump/launch-token-modal.js` | `launch` |
+| The `/launch` launchpad: launch a coin, claim creator rewards | `src/launch/launch-page.js` | `launch`, `claim` |
 | Agent-home pump.fun buy/sell | `src/agent-home-pumpfun.js` | `pump-trade` |
 | pump.fun x402 access payment | `src/pump/pump-modals.js` | `x402-pay` |
 | Skill purchase modal | `src/payment-modal.js` | `skill-purchase` |
@@ -215,7 +225,7 @@ keeps the sign-in clickwrap record in step with the Terms version.
 | Forge pay-per-generation | `src/forge-pay.js` | `forge-pay` |
 | Add funds / Coinbase onramp | `src/shared/add-funds.js` | `onramp` |
 | Drop-in x402 modal (incl. merchant embeds) | `public/x402.js` | `x402-pay` |
-| Review and sign page | `public/legal/agreements.html` | `agreements-page` |
+| Review and sign page | `public/legal/agreements.js`, loaded as a module by `public/legal/agreements.html` | `agreements-page` |
 
 If you add a surface, add its row here and its gate call in the code, and if it
 signs with a custodial key, call `requireRealFundsAgreement` in its handler: all

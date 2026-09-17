@@ -16,7 +16,7 @@ signer/funder wallets and how to fund them).
 
 Money-routing is deliberately **config-driven** — no receiver is hardcoded, so an
 unset receiver fails closed rather than silently routing real USDC to a baked-in
-address ([env.js:808](../api/_lib/env.js#L808)).
+address (the `X402_PAY_TO_*` getters in [env.js](../api/_lib/env.js)).
 
 ### Receivers (inbound USDC)
 | Env var | Role | Value |
@@ -39,7 +39,7 @@ address ([env.js:808](../api/_lib/env.js#L808)).
 | Env var | Fills from | Default rate |
 | ------- | ---------- | ------------ |
 | `MARKETPLACE_PLATFORM_FEE_WALLET` (→ platform treasury pubkey) | marketplace skill sales | `MARKETPLACE_PLATFORM_FEE_BPS` = **0** (off), ≤10% |
-| `PUMP_PLATFORM_FEE_WALLET` (→ platform treasury pubkey) | pump trades | `PUMP_PLATFORM_FEE_BPS` = **0** (off), ≤5% |
+| `PUMP_PLATFORM_FEE_WALLET` (→ platform treasury pubkey) | pump trades + coin launches | `PUMP_PLATFORM_FEE_BPS` = **100 (1%)**, ≤5%; `PUMP_LAUNCH_FEE_BPS` = **100 (1%)** on the dev buy, ≤5% |
 
 ### Signer / funder wallets
 Every engine signs from its **own** keypair; a single **funding root** tops those
@@ -71,7 +71,8 @@ encodings, minimum balances, guards, funding tool — in the
 | `cosmetic-purchase` | platform receiver → split | 50% | creator 50% (≤90%) from `COSMETIC_SPLIT_TREASURY_*` |
 | marketplace skill sale | agent owner `payout_address` | 0–10% fee | atomic split; fee → fee wallet |
 | labor skill (escrow) | worker + author | author 10% royalty | paid from escrow ([labor-settle.js:97](../api/_lib/labor-settle.js#L97)) |
-| pump trade | counterparty | 0–5% fee | fee appended to trader's tx |
+| pump trade | counterparty | **1%** | fee transfer appended to the trader's own tx (SOL, or USDC on a USDC-paired coin) |
+| coin launch dev buy (`/launch`) | the bonding curve | **1%** of the dev buy | fee transfer inside the launch tx; no dev buy, no fee |
 | `pump-launch` | `X402_PAY_TO_SOLANA/BASE` | 100% of $5 | pump.fun creator rewards accrue on-chain to nominated wallet |
 | `ring-settle` (internal) | `X402_PAY_TO_SOLANA` | 100% | recirculates (dogfood volume) |
 | vanity bounty | worker | escrow-based | from `VANITY_BOUNTY_PAYOUT_KEY` (→ club treasury fallback) |
@@ -91,19 +92,23 @@ in the platform receiver first, then a separate treasury forwards a share
 | Cosmetic creator split | creator share | `cosmetics-economy.js` `DEFAULT_CREATOR_BPS` | **50%** (cap 90%) |
 | Labor skill royalty | author royalty | `LABOR_SKILL_ROYALTY_BPS` | **10%** (cap 50%) |
 | Marketplace platform fee | platform cut | `MARKETPLACE_PLATFORM_FEE_BPS` | **0%** (cap 10%) |
-| Pump trade fee | platform cut | `PUMP_PLATFORM_FEE_BPS` | **0%** (cap 5%) |
+| Pump trade fee | platform cut | `PUMP_PLATFORM_FEE_BPS` | **1%** (cap 5%) |
+| Coin launch fee | platform cut on the dev buy | `PUMP_LAUNCH_FEE_BPS` | **1%** (cap 5%) |
 | Club tip | dancer share | — | **100%** to dancer (platform nets 0) |
 | Club cover | platform share | — | **100%** (club float) |
 
-All defaults are a low/off demo curve; production deployments tune them to real
-unit economics.
+The trade and launch fees are live at 1% (owner decision, 2026-09-16): every
+customer trade three.ws builds or signs pays it in the same transaction, and
+platform-owned agents are exempt. The rest are a low/off demo curve; production
+deployments tune them to real unit economics. Detail, surfaces and disclosure:
+[pump platform fee](pump-platform-fee.md).
 
 ---
 
 ## 4. Services catalog (what three.ws sells)
 
-- **x402 HTTP endpoints**: 80+ paid endpoints (81 distinct paid routes in the
-  [ring catalog](../api/_lib/x402/ring-catalog.js), the single source of truth)
+- **x402 HTTP endpoints**: 86 distinct paid routes in the
+  [ring catalog](../api/_lib/x402/ring-catalog.js), the single source of truth,
   across intel/oracle, agent/reputation, generation/3D, launch/naming/utility,
   club, avatar shop, and bazaars. Full list and prices:
   [x402 endpoints](x402-endpoints.md).

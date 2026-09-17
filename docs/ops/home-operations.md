@@ -986,9 +986,15 @@ from home_connections
 where user_id = '<user id>' and revoked_at is null;
 ```
 
-`status_detail` is written by the runtime on every failed handshake and is meant
-to be read verbatim to the user. Then run the correlation query: if they are the
-only one, it is their house. The usual causes, in order: the instance is off,
+`status_detail` is written by the runtime on every failed handshake, and since
+2026-09-10 on every mid-connection transition too: a pooled socket that dies
+while checked out now writes `unreachable` from the bridge's own `disconnected`
+event, and `connected` again on `reconnected`, so a stopped house stops reading
+Live on the card. Only real transitions are written, so a flapping house does not
+buy a round trip per event. It is meant to be read verbatim to the user.
+
+Then run the correlation query: if they are the only one, it is their house.
+The usual causes, in order: the instance is off,
 their remote https URL stopped resolving, their reverse proxy certificate
 expired, or they are on a LAN-only install and never had a reachable URL (in
 which case they need the three.ws add-on, not a fix).

@@ -30,9 +30,10 @@ How they interconnect:
   `followers` leaderboard metric.
 - **Every feed item links to a portfolio.** Feed cards deep-link to
   `/u/:username`, where the same records render as that creator's portfolio.
-- **Creating anything advances your streak.** Forging a model, saving a world,
-  or walking while signed in calls the streak engine, which in turn awards the
-  badges shown on `/rankings` and your profile.
+- **Showing up advances your streak.** Forging a model, saving a world,
+  restyling, walking, or landing a confirmed on-chain trade while signed in
+  calls the streak engine, which in turn awards the badges shown on
+  `/rankings` and your profile.
 
 ---
 
@@ -171,7 +172,11 @@ their own work.
 
 The streak engine ([api/_lib/streaks.js](../api/_lib/streaks.js),
 `recordDailyActivity()`) is called from sign-in, forge saves, diorama saves,
-and walk metrics, and writes `user_streaks` / `user_badges`. A daily rollup
+restyle saves, walk metrics, and a confirmed on-chain trade (both legs of
+[api/pump/[action].js](../api/pump/%5Baction%5D.js), fire-and-forget so the
+streak can never delay or fail the trade that earned it), and writes
+`user_streaks` / `user_badges`. The upsert is idempotent per UTC day, so a
+busy session still counts once: the streak measures showing up, not volume. A daily rollup
 cron ([api/cron/leaderboard-rollup.js](../api/cron/leaderboard-rollup.js))
 sweeps badge awards. Badges and streaks also render on profile pages.
 

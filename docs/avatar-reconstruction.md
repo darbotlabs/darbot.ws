@@ -41,6 +41,29 @@ poll would have, so an abandoned job still lands in the library. Design notes:
 - A provider 404 (`gcp_task_missing`) is terminal here, so a job whose worker
   record is genuinely gone resolves instead of being retried forever.
 
+## Object storage cannot take the avatar away
+
+The last step of finalize copies the finished GLB from the worker's bucket into
+ours. That single `putObject` used to sit between the user and the avatar they
+had already waited ninety seconds for: when the R2 credential stopped verifying
+at 03:15 UTC on 2026-09-11, materialize aborted, no avatar row was written, and
+the page could only say "Avatar finished but could not be saved. Try again."
+Retrying never worked, because the photo was never the problem.
+
+The mesh was never lost. The reconstruction worker parks it in
+`gs://three-ws-avatar-reconstructions`, which is public and lifecycle-free, and
+that URL is already in the job row. So `storeGlbOrKeepProviderUrl` in
+[`reconstruct-finalize.js`](../api/_lib/reconstruct-finalize.js) now lets a
+*named* storage-infrastructure fault (`isStorageInfrastructureError`: credential
+rejected or revoked, bucket missing, endpoint unreachable) cost the durable copy
+in our bucket rather than the user's avatar. The provider's absolute https URL
+becomes the storage key: `publicUrl()` passes an absolute key straight through,
+`copyObject()` declines to copy one, `defaultStorageMode()` records
+`r2.present = false` instead of claiming bytes that are not there, and
+`source_meta` carries `servedFrom` plus the `pendingBucketKey` a later re-copy
+needs. Any other error still throws, so only a fault we can name is allowed to
+degrade.
+
 ## Plan quotas are checked twice, on purpose
 
 A reconstruction only meets the caller's plan quota at the very end, inside

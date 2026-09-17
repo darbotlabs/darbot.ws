@@ -133,9 +133,9 @@ membership-aware at once rather than each one growing its own check.
 |---|---|---|
 | Store reads | `api/_lib/home/store.js` | `getConnection`, `listConnections` and `getDecryptedToken` join `home_members`. Each row comes back carrying `role` and `entity_scope`. There is deliberately no `or user_id = ...` beside the join. |
 | Bridge runtime | `api/_lib/home/runtime.js` | `acquire` reads the home and its token through those two store functions, so it inherits membership without a check of its own |
-| REST routes | `api/_lib/home/access.js` | `resolveHomeAccess(req, res, homeId, capability)` is the single door. It returns `role` and `scope`, refuses a non-member 404 and a member without the capability 403 |
+| REST routes | `api/_lib/home/access.js` | `resolveHomeAccess(req, res, homeId, capability)` is the single door. It returns `role` and `scope`, refuses a non-member 404 and a member without the capability 403. A bearer principal is held to the OAuth scope its capability maps to (`read` needs `home:read`, everything that changes the house, the roster, the layout or the allowances needs `home:act`), checked BEFORE the home is read so the refusal names the principal and not a house id |
 | Room graph | `api/home/[id].js`, `api/home/[id]/stream.js` | `filterGraphForScope` runs before serialization, on the single read and on every streamed frame |
-| The gate | `api/home/[id]/call.js` | `confirmed: true` from a role without `confirm` is refused before the socket is acquired, and an out-of-scope target is refused against the live graph |
+| The gate | `api/home/[id]/call.js` | `confirmed: true` is refused before the socket is acquired, twice over: `canAssertConfirmation` refuses any principal that is not a signed-in browser session (a bearer token holding `home:act` can ask to act and can never say yes), then the role must hold `confirm`. An out-of-scope target is refused against the live graph |
 | Scenes | `api/home/[id]/activate.js` | needs `act`; a scoped role is refused outright, because a scene reaches the whole house and a half-run scene is worse than none |
 | Confirmation redemption | `api/home/[id]/confirm.js` | needs `confirm`; bearer principals are refused before authentication |
 | Chat and MCP tools | `api/_lib/home/tools.js` | a bearer principal inherits the role of the account whose token it is, through `requireMembership` |
@@ -219,8 +219,10 @@ silently a change to what they can do.
 
 Sending an invitation mails it. The email names the role and, for a guest, states in the body that
 they will never be able to approve unlocking a door, so somebody forwarding an invitation can see
-they are handing over a guest seat and not the house. The link is shown in the UI either way, and
-the response says whether the mail actually went out (`emailed`) rather than assuming: a platform
+they are handing over a guest seat and not the house. The link is shown in the UI either way, in a
+region the panel owns rather than in the part that re-renders, so refreshing the roster does not
+wipe the only copy that will ever exist. The response says whether the mail actually went out
+(`emailed`) rather than assuming: a platform
 that mails the only copy of a one-use credential and then fails to deliver it has destroyed
 something the inviter cannot recreate. There is no way to see the link again afterwards, because
 the server keeps only a hash.
@@ -281,7 +283,7 @@ curl -X POST https://three.ws/api/home/$HOME_ID/members \
   "invite": { "id": "...", "email": "sitter@example.com", "role": "guest",
               "scope": { "mode": "allow", "areas": ["kitchen"], "entities": ["light.hall_lamp"] },
               "expires_at": "2026-09-10T03:31:52.462Z" },
-  "invite_url": "https://three.ws/home/join?invite=BBQFpFGdBbULN9KQUhbIfw0SiFA0DDbPx1iFFpx2Lng"
+  "invite_url": "https://three.ws/smart-home/join?invite=BBQFpFGdBbULN9KQUhbIfw0SiFA0DDbPx1iFFpx2Lng"
 }
 ```
 

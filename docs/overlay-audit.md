@@ -114,17 +114,31 @@ instead, and the stack lifts clear of it:
 
 ```js
 window.twsCornerStack.reserve('walk-companion', bottom + height);
+window.twsCornerStack.reserve('walk-companion', { height, width }); // both axes
 window.twsCornerStack.release('walk-companion'); // on unmount
 ```
 
 Reservations are keyed and independent, and the tallest wins, so two of them
-never fight. Measure from `getComputedStyle`, not `getBoundingClientRect`: a
+never fight. The stack applies them with a `transform`, never by animating
+`bottom`/`right`: those are layout properties, and re-laying the stack out on a
+re-measure registered as page-wide layout shift even though nothing on the page
+had moved. Measure from `getComputedStyle`, not `getBoundingClientRect`: a
 widget that animates in with a transform reports a short box mid-transition, and
 the stack would settle into it.
 
 If the corner stack has not booted yet when your widget mounts, listen once for
 `tws-corner-stack:ready` and claim then. Load order between these modules is not
 guaranteed.
+
+### Modals
+
+The stack renders above every page layer, so while a dialog owns the screen its
+widgets stay clickable on top of that dialog and swallow whatever control they
+cover. A modal opts out by putting `tws-modal-open` (published as
+`window.twsCornerStack.MODAL_CLASS`) on `<body>` while it is open and removing it
+on close; the stack fades out and stops taking pointer events for as long as the
+class is there. Do this for any dialog that covers the corner, not only
+full-screen ones.
 
 ### The page's own bottom chrome
 

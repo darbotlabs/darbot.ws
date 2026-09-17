@@ -80,9 +80,13 @@ blocking a launch:
 | `x:<handle>` | An X account, same resolver. |
 | `wallet:<address or name.sol>` | A fixed Solana recipient. |
 
-[`public/launch/launch.js`](../public/launch/launch.js) parses it, the launch
-panel shows the routing on the form before the mint ("Creator fees route to
-@deepseek-ai on GitHub"), and the moment the coin lands the post-launch
+`/launch` itself was rebuilt on [`src/launch/launch-page.js`](../src/launch/launch-page.js),
+which serves a Create tab and a My-coins tab. A `?reward=` visit is the one case
+that bypasses both: the fee-split handoff belongs to the studio panel, so those
+visits mount [`public/launch/launch.js`](../public/launch/launch.js) instead,
+which is what parses the value. The launch panel shows the routing on the form
+before the mint ("Creator fees route to @deepseek-ai on GitHub"), and the moment
+the coin lands the post-launch
 [fees panel](../public/studio/fees-panel.js) mounts on the success screen with
 that recipient already filled in at 100%. It is a draft, not an automatic write:
 the creator still reviews and signs the split, and a coin that already has

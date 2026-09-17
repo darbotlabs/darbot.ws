@@ -22,7 +22,13 @@ and it answers a different question. It looks at a fixed **6 hour** window and
 returns `unknown` below **15 attempts**, because it is tuned to page on a burst
 of failures and must not page on a quiet afternoon. At forge's real volume that
 window is regularly too small to judge at all, so "is generation healthy?" often
-answers `unknown` while a failure class has been recurring all week.
+answers `unknown` while a failure class has been recurring all week. The sensor
+also carries a stall check (`classifyForgeStall`) that this report cannot: a
+failure upstream of the `forge_creations` row writes no rows at all, and a
+ledger with nothing in it is exactly what a quiet afternoon looks like here.
+`down` with `stalled: true` means generations have stopped *starting*, so read
+the rest of the healthz payload (`object_storage` first) before opening this
+report at all.
 
 Triage needs the other question: over the last week, which class recurs most, on
 which lane, and what does the message actually say? That is this report.
@@ -145,6 +151,23 @@ recovery accounting above matters more than the raw count.
   and the same reaper in `model-hunyuan3d` and `model-triposg`). On NVIDIA it is
   `NVCF request not found or expired`. Check the recovered count before treating
   a spike as user-visible.
+- **`out_of_memory`** on a self-hosted lane is usually the GPU, not the prompt.
+  Torch's caching allocator holds freed blocks in reserve and nvdiffrast
+  allocates outside that cache, so an instance's usable VRAM only ever shrank:
+  `model-trellis` served 1,189 generations on 2026-09-06 and then, after a
+  restart on 2026-09-09, succeeded at exactly thirteen jobs and failed every
+  single one after them with `Cuda error: 2[cudaMalloc(&m_gpuPtr, bytes);]` out
+  of `postprocess_mesh`, while its health check kept passing and Cloud Run kept
+  routing to it. The worker now hands a job's GPU memory back before it releases
+  the inference semaphore, so a *recurring* OOM class on that lane is a new
+  fault, not the old one.
+- **A lane failing every job it accepts** is the shape to check `/health` for
+  rather than the ledger. `model-trellis` retries a failed model load
+  (`MODEL_LOAD_ATTEMPTS`, default 4, backing off from
+  `MODEL_LOAD_RETRY_BASE_S`), and once that budget is spent the error latches
+  and `/health` answers `503 ok:false` with `load_error` and `load_attempts`, so
+  the instance is drained and recycled instead of staying resident. A latched
+  load used to read as healthy.
 - **`upstream_5xx`, `rate_limited`, `unauthorized`, `payment_required`** are all
   vendor-side and resolve on the vendor's dashboard or in the env, not in code.
   See [production-log-triage.md](production-log-triage.md) for the same

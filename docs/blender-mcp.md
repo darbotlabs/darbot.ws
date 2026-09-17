@@ -39,7 +39,7 @@ Some Linux distribution packages ship Blender without the Python modules its glT
 claude mcp add blender -- npx -y @three-ws/blender-mcp
 ```
 
-In this repository the server is already declared in [`.mcp.json`](../.mcp.json) and runs straight from the working tree:
+To run it straight from a checkout of this repository instead of the published package, add it to [`.mcp.json`](../.mcp.json) yourself. The entry is not committed: an MCP client rewrote that file in place on 2026-09-12 and dropped it, and the package it points at ships either way.
 
 ```json
 {
@@ -259,7 +259,7 @@ Failures come back as structured tool errors, each naming a fix:
 
 ## Security
 
-`blender_run_python` executes caller-supplied Python inside Blender with this server's permissions, including filesystem access. That is what the tool is for, and it is annotated `destructiveHint: true` so a client prompts before running it. For unattended or shared deployments set `BLENDER_MCP_ALLOW_PYTHON=0`: the tool is then never advertised, and the other five keep working.
+`blender_run_python` executes caller-supplied Python inside Blender with this server's permissions, including filesystem access. That is what the tool is for, and it is annotated `destructiveHint: true` so a client prompts before running it. For unattended or shared deployments set `BLENDER_MCP_ALLOW_PYTHON=0`: the tool is then never advertised, and the other six keep working.
 
 Only `blender_forge_import` reaches the network, and only the deployment named by `THREE_WS_BASE`. Everything else stays on the machine. The broader model is in [MCP safety](./mcp-safety.md).
 

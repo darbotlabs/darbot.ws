@@ -156,12 +156,41 @@ as fresh. That shape (every cursor current, zero events) is what a crashing
 crawler looks like from the outside, and it is invisible to any check that only
 asks whether the job ran.
 
+Cursor age is blind to a second shape, because the Solana sweep stamps its
+`last_indexed_at` on the failure path too (deliberately, so one unreadable
+account cannot hold the oldest-first queue head forever). A wedged agent then
+looks exactly as fresh as a healthy one. So the monitor also scores the **share
+of Solana cursors carrying an error**: 5% reads as `degraded`, 25% as `down`
+(`SOLANA_ERROR_RATE_DEGRADED` and `SOLANA_ERROR_RATE_DOWN`).
+
+The failure those thresholds were built for is the retention wall. Each leg
+resumes from the last signature or block it recorded; when the RPC answering the
+call no longer serves it, the read throws, the cursor is never written, and
+every later tick re-asks for the same dead history. Both legs recover from it
+now. [`api/_lib/solana/cursor-recovery.js`](../api/_lib/solana/cursor-recovery.js)
+recognizes an unresolvable cursor signature and restarts that agent's sweep from
+the head, and the EVM crawl skips forward once per tick past a pruned-history
+rejection instead of letting the range backoff retry something it cannot fix.
+The blocks skipped that way are published on the health board
+(`historyGapChains`, `historyGapBlocks`) and never scored, because that history
+is already gone and no tick can bring it back.
+
+Solana leads the verdict, and here that is correctness rather than preference:
+an EVM-only fault caps the subsystem at `degraded` instead of `down`, since a
+secondary chain months behind head changes nothing on the agent profile a reader
+actually opens. The detail line says so whenever the cap applies.
+
+Operator-side detail (error classes, the queries to group them by, and the
+recovery script for cursors already stuck) lives in
+[docs/ops/agent-index.md](./ops/agent-index.md).
+
 ## Where the code lives
 
 | Piece | File |
 | --- | --- |
 | Event shape, validation, read and write | [`api/_lib/onchain-events.js`](../api/_lib/onchain-events.js) |
 | Solana classification and per-agent crawl | [`api/_lib/solana-agent-events.js`](../api/_lib/solana-agent-events.js) |
+| Retention-wall cursor recovery | [`api/_lib/solana/cursor-recovery.js`](../api/_lib/solana/cursor-recovery.js) |
 | ERC-8004 identity log decoder | [`api/_lib/erc8004-registry-events.js`](../api/_lib/erc8004-registry-events.js) |
 | ERC-8004 reputation log decoder | [`api/_lib/erc8004-reputation-events.js`](../api/_lib/erc8004-reputation-events.js) |
 | Freshness monitor | [`api/_lib/ops/index-lag.js`](../api/_lib/ops/index-lag.js) |

@@ -161,9 +161,9 @@ judge prompt changes, because **an accept rate is only comparable within one gat
 version.** Comparing last week's 62% against today's under different thresholds
 is meaningless.
 
-## Two transports, one gate
+## Three transports, one gate
 
-The gate runs from two places with different credentials, so the model call is
+The gate runs from places with different credentials, so the model call is
 behind a transport interface. The decision logic is identical either way, which
 is the point: the bar cannot drift between how an asset arrives.
 
@@ -171,6 +171,21 @@ is the point: the bar cannot drift between how an asset arrives.
 | --- | --- | --- | --- |
 | `inProcessTransport()` | Cloud Run, GCP service account attached | [`render-clip.js`](../api/_lib/render-clip.js) in process | Vertex Gemini direct |
 | `remoteTransport({ origin })` | A workstation with no GCP credentials | `POST /api/render/avatar-clip` | `POST /api/vision` |
+| `localJudgeTransport({ origin })` | A workstation measuring a vision-chain fix before it deploys | `POST /api/render/avatar-clip` | `describeImage()` from [`vision.js`](../api/_lib/vision.js) in this process |
+
+`remoteTransport` and `localJudgeTransport` share one body (`buildTransport`) and
+differ only in which process calls the model, so their accept rates stay
+comparable. Both ask for the verdict through `askJson`, which gives a model that
+replied in prose exactly **one** more attempt with the format instruction
+restated last. That retry never relaxes the verdict, only the format: a second
+prose reply still fails. It exists because the free vision rungs occasionally
+open with "The image shows...", and treating that as an infrastructure failure
+recorded the asset as ungated and re-spent GPU time on the same prompt at the
+next resume.
+
+The bulk batch runner is [`scripts/gcp/seed-avatars.mjs`](../scripts/gcp/seed-avatars.mjs).
+It has no 70 s function wall, so unlike the cron it runs **both** stages; pass
+`--judge=local` to point its judge at `localJudgeTransport`.
 
 ## Using it
 
@@ -227,6 +242,33 @@ A verdict looks like this:
 Passing no `transport` runs stage 1 alone. That is not a degraded mode: it is the
 cron's default, and it is a complete, meaningful verdict.
 
+## The rig stage, after the gate
+
+A verdict decides whether an asset is published. `SEED_CRON_RIG` decides what is
+published: a rigged avatar or a static mesh. It has been **on by default since
+2026-09-09**, after an audit found that zero of the 17,349 published seed avatars
+had ever been rigged, because the stage was opt-in and nothing opted in. Every
+catalog avatar was animating through the retarget fallback rather than its own
+skeleton.
+
+Not every accepted mesh is sent. `riggableShape()` in
+[`forge-seed-cron.js`](../api/cron/forge-seed-cron.js) asks a different question
+from the gate: not "is this worth publishing" but "does binding a humanoid rig
+to it make it better or worse". It reads `thinAxis` and `planar`, which the mesh
+stage already records. glTF is Y-up, so a mesh whose *thinnest* extent is Y is
+lying down or standing in a slab, and the auto-rigger skins the slab along with
+the figure: the first clip that moves the legs drags it across the scene. That is
+not hypothetical. A seeded mesh (1.99 x 0.69 x 1.99) rigged cleanly by every
+structural measure, 52-joint mixamorig skeleton and unit inverse binds, and then
+shredded on screen the moment the idle clip played, while the same mesh published
+static rendered correctly.
+
+Every failure path keeps the asset. A refused shape, a rig fault, or a rig that
+stops answering past `RIG_STALL_MS` (45 minutes) publishes the gated keeper
+**static** rather than losing it, which is exactly what every seed avatar was
+before the stage turned on. The verdict is now written onto the keeper row as
+well as the reject, so a published entry carries the gate that let it through.
+
 ## Configuration
 
 Gate thresholds (read at import, so a change needs a restart):
@@ -248,7 +290,7 @@ with no redeploy):
 | `SEED_CRON_MAX_PENDING` | 3 x batch | In-flight ceiling |
 | `SEED_CRON_VISION` | off | Enables stage 2 inside the cron |
 | `SEED_CRON_VISION_MS` | 20,000 | Wall-clock budget for stage 2 |
-| `SEED_CRON_RIG` | off | Auto-rigs accepted avatars before publishing |
+| `SEED_CRON_RIG` | **on** | Auto-rigs accepted avatars before publishing (`0` to publish static). Only shapes `riggableShape()` accepts are sent |
 
 ### Why stage 2 is off by default in the cron
 

@@ -56,7 +56,7 @@ Linked pills: use `<a class="pill pill--onchain">` — gets hover/focus states a
 
 ## Remaining long tail — classes → canonical equivalent
 
-These classes are defined across the codebase. Follow-up agents should replace them with canonical classes (keep old class as needed for scoped CSS overrides). Re-verified 2026-08-05: every class in both tables below is still in use in `pages/`, `src/`, or `public/`, so every row remains open work.
+These classes are defined across the codebase. Follow-up agents should replace them with canonical classes (keep old class as needed for scoped CSS overrides). Re-verified 2026-09-17: every class in both tables below is still in use in `pages/`, `src/`, or `public/`, so every row remains open work.
 
 ### Button class names → canonical
 
@@ -78,13 +78,12 @@ These classes are defined across the codebase. Follow-up agents should replace t
 | `bento-action-btn`, `bento-pill-btn` | `.btn.btn--ghost` / `.pill` |
 | `market-empty-cta-btn`, `market-empty-cta-btn.primary` | `.btn` / `.btn.btn--primary` |
 | `btn-primary`, `btn-secondary` | `.btn.btn--primary` / `.btn.btn--secondary` |
-| `capture-btn` | `.btn.btn--ghost` |
 | `anim-btn`, `anim-btn--active`, `anim-btn--loading` | `.btn` + `[aria-busy]` for loading |
 | `ltm-toggle-btn` | `.btn.btn--ghost` |
 | `back-btn` | `.btn.btn--secondary` |
 | `abort-btn`, `add-btn`, `assign-btn` | `.btn.btn--secondary` / `.btn.btn--danger` |
 | `pay-btn` | `.btn.btn--primary` |
-| `model-btn`, `anim-upload-btn`, `anim-repin-btn`, `anim-stop-btn` | `.btn.btn--ghost` |
+| `d-model-btn` (marketplace detail), `anim-upload-btn`, `anim-repin-btn`, `anim-stop-btn` | `.btn.btn--ghost` |
 
 ### Pill/badge class names → canonical
 
@@ -111,8 +110,8 @@ These classes are defined across the codebase. Follow-up agents should replace t
 
 ## Marketplace page note
 
-`pages/marketplace.html` defines inline `.btn-primary` / `.btn-secondary` styles. Migration:
+The page's bare inline `.btn-primary` / `.btn-secondary` definitions are gone; what remains are two scoped overrides in its `<style>` block (`.avatar-modal-actions .btn-primary/.btn-secondary` and `.payment-modal-success .ps-actions .btn-primary/.btn-secondary`) plus the detail-panel rules in `public/marketplace.css` (`.market-avatar-detail .btn-secondary`, `.market-tool-detail .btn-secondary`). The markup still uses the old names throughout. Migration:
 
-1. Remove inline button CSS.
-2. Replace `btn-primary` → `btn btn--primary`, `btn-secondary` → `btn btn--secondary`.
+1. Replace `btn-primary` → `btn btn--primary`, `btn-secondary` → `btn btn--secondary` in the markup.
+2. Retain the scoped sizing/colour overrides, rewritten against the canonical classes (`.avatar-modal-actions .btn { ... }`).
 3. Replace `market-empty-cta-btn.primary` → `btn btn--primary`.

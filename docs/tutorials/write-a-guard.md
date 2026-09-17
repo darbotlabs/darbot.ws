@@ -163,11 +163,14 @@ That message is the point of the whole registry. Documentation drifts from reali
 
 ### Which stage?
 
+The six stage ids `data/guards.json` accepts, and what each is for:
+
 | Stage | Use it when | Cost budget |
 |---|---|---|
 | `prebuild` | The guard checks something the build itself generates. | Under a second. |
 | `gate` | Offline, deterministic, no credentials. Most guards belong here. | A few seconds. |
 | `build:gcp` | It can only judge a finished artifact, like `dist/`. | Seconds. |
+| `deploy:submit` | It has to see the finished artifact and the live environment it is about to ship over (a pending migration, the real upload set). | Seconds. |
 | `pre-push` | It judges commit content and must not be skippable. | Under a second. |
 | `manual` | It needs a browser, live credentials, or the network. | Any. |
 

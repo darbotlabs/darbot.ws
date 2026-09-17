@@ -132,7 +132,10 @@ from repo root `/workspaces/three.ws`.
 - **3D generation** — `@three-ws/forge` (`packages/forge/`), backing
   `api/forge*.js` + `api/mcp-3d.js`. Text/image → rig-ready GLB.
 - **x402 payments** — `api/_lib/x402/bazaar-client.js` (`Bazaar`), `api/x402/*`,
-  `api/_lib/x402-spec.js`. USDC micro-payments + the bazaar service directory.
+  `api/_lib/x402-spec.js`. Micro-payments in USDC, and in $THREE on the Solana
+  rail when `X402_ACCEPT_THREE_SOLANA` is on (a resource quoting both renders a
+  token chooser in checkout; agent wallets stay USDC-only), plus the bazaar
+  service directory.
 - **Pages/routing** — register new pages in `data/pages.json`; HTML in `pages/`,
   JS in `src/`, CSS co-located or in `public/`. Vite multi-entry
   (`vite.config.js`), dev server `npm run dev` (port 3000).

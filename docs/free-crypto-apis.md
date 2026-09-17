@@ -14,8 +14,8 @@ These need no new vendor relationship. Either the credential slot already exists
 
 | Provider | Status in repo | What finishing it buys |
 | --- | --- | --- |
-| DeBank Open API | `DEBANK_ACCESS_KEY` / `DEBANK_API_KEY` declared in `.env.example`, zero code readers | Multi-chain wallet portfolio + DeFi positions for any EVM address. Either wire it or delete the dead vars. |
-| Etherscan gas oracle | We already hold `ETHERSCAN_API_KEY`; only the contract-creation endpoint is called | Free EVM gas recommendations (safe/proposed/fast) via the V2 multichain API we already use. |
+| DeBank Open API | `DEBANK_ACCESS_KEY` declared in `.env.example`, zero code readers | Multi-chain wallet portfolio + DeFi positions for any EVM address. Either wire it or delete the dead var. |
+| Etherscan gas oracle | Done: it is the last rung of the gas chain behind `/api/v1/gas` (`api/_lib/gas-oracles.js`) | Free EVM gas recommendations (safe/proposed/fast) via the V2 multichain API we already use. |
 | Alchemy NFT + Token APIs | `ALCHEMY_API_KEY` already funds our RPC lanes | NFT metadata/ownership and token balances on the same free compute units. No new signup. |
 | CryptoPanic | Named in the `api/news/archive.js` docstring, never called | Aggregated crypto news with votes/sentiment. Free developer tier, API key. Would slot into the news pipeline as a structured source next to RSS. |
 | Helius DAS extras | Helius key already live | Webhooks are used; the free tier also covers priority-fee estimates and enhanced transaction parsing we do not call yet. |
@@ -114,7 +114,7 @@ Jupiter owns the Solana lane. For the EVM x402/trade surfaces there is no aggreg
 | --- | --- | --- | --- |
 | RugCheck | Free (Solana) | No | See Solana section; highest-fit item in this file. |
 | Honeypot.is | Free | No | EVM honeypot simulation (can you sell after you buy). Complements GoPlus flags on BSC/Base tokens. |
-| GoPlus authenticated tier | Free app key | Yes | We call GoPlus keyless today; `GOPLUS_APP_KEY`/`GOPLUS_APP_SECRET` sit unused in `.env.example`. Signing up raises rate limits at zero cost, or the vars should be deleted. |
+| GoPlus authenticated tier | Free app key | Yes | We call GoPlus keyless today, and the unused `GOPLUS_APP_KEY`/`GOPLUS_APP_SECRET` slots have since been dropped from `.env.example`. Signing up raises rate limits at zero cost, and would mean declaring the pair again. |
 
 ## News, sentiment, and events
 
@@ -140,7 +140,7 @@ Jupiter owns the Solana lane. For the EVM x402/trade surfaces there is no aggreg
 
 ## Suggested adoption order
 
-1. Zero-cost cleanups: wire or delete the dead DeBank and GoPlus env vars; call the Etherscan gas oracle and Alchemy NFT endpoints our existing keys already pay for.
+1. Zero-cost cleanups: wire or delete the dead `DEBANK_ACCESS_KEY` var (the GoPlus pair is already gone); call the Alchemy NFT endpoints our existing key already pays for.
 2. Solana product fit: RugCheck in the oracle/sniper risk path; Solscan Pro or Shyft as a Helius-relief lane; Tensor or Magic Eden if any NFT surface ships.
 3. Resilience rungs: Binance + OKX public tickers in `market-fallbacks.js`; CoinMarketCap and CoinCap as listing fallbacks; Coin Metrics for fundamentals.
 4. New capability: CoinGlass (derivatives breadth), Dune (any-metric API), CoinMarketCal (forward-looking events), CryptoPanic (structured news), a keyless EVM swap-quote rung (ParaSwap or KyberSwap).

@@ -17,7 +17,7 @@ Objects are props, not agents: opening one in the viewer uses object mode, which
 
 ## Using the gallery
 
-Each card renders the object live in an auto-rotating `<model-viewer>` (with the pre-rendered thumbnail as the poster) and offers three actions:
+Each card shows the pre-rendered thumbnail and offers three actions. A card stays a still image until you dwell on it (or tab into it), at which point that one card upgrades to a live, auto-rotating `<model-viewer>`; at most six stay mounted at a time, and a card with no rendered thumbnail upgrades as soon as it scrolls into view. Sweeping the pointer across a row never starts a download, because the upgrade waits on hover intent rather than the first `pointerover`.
 
 | Button | Destination | What you get |
 |---|---|---|
@@ -27,15 +27,16 @@ Each card renders the object live in an auto-rotating `<model-viewer>` (with the
 
 Gallery controls:
 
-- **Category chips** above the grid filter by category (furniture, lighting, tools, and so on), derived live from the manifest. "All" clears the filter.
-- **Search** matches names and tags; press `/` anywhere on the page to focus the search box.
+- **Category chips** above the grid filter by category (furniture, lighting, tools, and so on), derived live from the manifest. A source catalog's own `collection:` labels are not browsing categories, so they are excluded from the chips. "All" clears the filter.
+- **Search** matches names, tags, and categories; press `/` anywhere on the page to focus the search box.
 - **Sort** by name (A to Z, Z to A) or by file size (largest or smallest first).
 - The whole manifest is fetched once and filtered client-side, so chips, search, and sort are instant.
-- Loading shows a skeleton grid; an empty library, an empty search result, and a fetch error each have their own designed state with a recovery action.
+- The grid renders 48 cards at a time behind a **Load more** button, which an `IntersectionObserver` also trips as you approach it. A live region above the grid announces the running tally ("48 of 511 shown") after every chunk. Mounting a viewer per entry is what made this page take 18 seconds to its first interactive card.
+- Loading shows a skeleton grid; an empty library, an empty search result, and a fetch error each have their own designed state with a recovery action, and a failed load names the actual reason beside its retry button.
 
 ## API: `GET /api/objects/library`
 
-Public, no authentication, `GET` and `OPTIONS` only (`HEAD` is answered like `GET`). Browser `fetch` from a third-party origin is not enabled: like the [Character Library API](./character-library.md), the endpoint sends `Access-Control-Allow-Origin` only for three.ws and its partner origins, and the R2 CDN holding the GLBs is scoped the same way. Call it server-side, or from a three.ws page, and the assets it points at are still yours to download and redistribute anywhere (a download or a server-side fetch is not CORS-gated; only in-browser cross-origin reads are). The endpoint proxies a small manifest JSON from the R2 CDN (`objects/library/manifest.json`) with an edge cache (`Cache-Control: public, s-maxage=300, stale-while-revalidate=3600`). The GLB and thumbnail bytes never pass through the API: every entry carries absolute CDN URLs the browser loads directly. It mirrors the [Character Library API](./character-library.md) exactly, with `objects` in place of `avatars`.
+Public, no authentication, `GET` and `OPTIONS` only (`HEAD` is answered like `GET`). CORS is open (`Access-Control-Allow-Origin: *`), so a browser `fetch` from any origin works: the manifest is a CC0 index with no caller data in it, and the GLBs it points at already load cross-origin through `/cdn/<key>`. That is what lets an embedded [AR Studio](./ar-studio.md) on someone else's site render the object tray, not just the models in it. The endpoint proxies a small manifest JSON from the R2 CDN (`objects/library/manifest.json`) with an edge cache (`Cache-Control: public, s-maxage=300, stale-while-revalidate=3600`). The GLB and thumbnail bytes never pass through the API: every entry carries absolute CDN URLs the browser loads directly. It mirrors the [Character Library API](./character-library.md) exactly, with `objects` in place of `avatars`.
 
 ### Query parameters
 
@@ -75,6 +76,8 @@ Each entry in `objects`:
 | `source` | string | Origin catalog, e.g. `"polyhaven"` |
 
 Before the manifest is first uploaded, the endpoint returns `{ "objects": [], "total": 0 }` rather than an error, so consumers feature-detect by emptiness. A storage outage degrades the same way, but that response carries `Cache-Control: no-store` instead of the 300s edge cache, so the library reappears the moment storage recovers rather than staying empty for the rest of the cache window.
+
+The manifest read itself has a second path before it gets there. `getPublicObjectBuffer()` reads the key over the signed S3 connection first, and on any failure refetches the same key from the public CDN domain, because a CC0 manifest is public data either way. A rejected or rotated storage credential therefore cannot empty the catalog. Only both paths failing produces the empty response, and it rethrows the *signed* error, so a genuine `NoSuchKey` still means "not published yet" rather than a transport fault.
 
 ### Example
 

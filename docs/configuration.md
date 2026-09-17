@@ -249,19 +249,8 @@ Sign up through the [Avaturn developer docs](https://docs.avaturn.me/).
 AVATURN_API_URL=https://api.avaturn.me
 ```
 
-#### `VITE_AVATURN_EDITOR_URL`
-**Optional.** URL for the hosted avatar editor (no photos required, opened by the "Use default avatar" card at `/create`).
-
-```
-VITE_AVATURN_EDITOR_URL=https://editor.avaturn.me/
-```
-
-#### `VITE_AVATURN_DEVELOPER_ID`
-**Optional.** Developer ID appended as a query parameter to the avatar editor URL.
-
-```
-VITE_AVATURN_DEVELOPER_ID=xxxxx
-```
+#### `VITE_AVATURN_EDITOR_URL`, `VITE_AVATURN_DEVELOPER_ID`
+**Retired; no code reads them.** Both still appear in `.env.example`, but the photo pipeline no longer builds an editor URL in the browser: `src/avatar-creator.js` opens the `@avaturn/sdk` editor against the session URL that `/api/onboarding/avaturn-session` mints server-side from `AVATURN_API_KEY`. Setting either variable changes nothing.
 
 #### `AVATAR_REGEN_PROVIDER`
 **Optional.** Platform provider for avatar regeneration and reconstruction: `replicate`, `huggingface`, or `gcp` (`api/_lib/regen-provider.js`). When unset the provider is inferred from credentials, paid first: `REPLICATE_API_TOKEN` selects Replicate, then `GCP_RECONSTRUCTION_URL` the self-hosted Cloud Run worker, then `HF_TOKEN` the HF Spaces queue; with none of those the platform provider is `none` and the reconstruct endpoint falls back to a user's stored BYOK key (Meshy, Tripo) before answering `501`.
@@ -444,7 +433,8 @@ The build is controlled by the `TARGET` environment variable:
 | Command | `TARGET` | Output | Description |
 |---|---|---|---|
 | `npm run build` | `app` (default) | `dist/` | Full multi-page SPA |
-| `npm run build:lib` | `lib` | `dist-lib/` | Self-contained web component for CDN |
+| `npm run build:lib` | `lib` | `dist-lib/` | Self-contained web component for CDN (ES module only) |
+| `npm run build:lib:full` | `lib` | `dist-lib/` | The same bundle in both ES and UMD form (`LIB_FORMATS=es,umd`); this is what `build:gcp` runs |
 | `npm run build:all` | both | both | Builds the chat bundle first, then app and lib in parallel |
 
 **App build** (`TARGET=app`) emits many HTML entry points for the multi-page app, sourced from `pages/`:
@@ -455,11 +445,11 @@ The build is controlled by the `TARGET` environment variable:
 - `pages/dashboard-next/`: user dashboard (sub-pages auto-discovered)
 - `public/studio/index.html`: widget studio
 
-**Library build** (`TARGET=lib`) emits a self-contained ES module and UMD bundle:
+**Library build** (`TARGET=lib`) emits a self-contained ES module. The UMD bundle is opt-in through `LIB_FORMATS`, which is why the deploy chain runs `npm run build:lib:full` (`TARGET=lib LIB_FORMATS=es,umd`) rather than `build:lib`:
 
 ```
-dist-lib/agent-3d.js       # ES module
-dist-lib/agent-3d.umd.cjs  # UMD (CommonJS-compatible)
+dist-lib/agent-3d.js       # ES module (npm run build:lib)
+dist-lib/agent-3d.umd.cjs  # UMD, CommonJS-compatible (npm run build:lib:full)
 ```
 
 Three.js and ethers are bundled (not externalized) so the web component works as a zero-install drop-in embed via `<script type="module">`.

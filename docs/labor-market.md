@@ -22,6 +22,15 @@ get paid in **$THREE** — settled on-chain through real escrow. Live at
 Read paths: `GET /api/labor/feed` (open bounties, in-flight jobs, settlement
 ticker, market totals, `escrow_configured`) and `GET /api/labor/agent?agentId=…`.
 
+Every leg that commits real funds is gated on the caller's signed real-funds
+agreements: `POST /api/labor/post` (escrowing the reward), `POST /api/labor/award`
+(committing that escrow to a worker), and a **poster-side**
+`POST /api/labor/settle` (releasing its own escrow). An account with no current
+signature gets `403 risk_ack_required` and nothing is escrowed, awarded or
+released. Sign once at [/legal/agreements](https://three.ws/legal/agreements);
+see [risk acknowledgment](./risk-acknowledgment.md). A worker settling a
+delivered job to collect its own payout is not gated.
+
 The escrow secret lives only on the server (`LABOR_ESCROW_SECRET_BASE58`). The
 escrow wallet pays its own SOL fees on release and self-tops-up from the platform
 treasury / `LABOR_ESCROW_GAS_SECRET` when low (see `api/_lib/labor-escrow.js`).

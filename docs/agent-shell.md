@@ -97,10 +97,21 @@ Requirements for a shell page:
   tolerate their target elements disappearing mid-flight (a navigation can land
   while a fetch is pending).
 
-Live proof pages: `/markets`, `/coins`, and `/markets/robinhood`
-([pages/markets.html](../pages/markets.html),
-[pages/coins.html](../pages/coins.html),
-[pages/markets-robinhood.html](../pages/markets-robinhood.html)). The swapper lives in
+Live proof pages (every page carrying `data-shell` today):
+
+| Route | Page |
+| --- | --- |
+| `/markets` | [pages/markets.html](../pages/markets.html) |
+| `/coins` | [pages/coins.html](../pages/coins.html) |
+| `/pocket` | [pages/pocket.html](../pages/pocket.html) |
+| `/markets/robinhood` | [pages/markets-robinhood.html](../pages/markets-robinhood.html) |
+| `/markets/robinhood/desk` | [pages/hood-desk.html](../pages/hood-desk.html) |
+| `/markets/robinhood/portfolios` | [pages/hood-portfolios.html](../pages/hood-portfolios.html) |
+| `/markets/robinhood/portfolios/universe` | [pages/hood-portfolios-universe.html](../pages/hood-portfolios-universe.html) |
+
+Navigating between any two of them is a content swap, which is what makes the
+Robinhood Crypto cluster feel like one terminal rather than four pages. The
+swapper lives in
 [src/view-transitions.js](../src/view-transitions.js), which is inlined on
 every page by the `view-transitions` plugin in
 [vite.config.js](../vite.config.js).

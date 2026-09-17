@@ -75,9 +75,11 @@ Find an HTTP service you want and click **Try it** on its card.
 
 1. The drop-in payment modal opens, having already re-fetched the live 402 challenge to confirm the current price (prices can change; the card is a cached hint, the modal is the source of truth).
 2. The modal shows the **price**, the **network**, and **who you're paying** — the on-chain `payTo` address, linked to a block explorer so you can verify the recipient before committing.
-3. Pick your wallet. The modal only offers wallets that match a network in the challenge's `accepts` and are actually detected in your browser; undetected ones render disabled with an "install" hint. Signed-in users with funded agents also see a **"Your agents"** group at the top; picking one skips the wallet popup entirely and pays from the agent's own USDC under its spend limits.
-4. Approve the payment in your wallet. Before prompting you, the modal does a fail-open balance pre-check — if it can positively read that your wallet is short, it shows an insufficient-funds state with the exact shortfall and an explorer link, instead of letting you sign a doomed transaction.
-5. The platform settles on-chain and retries the call. The card's receipt area fills in with the result and a link to the on-chain transaction.
+3. If the resource is priced in more than one token on the same network, a **token chooser** appears above the wallet list with each option's real price, so you compare (say) 0.001 USDC against 10 THREE before signing. three.ws quotes USDC and `$THREE` on its own paid endpoints; the server's preferred token is first and selected by default. Agent wallets settle Solana USDC only, so on a non-USDC token they say so rather than disappearing.
+4. Pick your wallet. The modal only offers wallets that match a network in the challenge's `accepts` and are actually detected in your browser; undetected ones render disabled with an "install" hint. Signed-in users with funded agents also see a **"Your agents"** group at the top; picking one skips the wallet popup entirely and pays from the agent's own USDC under its spend limits.
+5. On your first payment the modal asks you to sign the three.ws real-funds agreements (Terms of Service, Risk Disclosure, Agent Wallet Agreement) at [/legal/agreements](/legal/agreements). It is once per account, and declining stops the payment. The server enforces the same signature on the agent-wallet path, which answers `403 risk_ack_required` without it.
+6. Approve the payment in your wallet. Before prompting you, the modal does a fail-open balance pre-check: if it can positively read that your wallet is short, it shows an insufficient-funds state with the exact shortfall and an explorer link, instead of letting you sign a doomed transaction.
+7. The platform settles on-chain and retries the call. The card's receipt area fills in with the result and a link to the on-chain transaction.
 
 What you signed is exactly what the challenge declared — the modal never invents an amount or a recipient. If the seller configured optional charity / round-up giving on a Solana checkout, you'll see a pre-checked, opt-out box that rides the *same* transaction, so you still pay once.
 
@@ -115,6 +117,7 @@ Read it like a receipt-in-advance:
 - **`amount`** is in atomic units of **`asset`**. With `decimals: 6`, `"1000"` is $0.001. (Spec-strict sellers may name this field `maxAmountRequired`; the client coerces both to `amount`.)
 - **`network`** tells you which wallet you need. `solana` / `solana:*` → Phantom/Solflare; `eip155:8453` → Base; other `eip155:*` are the EVM L2s in `EVM_NETWORKS` (`public/x402-pay-core.js`).
 - **`payTo`** is exactly where your USDC goes. Nothing else moves.
+- **`extra.feePayer`** is the sponsor that co-signs the Solana transaction so your SOL is untouched. It is optional: an accept with no `feePayer` is the **self-pay** contract, where you cover the network fee yourself. The modal says so on the approve step ("you cover the network fee on this one") rather than letting the wallet popup be the first you hear of it.
 - **`maxTimeoutSeconds`** bounds how long your signed authorization is valid — your one safety net against a stale payment lingering.
 
 A single endpoint can list several `accepts` (e.g. Base *and* Solana). You — or your wallet — pick whichever network you hold funds on.
@@ -219,6 +222,7 @@ If the result looks wrong but you were charged, note: x402 has **single-shot, no
 - **"Payment module failed to load (x402.js)"** on a Bazaar card — the drop-in script 404'd or didn't evaluate, so `window.X402` is undefined. Reload the page; check the network tab for the `/x402.js` request.
 - **Wallet button is disabled** — that wallet isn't detected, or no `accept` matches its network. Install the extension (Phantom for Solana, MetaMask/Coinbase for Base) and reload, or pick the other rail.
 - **"Not enough USDC — you need X but your wallet holds Y"** — the balance pre-check caught a shortfall before you signed. Top up the wallet on the shown network (the error links your address on the explorer) and retry. The check is fail-open: if your balance can't be read, payment still proceeds.
+- **"Payments are temporarily paused while we top up the wallet that settles them"**: a `503 settlement_unavailable`, the sponsor wallet is under its SOL reserve or the fee budget is spent. Nothing was charged and the error is marked retryable; try again shortly.
 - **"Endpoint did not return 402 (got 200/404…)"** — you pointed `pay()` at a free or non-x402 URL. Confirm the endpoint actually challenges with `curl -i <url>` (Step 3).
 - **402 but "no `accepts` array could be found"** — a proxy stripped the body *and* the `payment-required` header, or the seller's challenge is malformed. Try the endpoint's own canonical URL; if it's third-party, the seller's 402 is non-compliant.
 - **Signature rejected at settle on Base** — almost always a wrong EIP-712 domain. Base USDC's domain name is `"USD Coin"` at version `"2"`; a seller advertising anything else produces a payload the facilitator rejects. Nothing you can fix as a buyer — report it to the provider.
@@ -238,7 +242,7 @@ You learned four ways to consume an x402 paid service:
 - **`window.X402.pay`** — pay for any endpoint from your own code; resolves with the result plus an on-chain receipt, with a `networks` allowlist to pin the rail.
 - **The Endpoint Shopper** ([/shopper](/shopper)) — describe a task and a budget; an agent discovers, pays for, and synthesizes results from Bazaar endpoints autonomously.
 
-The throughline: discovery and payment are decoupled, the 402 challenge is the single source of truth for price and recipient, every payment settles on-chain in USDC, and one module (`public/x402.js`) drives every surface.
+The throughline: discovery and payment are decoupled, the 402 challenge is the single source of truth for price, token, and recipient, every payment settles on-chain in the asset you picked (USDC, or `$THREE` where a three.ws endpoint quotes it), and one module (`public/x402.js`) drives every surface.
 
 **Use it from your own project (npm)**
 

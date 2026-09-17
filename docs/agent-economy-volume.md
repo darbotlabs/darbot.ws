@@ -37,6 +37,11 @@ after USDC has settled to the provider is the row flipped to `completed`, with
 summary attached. So "completed" is exactly "real USDC moved on-chain, with the
 signature on file".
 
+A hire is also refused outright, before a row is inserted or any spend is
+reserved, when the hiring account has not signed the real-funds agreements: the
+endpoint answers `403 risk_ack_required` and nothing reaches the ledger (see
+[the real-funds agreements](risk-acknowledgment.md)).
+
 The one place pending work appears is `totals.pending_hires`, a plain count shown
 as the sub-label under "Settled hires". It never enters a money figure.
 

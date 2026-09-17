@@ -102,7 +102,7 @@ So ~0.05 SOL canaries a handful; **~0.007 × N** covers a fleet of N (≈ 13 SOL
 Two layers, both real:
 
 - **Off-chain manifest** (`buildAgentManifest`) — a superset of the Metaplex token-metadata standard and `agent-manifest/0.1`: name, image (avatar thumbnail), `animation_url` (the GLB body), `external_url` (the agent's three.ws page), attributes, the platform brand block, and the `$THREE` link. Pinned to **IPFS via Pinata** (`PINATA_JWT`) → falls back to web3.storage → falls back to R2 with a real CIDv1. Never a stub.
-- **On-chain Attributes plugin** (`buildAgentOnchainAttributes`) — a curated ~11-pair subset written into the asset account itself: `platform`, `url`, `agent`, `agent_url`, `x`, `github`, `$THREE`, `$THREE_url`, `standard`, `schema`, `created`. Byte-clamped to keep the whole transaction under Solana's 1232-byte limit.
+- **On-chain Attributes plugin** (`buildAgentOnchainAttributes`): a curated ~12-pair subset written into the asset account itself: `platform`, `url`, `agent`, `agent_url`, `x`, `github`, `$THREE`, `$THREE_url`, `standard`, `schema`, `skills`, `created` (`agent_url`, `skills` and `created` only when the agent has them). Byte-clamped to keep the whole transaction under Solana's 1232-byte limit.
 
 ---
 

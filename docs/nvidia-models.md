@@ -32,11 +32,11 @@ Because it is one key for everything, a deployment either has the whole NVIDIA l
 | --- | --- | --- | --- |
 | **Text → 3D** | `microsoft/trellis` | `api/_providers/nvidia.js`, `api/_lib/forge-tiers.js` | ✅ |
 | **Text → image** | `black-forest-labs/flux.1-dev` | `api/_mcp3d/text-to-image.js` | ✅ |
-| **LLM (default lane)** | `nvidia/nemotron-3-super-120b-a12b` (compact rung: `nvidia/nemotron-3-nano-30b-a3b`) | `api/_lib/llm.js`, `api/_lib/chat-models.js` | ✅ |
-| **LLM (model garden)** | Nemotron 120B / 49B / Nano 9B, Llama 4 Maverick, DeepSeek V4 Pro, Kimi K2.6, MiniMax M2.7 | `api/brain/chat.js` | ✅ |
-| **Vision / VLM** | `nvidia/nemotron-nano-12b-v2-vl`, `meta/llama-3.2-11b-vision-instruct` | `api/_lib/vision.js` | ✅ |
-| **Embeddings** | `nvidia/nv-embedqa-e5-v5` | `api/_lib/embeddings.js` (and `api/agents/_id/embed.js`, which delegates to it) | ✅ |
-| **Reranking** | `nvidia/rerank-qa-mistral-4b` | `api/_lib/rerank.js` | ✅ |
+| **LLM (default lane)** | `nvidia/nemotron-3-super-120b-a12b` (compact rung: `nvidia/nemotron-3.5-lightning-30b-a3b`) | `api/_lib/llm.js`, `api/_lib/chat-models.js` | ✅ |
+| **LLM (model garden)** | Nemotron 3 Super 120B / Ultra 550B / 3.5 Lightning 30B, DeepSeek V4 Pro, Kimi K2.6, MiniMax M2.7 | `api/brain/chat.js` | ✅ |
+| **Vision / VLM** | `meta/llama-3.2-11b-vision-instruct`, then free OpenRouter `:free` VLM rungs | `api/_lib/vision.js` | ✅ |
+| **Embeddings** | `nvidia/nemotron-3-embed-1b` | `api/_lib/embeddings.js` (and `api/agents/_id/embed.js`, which delegates to it) | ✅ |
+| **Reranking** | `nvidia/rerank-qa-mistral-4b` (pin verified dead, stage off by default) | `api/_lib/rerank.js` | ✅ |
 | **Content safety** | `nvidia/llama-3.1-nemoguard-8b-content-safety`, `meta/llama-guard-4-12b` | `api/_lib/publish-safety.js` | ✅ |
 | **Text-to-speech** | `magpie-tts-multilingual` (Riva) | `api/_lib/tts-nvidia.js` | ✅ |
 
@@ -86,10 +86,10 @@ NVIDIA NIM hosts 100+ open-weight chat models behind the one key, all OpenAI-com
 
 ### 3a. The default production lane
 
-**Model:** `nvidia/nemotron-3-super-120b-a12b` (with `nvidia/nemotron-3-nano-30b-a3b` as the compact Nemotron rung)
+**Model:** `nvidia/nemotron-3-super-120b-a12b` (with `nvidia/nemotron-3.5-lightning-30b-a3b` as the compact Nemotron rung)
 **Source:** [api/_lib/llm.js](../api/_lib/llm.js), [api/_lib/chat-models.js](../api/_lib/chat-models.js).
 
-The platform's general LLM helper runs a **free-first ladder: Groq → Cerebras → OpenRouter → NVIDIA NIM**, followed by further keyless free rungs (OVH, Gemini, Pollinations) and only at the very end a paid backstop (Anthropic/OpenAI). Every free rung was re-pointed on 2026-08-27 to models the providers still serve: Groq now runs `qwen/qwen3.8-27b` (instant tier `openai/gpt-oss-20b`), Cerebras keeps `llama-3.3-70b`, and the NVIDIA rung runs Nemotron 3 Super 120B, an NVIDIA MoE on an independent provider, so an outage on the other free lanes still answers here. Both NVIDIA rungs are called with thinking disabled (`chat_template_kwargs: { enable_thinking: false }`) so a chat turn answers instead of reasoning out loud. Both are tool/function-calling capable, so they are eligible for tool-required requests.
+The platform's general LLM helper runs a **free-first ladder: Groq → Cerebras → OpenRouter → NVIDIA NIM**, followed by further keyless free rungs (OVH, Gemini, Pollinations) and only at the very end a paid backstop (Anthropic/OpenAI). Every free rung was re-pointed on 2026-08-27, and every NVIDIA-routed id again on 2026-09-10 after a sweep of `GET /v1/models` on the live account found most of them answering `410 Gone`. A dead id is worse than a missing one: a fallback chain treats a 410 like a rate limit and moves on, so nothing logged an outage while each dead entry burned one of the chain's few retry slots. The rungs the providers still serve: Groq now runs `qwen/qwen3.8-27b` (instant tier `openai/gpt-oss-20b`), Cerebras keeps `llama-3.3-70b`, and the NVIDIA rung runs Nemotron 3 Super 120B, an NVIDIA MoE on an independent provider (the opt-in compact rung moved off `nemotron-3-nano-30b-a3b`, which NIM stopped serving, to `nemotron-3.5-lightning-30b-a3b`), so an outage on the other free lanes still answers here. Both NVIDIA rungs are called with thinking disabled (`chat_template_kwargs: { enable_thinking: false }`) so a chat turn answers instead of reasoning out loud. Both are tool/function-calling capable, so they are eligible for tool-required requests.
 
 This lane powers the platform's built-in AI surfaces — chat, embedded site widgets, the tutor, the fact-checker, persona tools, agent-to-agent talk, the transaction explainer — all of which lead with the free providers and only fall through to a paid model if every free lane fails.
 
@@ -99,15 +99,15 @@ This lane powers the platform's built-in AI surfaces — chat, embedded site wid
 
 | Brain label | Model id | Tier | What it's for |
 | --- | --- | --- | --- |
-| Nemotron 3 Super 120B | `nvidia/nemotron-3-super-120b-a12b` | flagship | NVIDIA's flagship Nemotron MoE — strong agentic reasoning |
-| Llama-Nemotron Super 49B | `nvidia/llama-3.3-nemotron-super-49b-v1.5` | reasoning | Nemotron reasoning tuned on Llama 3.3 — math, code, planning |
-| Nemotron Nano 9B | `nvidia/nvidia-nemotron-nano-9b-v2` | balanced | Compact Nemotron with built-in reasoning — strong quality per token |
+| Nemotron 3 Super 120B | `nvidia/nemotron-3-super-120b-a12b` | flagship | NVIDIA's flagship Nemotron MoE, strong agentic reasoning |
+| Llama-Nemotron Super 49B | `nvidia/nemotron-3-ultra-550b-a55b` | reasoning | Deepest Nemotron reasoning rung: math, code, planning |
+| Nemotron Nano 9B | `nvidia/nemotron-3.5-lightning-30b-a3b` | balanced | Compact Nemotron with built-in reasoning, strong quality per token |
 | DeepSeek V4 Pro | `deepseek-ai/deepseek-v4-pro` | reasoning | Deep reasoning, hosted on NIM |
 | Kimi K2.6 | `moonshotai/kimi-k2.6` | flagship | Moonshot long-context agentic model |
-| Llama 4 Maverick | `meta/llama-4-maverick-17b-128e-instruct` | balanced | Meta's 128-expert MoE — fast, multimodal-capable |
+| Llama 4 Maverick | `nvidia/nemotron-3-super-120b-a12b` | balanced | Meta's Maverick left the account's catalog; the slot now serves Nemotron 3 Super |
 | MiniMax M2.7 | `minimaxai/minimax-m2.7` | balanced | General reasoning and chat |
 
-For anonymous (signed-out) callers, only the genuinely free tiers (the OpenRouter open-weight default plus these NVIDIA NIM models) are selectable. Each shows "unavailable" until the key is set. The routing catalog in `chat-models.js` also lists `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-3-nano-30b-a3b`, and `nvidia/llama-3.3-nemotron-super-49b-v1.5` as tool-capable NVIDIA models, and the Brain's own fallback chain still appends `meta/llama-3.3-70b-instruct` on NIM behind the OpenRouter rungs when a chosen route is dead.
+For anonymous (signed-out) callers, only the genuinely free tiers (the OpenRouter open-weight default plus these NVIDIA NIM models) are selectable. Each shows "unavailable" until the key is set. The three picker labels above are the Brain's own UI strings and were not renamed when the ids under them were re-pinned on 2026-09-10, so the id column is the one to trust. The routing catalog in `chat-models.js` lists `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-3.5-lightning-30b-a3b`, and `nvidia/nemotron-3-ultra-550b-a55b` as the tool-capable NVIDIA models, and the Brain's own fallback chain appends `nvidia/nemotron-3.5-lightning-30b-a3b` on NIM behind the OpenRouter rungs when a chosen route is dead.
 
 > **Where the line is:** Nemotron and the `nvidia/…`-prefixed models are NVIDIA's own. The others in this table (DeepSeek, Kimi, Llama 4, MiniMax) are third-party open weights that NVIDIA *hosts and serves free* on NIM — so they ride the same key, but the model itself isn't NVIDIA's. The point of NIM is exactly this: one free key, a whole model garden.
 
@@ -115,10 +115,10 @@ For anonymous (signed-out) callers, only the genuinely free tiers (the OpenRoute
 
 ## 4. Vision / VLM — image understanding
 
-**Models (in order):** `nvidia/nemotron-nano-12b-v2-vl` → `meta/llama-3.2-11b-vision-instruct`
+**Model on NIM:** `meta/llama-3.2-11b-vision-instruct`
 **Source:** [api/_lib/vision.js](../api/_lib/vision.js).
 
-Two free NIM vision lanes on the OpenAI-compatible chat host. Nemotron Nano VL leads because it carries the **smallest image-token footprint** (~281 prompt tokens for a small image vs ~1600 for a 90B-class model); the Llama 3.2 11B vision model is a different family, so its failure modes are independent — a true fallback, not a retry. Images pass as an http(s) URL (the model server fetches it) with SSRF validation on the URL before it leaves the box.
+One free NIM vision lane on the OpenAI-compatible chat host. `nvidia/nemotron-nano-12b-v2-vl` used to lead it for its small image-token footprint; NVIDIA retired that model on 2026-08-26 and the host now answers every request for it with a hard `410`, so it was removed on 2026-09-08 rather than swapped, because probing the catalog for a replacement free NIM VLM needs a live key. Behind the NIM rung sit free OpenRouter `:free` VLM routes (Gemma 4, Ling 3.0 Flash VL, Nemotron Nano Omni and others), then Cloudflare Workers AI, Vertex Gemini, and the paid OpenAI backstop; the OpenRouter rung was added on 2026-09-09 after NVIDIA, OpenAI, and both Google routes failed in the same request and took every image-judging feature down at once. Only `:free` ids are listed there, because the spend ledger prices OpenRouter by that exact suffix. Images pass as an http(s) URL (the model server fetches it) with SSRF validation on the URL before it leaves the box.
 
 **Where it's used:**
 - **Forge photo pre-check** — before a generation slot is spent, the uploaded photo is screened: a screenshot of text, a cluttered subject-less scene, or a too-dark image gets a heads-up and a fix (with a one-click "Generate anyway").
@@ -127,16 +127,18 @@ Two free NIM vision lanes on the OpenAI-compatible chat host. Nemotron Nano VL l
 
 All three **fail safe**: if the vision lane is unavailable, the feature quietly switches off — it never blocks or breaks the primary flow.
 
-The chain is budgeted and remembers what hurt. Each attempt gets an even share of whatever remains on the caller's deadline (`laneAttemptTimeout`, never below 3.5 s), so the first rung cannot consume the budget of the rest, and the pre-chain inline image fetch is capped at a quarter of the deadline and 8 s. A lane that fails is cooled for 45 s through the shared provider-health ledger (`api/_lib/provider-health.js`) and moved behind the healthy rungs on the next call rather than re-picked; a `429` cools every sibling lane on that host and skips them for the rest of the call, and a `401`/`403`/`402` earns the longer auth cooldown. A success clears the lane's cooldown.
+The chain is budgeted and remembers what hurt. Each attempt takes whatever remains on the caller's deadline minus a reserve for the next rungs (`laneAttemptTimeout`, never below 3.5 s, reserving for at most two further lanes), so the lane in hand spends the budget nobody else needs yet while every remaining rung keeps its floor. Dividing the deadline evenly instead starved the lane most likely to answer once the chain grew past a handful of rungs, and the pre-chain inline image fetch is capped at a quarter of the deadline and 8 s. A lane that fails is cooled for 45 s through the shared provider-health ledger (`api/_lib/provider-health.js`) and moved behind the healthy rungs on the next call rather than re-picked; a `429` cools every sibling lane on that host and skips them for the rest of the call, and a `401`/`403`/`402` earns the longer auth cooldown. A success clears the lane's cooldown.
 
 ---
 
 ## 5. Embeddings — semantic retrieval
 
-**Primary:** `nvidia/nv-embedqa-e5-v5` (1024-dim) · **Endpoint:** `integrate.api.nvidia.com/v1/embeddings`
-**Source:** [api/_lib/embeddings.js](../api/_lib/embeddings.js) (tag `nvidia/nv-embedqa-e5-v5@1024`).
+**Primary:** `nvidia/nemotron-3-embed-1b` (2048-dim) · **Endpoint:** `integrate.api.nvidia.com/v1/embeddings`
+**Source:** [api/_lib/embeddings.js](../api/_lib/embeddings.js) (tag `nvidia/nemotron-3-embed-1b@2048`).
 
-The default embedder for new vectors: **free with the one key, 1024 dimensions, hard-capped at 512 input tokens** (longer inputs are rejected upstream, so callers chunk to fit). Vectors are tagged with `model@dimension` so a later model swap can't silently mix incompatible spaces. Powers **agent memory and knowledge-widget retrieval**; the paid embedding provider is demoted to backup behind it. At ingest, `embedPassagesAny()` walks every configured embedder in free-first order (NIM → Vertex → OpenAI, the caller's preferred tag first), cooling a lane that fails for 45 s (longer on an auth fault) so the next ingest starts on a healthy rung, and returns the tag it actually used so the document set is stamped with the space its vectors live in. Search-side, the Agent Galaxy falls back to lexical ranking when the embedder cannot answer, because a query vector from another model cannot be compared against vectors stored in a different space.
+`nv-embedqa-e5-v5` held this slot until NVIDIA ended its life on 2026-08-25. Its tag stays in the registry as `NIM_EMBED_TAG_RETIRED`, resolvable forever so vectors written in that space still read back, but reporting unconfigured so it is never picked for new work. Vectors are stored as `jsonb`, so the dimension change needed no migration.
+
+The default embedder for new vectors: **free with the one key, 2048 dimensions, hard-capped at 512 input tokens** (longer inputs are rejected upstream, so callers chunk to fit). Vectors are tagged with `model@dimension` so a later model swap can't silently mix incompatible spaces. Powers **agent memory and knowledge-widget retrieval**; the paid embedding provider is demoted to backup behind it. At ingest, `embedPassagesAny()` walks every configured embedder in free-first order (NIM → Vertex → OpenAI, the caller's preferred tag first), cooling a lane that fails for 45 s (longer on an auth fault) so the next ingest starts on a healthy rung, and returns the tag it actually used so the document set is stamped with the space its vectors live in. Search-side, the Agent Galaxy falls back to lexical ranking when the embedder cannot answer, because a query vector from another model cannot be compared against vectors stored in a different space.
 
 **Also:** the agent-embed endpoint [api/agents/_id/embed.js](../api/agents/_id/embed.js) does not carry a provider list of its own. It delegates to the registry above, so `POST /api/agents/:id/embed` serves this same model and returns the tag alongside the vector. It previously called `baai/bge-m3` directly; NVIDIA stopped serving that model on the hosted endpoint (500 on every request), which is exactly the failure mode a single registry prevents.
 
@@ -147,7 +149,7 @@ The default embedder for new vectors: **free with the one key, 1024 dimensions, 
 **Model:** `nvidia/rerank-qa-mistral-4b` · **Endpoint:** `ai.api.nvidia.com/v1/retrieval/nvidia/reranking`
 **Source:** [api/_lib/rerank.js](../api/_lib/rerank.js).
 
-Cosine-over-embeddings recall is cheap but coarse. This **cross-encoder reranker** re-scores the top passages so the most relevant context leads. It is **opt-in** (`KNOWLEDGE_RERANK_ENABLED=1` plus the NVIDIA key) and **strictly fail-open** — any rerank error keeps the original cosine ordering. Reranking may improve retrieval but may never break it. Used to refine knowledge-widget answers.
+Cosine-over-embeddings recall is cheap but coarse. This **cross-encoder reranker** re-scores the top passages so the most relevant context leads. It is **opt-in** (`KNOWLEDGE_RERANK_ENABLED=1` plus the NVIDIA key) and **strictly fail-open**: any rerank error keeps the original cosine ordering. The 2026-09-10 catalog sweep found this model dead on the account and it is deliberately left pinned: the stage is off in production and fails open by contract, so a pin verified dead beats an unverified guess. Turning the stage on means re-pinning it against a live catalog first. Reranking may improve retrieval but may never break it. Used to refine knowledge-widget answers.
 
 ---
 

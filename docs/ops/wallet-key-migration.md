@@ -3,6 +3,16 @@
 Date range: keys introduced 2026-06-19, pool agents created 2026-06-26, migration to
 Cloud Run 2026-07-07, diagnosed + resolved 2026-07-12.
 
+> **Cause corrected 2026-09-16, after this record was written.** The measurement
+> behind the diagnosis below did not hold up: every wallet the production API
+> wrote in June 2026 opens with today's production key, and wallets kept getting
+> sealed long after the migration. The sealing writes came from deployments that
+> shared the production database while carrying their own key, not from a key
+> the migration dropped. The corrected brief, the evidence, and the recovery path
+> are in [stranded-wallets.md](stranded-wallets.md). Read this page as the record
+> of what was believed and done at the time; the rotation mechanics, the
+> fund-safety guard, and the secret-storage runbook below are all still current.
+
 ## What happened
 
 Custodial Solana wallets for the pump.fun launch-pool agents (`launcher_queue`, scope
@@ -97,6 +107,17 @@ node scripts/audit-custodial-key-health.mjs
 Never `--set-env-vars` here: it replaces the entire environment set. Covered by
 `tests/secret-box.test.js` (retired-key read, stacked rotations, and a case proving new
 writes never use a retired key).
+
+Step 1 is now load-bearing for a second reason. Since 2026-09-16 `secret-box.js` binds a
+database to the key that writes into it: the first encrypt records an HMAC fingerprint of
+the key in `app_settings` (`secret_box_write_key`), and any later process holding a
+different key is refused with `secret_box_key_mismatch` instead of minting a wallet nobody
+can open. A rotation that puts the outgoing key in `WALLET_ENCRYPTION_KEY_PREVIOUS` first
+moves that fingerprint forward; a rotation that skips step 1 fails its next custodial write
+outright. The fingerprint is one-way, so storing it reveals nothing. If a wallet is already
+sealed under a key you have since recovered,
+`scripts/recover-sealed-wallets.mjs` re-encrypts it in place under the current key, keeping
+the address and moving no funds.
 
 **What this does not do:** it cannot recover the keys already lost. A re-measure on
 2026-08-01 (`scripts/audit-custodial-key-health.mjs`) found 8 of 565 custodial wallets
@@ -373,6 +394,10 @@ anybody to reconnect.
 - `scripts/audit-home-credential-health.mjs`: the same reading for connected homes, whose
   tokens sit under the same key (see the section above). Exits 3 with no key, 1 when a
   home is sealed.
+- [Stranded custodial wallets](stranded-wallets.md): the standing owner decision, and
+  the corrected cause of the sealing.
+- `scripts/recover-sealed-wallets.mjs`: re-encrypt a sealed wallet in place once its
+  original key is found.
 - `scripts/audit-custodial-key-health.mjs`: read-only sweep of every custodial wallet,
   how many still decrypt, how much SOL sits behind the ones that do not, and which
   addresses they are. Needs `DATABASE_URL` and `WALLET_ENCRYPTION_KEY`; it exits 3 rather

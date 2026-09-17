@@ -74,7 +74,12 @@ first attention:
 
 `attendRotation` promotes `data-src` to `src` the first time the card is
 hovered, focused or tapped. The poster carries the finished frame in the
-meantime, so nothing looks unfinished.
+meantime, so nothing looks unfinished. A `data-src` viewer also defers the
+`<model-viewer>` element bundle itself: first attention asks
+`model-viewer-loader.js` for the element and sets `src` in the same breath, so
+the bundle and the GLB arrive together and the card upgrades once. On a page
+that already loaded the element the loader is idempotent and resolves without a
+request, so a decorative card never builds a WebGL renderer during load.
 
 Render the poster with
 [`scripts/render-glb-poster.mjs`](../scripts/render-glb-poster.mjs), which
@@ -163,8 +168,10 @@ flipping `data-theme` and reading a computed style: a full style recalc, twice
 per probe. It used to re-probe on any DOM mutation, which on a JS-rendered page
 became a recalc storm: 8.7 s of main-thread time on `/marketplace` alone, enough
 that Lighthouse gave up on the page. Only a stylesheet can change that verdict,
-so only a stylesheet landing or leaving re-probes, coalesced to one probe per
-frame.
+so only a stylesheet landing or leaving re-probes. The filter is the whole
+saving, so the probe itself stays synchronous: `nav.js` injects its stylesheet
+long after boot, and a visitor who chose light has to get light in the same turn
+the sheet arrives rather than a frame later.
 
 ---
 

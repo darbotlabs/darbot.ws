@@ -56,30 +56,41 @@ than naming a coin.
 
 ## Categories: how the filter tabs group types
 
-The `/notifications` page has eight tabs: **All**, **Sales & earnings**,
+The `/notifications` page has nine tabs: **All**, **Sales & earnings**,
 **Purchases**, **Social**, **In person**, **Market alerts**, **Creations**,
-and **Account**. Each notification type maps to exactly one category; the
-mapping (`TYPE_CATEGORY`) lives in
+**Companion**, and **Account**. Each notification type maps to exactly one
+category; the mapping (`TYPE_CATEGORY`) lives in
 [api/_lib/notify-prefs.js](../api/_lib/notify-prefs.js) and is mirrored in
 [src/notifications-page.js](../src/notifications-page.js) for tab filtering.
 
 | Category (tab) | Key | Notification types |
 |---|---|---|
 | Sales & earnings | `sales` | `skill_purchased`, `asset_purchased`, `sale`, `payment-earned`, `payment_received`, `referral_earned`, `referral_signup`, `referral_reward`, `pump_launch_filled`, `royalty_paid` |
-| Purchases | `purchases` | `skill_purchase_confirmed`, `asset_purchase_confirmed`, `skill_gift_received`, `skill_gift_sent` |
+| Purchases | `purchases` | `skill_purchase_confirmed`, `asset_purchase_confirmed`, `skill_gift_received`, `skill_gift_sent`, `print_update` |
 | Social | `social` | `remix`, `reply`, `comment`, `embed`, `mention`, `fork`, `follow`, `dm_received`, `agent_review`, `quest_complete` |
 | In person | `irl` | `irl_interaction`, `irl_reply` |
 | Market alerts | `alerts` | `pump_alert` |
 | Creations | `creations` | `forge_complete`, `forge_failed` |
+| Companion | `companion` | `companion_delivery` |
+| (no tab yet) | `knock` | `knock_received` |
 | Account | `account` | `withdrawal_completed`, `withdrawal_failed`, `payment_mismatch`, `asset_payment_mismatch`, `skill_payment_mismatch`, `security_alert`, `wallet_anomaly_frozen`, plus any type not in the map |
 
-Two details worth knowing:
+`print_update` is the single type Materialize uses for a physical order's whole
+lifecycle, quoted through delivered, and it sits with purchases because the
+order is the buyer's own.
+
+Three details worth knowing:
 
 - **Unmapped types fall back to `account`**, so a newly added notification
   type is never silently undeliverable or unfilterable.
 - **Tab filtering is client-side** over the pages already fetched. The API's
   own `?type=` parameter filters server-side by a single exact type (e.g.
   `?type=pump_alert`), not by category.
+- **`knock` is a preference category without a tab.** The preference center
+  lists it ("Knocks at your door") and the server gates delivery on it, but
+  the page's own copy of the map has no entry for `knock_received`, so on
+  `/notifications` a knock is filtered under **Account** rather than a tab of
+  its own.
 
 ## The avatar channel: delivered in person
 
@@ -92,12 +103,15 @@ loud, with a link straight to the thing that happened.
 `telegram`. It is gated by the same per-category matrix, edited in the same
 place (`/dashboard/settings`), and measured in the same funnel.
 
-**What gets announced.** By default: **Sales & earnings**, **Creations**, and
-**Account**. Money landing, a generation finishing while you waited, and
+**What gets announced.** By default: **Sales & earnings**, **Creations**,
+**Companion deliveries**, **Knocks at your door**, and **Account**. Money
+landing, a generation finishing while you waited, a message your companion
+triaged as worth hearing, someone who paid your price to reach you, and
 anything touching your account are worth an interruption. Purchases, social,
 in person, and market alerts are off by default because they are frequent.
 Every one of them is a toggle, so an inbox that should speak up more (or not
-at all) is two clicks away.
+at all) is two clicks away. The defaults live in `DEFAULTS` in
+[api/_lib/notify-prefs.js](../api/_lib/notify-prefs.js).
 
 **When it stays quiet.** The rules live in
 [src/notification-herald.js](../src/notification-herald.js):

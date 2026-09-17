@@ -44,6 +44,7 @@ and whether it is reconciled against the chain.
 | a2a mandate settlements | **no durable ledger** — mandate is an unstored JWS; cap in Redis (`INCRBY`) with per-replica memory fallback | ❌ | ❌ | Redis atomic (bypassable w/o Upstash) | ❌ |
 | Credit deposits | `credit_ledger` (`amount_usd, balance_after, tx_signature, idempotency_key UNIQUE`) — balance+ledger in one CTE | ✅ | ✅ | `idempotency_key UNIQUE` + finalized-only | on finalized tx |
 | Subscriptions | `subscription_checkouts` (`reference UNIQUE, amount, platform_fee_amount, tx_signature`) | ✅ | mutable status | `reference UNIQUE` + payment-idempotency | ❌ |
+| Platform trade & launch fee (1%, live since 2026-09-16) | **no fee ledger of its own.** A server-signed agent trade records the fee block in `agent_custody_events.meta.platform_fee` next to the trade's signature; a wallet-signed trade or launch carries it only in the prep/confirm response, and `launch-confirm` refuses to list a launch whose confirmed transaction did not pay it (`txPaidPlatformFee`) | ✅ via the trade's own signature | custody events by convention | the trade's own claim row | ❌ **no** |
 | Vanity bounty payouts | **Redis / in-memory** (`vanity-bounty-store.js`) — not Postgres | ⚠️ in Redis only | ❌ (memory fallback loses on restart) | Redis CAS | ❌ |
 
 \* **"By convention"** means the code never issues UPDATE/DELETE on the table, but
@@ -86,7 +87,8 @@ Books automatically verified against the chain:
 
 **NOT reconciled against the chain:** `x402_audit_log` (the main revenue ledger),
 `club_payouts`, `cosmetic_sales`, `agent_jobs`, `agent_withdrawals`,
-`three_buyback_runs`, and vanity payouts.
+`three_buyback_runs`, vanity payouts, and the 1% trade/launch fee (which has no
+ledger to reconcile).
 
 Two blind spots default a record to `reconciled=true` without verifying it:
 **EVM/Base** settlements (`skipped_non_solana`) and **RPC failures** (`unknown`).
@@ -239,7 +241,14 @@ Ranked by accounting/regulatory risk. Each is a tracked remediation item.
     covered, see §3); **no external alert channel beyond Telegram, and the push
     lane self-throttles**; **global kill switches need a redeploy** (add a
     runtime halt flag).
-14. **Financial data shares the storage-capped Neon branch** — isolate money/audit
+14. **The 1% trade and launch fee has no revenue ledger.** Every customer trade
+    three.ws builds or signs pays it on-chain (see
+    [pump platform fee](pump-platform-fee.md)), but the only durable record is the
+    custody event of a server-signed trade; fees paid inside a user-signed
+    transaction are countable only by scanning the fee wallet. *Fix: an append-only
+    `platform_fee_events` row per charged transaction, keyed `UNIQUE` on the
+    signature, and a reconciler against the fee wallet's on-chain receipts.*
+15. **Financial data shares the storage-capped Neon branch.** Isolate money/audit
     tables onto their own branch/DB so an intel-firehose cap can't drop financial
     writes.
 

@@ -1,5 +1,666 @@
 {
 	"$doc": "/docs/freshness",
 	"$comment": "Review baselines for `npm run docs:freshness`. Without this file the only clock a doc has is its own last commit, so a page someone read end to end and found correct still measures as drifting, and the only way to clear it is a cosmetic edit that lies about what happened. A stamp here says a human or an agent checked this doc against the repo at that commit. Freshness is then measured from whichever is newer, the doc's last edit or its last review. Write stamps with `npm run docs:review -- <doc> [more docs] --note \"...\"`, never by hand: the tool resolves the commit, refuses a doc that does not exist, and keeps the ordering stable. kind `verified` means the prose was checked against the code and matched. kind `snapshot` means the doc is a dated record (an audit, an incident writeup, a finished work order) that documents a moment and must not be rewritten to match today's code, so it is never counted as drift.",
-	"reviews": {}
+	"reviews": {
+		"docs/3d-asset-pipeline.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/a2a-payments.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-abilities/ABILITIES.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-abilities/FULL-ARTICLE.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-abilities/chapters/01-the-body.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-abilities/chapters/11-markets-intelligence.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-abilities/wallet/07-signals.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-economy-volume.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-index.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-shell.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-symphony.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agent-tasks/fix-x402-caller-mismatches.md": {
+			"commit": "53f2a200f",
+			"kind": "snapshot",
+			"by": "agent",
+			"note": "dated record, kept as written"
+		},
+		"docs/agent-wallet-api.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agora/tasks/00-INDEX.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/agora/tasks/05-commons-scaffold.md": {
+			"commit": "53f2a200f",
+			"kind": "snapshot",
+			"by": "agent",
+			"note": "dated record, kept as written"
+		},
+		"docs/assistant-widget.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/avatar-engines.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/avatar-reconstruction.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/avatar-wardrobe.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/blender-mcp.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/btn-pill-migration.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/chatgpt-ar.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/choreography.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/clash.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/coin-pages.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/configuration.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/copy-trading.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/crews.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/daily-forge.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/demo-routes.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/diorama.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/economy-master.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/economy-solver.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/event-readiness/01-play-first-impression.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/event-readiness/07-platform-smoke-sweep.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/event-readiness/14-welcome-concierge.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/event-readiness/17-plaza-live-show.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/event-readiness/18-coin-wars-portal.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/financial-controls.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/forge-background-generation.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/forge-pipeline.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/free-crypto-apis.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/guards.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/home-households.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/home-privacy.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/home-security.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/internal/MAINNET-TEST-2026-07-03.md": {
+			"commit": "53f2a200f",
+			"kind": "snapshot",
+			"by": "agent",
+			"note": "dated record, kept as written"
+		},
+		"docs/internal/fable-playbook.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/irl/THREAT-MODEL.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/labor-market.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/launch-usecases.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "recipe handoff re-checked against the rebuilt /launch page"
+		},
+		"docs/lipsync.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/mcp-safety.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/money-map.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/news-rights.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/notifications.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/nvidia-models.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/object-library.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/onboarding-tier.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/onchain-agents.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/cron-auth.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/forge-error-triage.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/home-operations.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/play-store-developer-page.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/search-indexing.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/solana-rpc-lanes.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/trading-bot-report.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ops/wallet-key-migration.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/oracle-trading-mcp-plan.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/overlay-audit.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/page-performance.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/play-hardening.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/pump-platform-fee.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/pumpfun-program/UPSTREAM-pumpswap-virtual-quote-reserves.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/risk-acknowledgment.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/security/SECURITY_AUDIT.md": {
+			"commit": "53f2a200f",
+			"kind": "snapshot",
+			"by": "agent",
+			"note": "dated record, kept as written"
+		},
+		"docs/security/review-2026-06-24.md": {
+			"commit": "53f2a200f",
+			"kind": "snapshot",
+			"by": "agent",
+			"note": "dated record, kept as written"
+		},
+		"docs/seed-quality.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/seeker-app.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/seeker-publishing.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/site-performance.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/smart-home.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/social-layer.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/solana-reputation.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/sonar.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/spotlight.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/talking-avatar-video.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/terminal.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/timeline.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/tutorials/mine-vanity-address.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/tutorials/pay-for-x402-service.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/tutorials/self-host-agent-backend.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/tutorials/write-a-guard.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/upstream/home-assistant-js-websocket-resubscribe-rejection.md": {
+			"commit": "53f2a200f",
+			"kind": "snapshot",
+			"by": "agent",
+			"note": "dated record, kept as written"
+		},
+		"docs/user-wallet.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/01-onboarding-creation.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/02-forge-text-to-3d.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/03-3d-editing-viewer.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/04-embed-widget-studio.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/05-discovery-social.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/06-marketplace-skills.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/07-crypto-trading-analytics.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/08-coin-launch-wallets.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/11-account-dashboard.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/ux-flows/12-home-and-content.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/vaults.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/walk-leaderboard.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/x-accounts.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/x402-distribution.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		},
+		"docs/x402-ring-economy.md": {
+			"commit": "53f2a200f",
+			"kind": "verified",
+			"by": "agent",
+			"note": "full sweep: read against the drifted commits and corrected where wrong"
+		}
+	}
 }

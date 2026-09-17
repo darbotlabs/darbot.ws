@@ -99,6 +99,10 @@ Topup is the outbound leg; **sweepback**
 :41) is the return leg. It walks the same registry and brings surplus back, so
 every lamport cycles master → engines → work → master:
 
+- **Never swept at all.** A signer marked `holdsUserFunds` in the registry holds
+  money owed to third parties, not platform float, so both sweepback and
+  `reclaimIdleSol` skip it in every mode, drain included, and report it as
+  `holds_user_funds`.
 - **Excess mode (the schedule).** Skims only SOL *above* each signer's operating
   float — the same `refillTo` the topup refills to, so the two crons never
   oscillate — and consolidates stray token balances from signers that don't
@@ -145,7 +149,7 @@ the return.
 ## Agent-wallet reclaim: the other half of the fleet's SOL
 
 Sweepback and `reclaimIdleSol` both walk the **`SOLANA_SIGNERS` registry** — the
-fourteen engine wallets. That is not where most of the platform's SOL lives.
+fifteen engine wallets. That is not where most of the platform's SOL lives.
 `fundAgentForLaunch` ([`api/_lib/launcher-funding.js`](../api/_lib/launcher-funding.js))
 moves SOL master → **agent custody wallet** one way, and nothing ever moved it
 back: snipes recycle ~97 % of their capital, but the proceeds settle into the
@@ -642,7 +646,7 @@ a third-party-verifiable timestamp of the books.
 The 2026-07-02 wiring gaps this section used to track are closed. Current state
 of the tree the master feeds:
 
-- **The registry defines the master plus fourteen engine signers** (relayers,
+- **The registry defines the master plus fifteen engine signers** (relayers,
   launcher master, treasuries, marketplace payer, a2a payer, ring sponsor/payer,
   circulation treasury, NFT collection authority). An engine whose secret env is
   unset simply never resolves and is skipped by the sweep; set each engine's

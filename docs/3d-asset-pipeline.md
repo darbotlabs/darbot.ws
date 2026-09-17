@@ -96,8 +96,10 @@ This is how a motion enters the **shared animation library** that every agent an
 # 2. Add an entry to scripts/animations.config.json
 # 3. Build:
 npm run build:animations
-#   → retargets to cz.glb, writes public/animations/clips/<name>.json,
-#     rewrites public/animations/manifest.json, then re-syncs
+#   → builds the project-authored clips first (build-original-animations.mjs,
+#     keyframe choreography with no third-party source file), then retargets to
+#     cz.glb, writes public/animations/clips/<name>.json, rewrites
+#     public/animations/manifest.json, then re-syncs
 #     public/animations/registry.json (sync-animation-registry.mjs) and
 #     rebuilds public/animations/signatures.json (build-motion-signatures.mjs)
 ```
@@ -148,10 +150,17 @@ Source: [scripts/optimize-glb.mjs](../scripts/optimize-glb.mjs). Lossless geomet
 
 Track names are **canonical bone names** (`Hips`, `Spine`, `LeftArm`, …) so the same clip retargets onto any rig at runtime.
 
-**manifest.json** maps each clip to the UI:
+Every number in a written clip is serialized to **7 significant digits**
+(`compactClipJson` in [scripts/compact-clips.mjs](../scripts/compact-clips.mjs)),
+which is lossless for float32 keyframes and about half the bytes of
+double-precision output. Regenerating a clip any other way doubles its size for
+no visible difference.
+
+**manifest.json** maps each clip to the UI. `duration` is written from the built
+clip, and `category` appears when the config entry sets one:
 
 ```json
-{ "name": "idle", "url": "/animations/clips/idle.json", "label": "Idle", "icon": "🧍", "loop": true }
+{ "name": "idle", "url": "/animations/clips/idle.json", "label": "Idle", "icon": "🧍", "loop": true, "duration": 15.8 }
 ```
 
 **The canonical skeleton** is the 52-bone humanoid set exported as `CANONICAL_BONES` from [src/glb-canonicalize.js](../src/glb-canonicalize.js): the torso chain (`Hips → Spine → Spine1 → Spine2 → Neck → Head`), both arms (`Shoulder → Arm → ForeArm → Hand`) with full finger chains, and both legs (`UpLeg → Leg → Foot → ToeBase`). `public/avatars/cz.glb` is the reference rig every clip is retargeted against.
@@ -191,7 +200,10 @@ There is **no rig allowlist**. [src/glb-canonicalize.js](../src/glb-canonicalize
 | MikuMikuDance (PMX/PMD) | `センター`, `上半身`, `首`, `左腕`, `左ひじ`, `左ひざ` (Japanese names, `左`/`右` side prefix) |
 | UniGLTF / VRM converter | `5.joint_HipMaster`, `10.!joint_LeftToe` |
 | Daz3D / Genesis | `hip`, `abdomen`, `lShldr`, `lThigh`, `lShin`, `lCollar` |
-| Reallusion CC3 / CC4 | `CC_Base_Hip`, `CC_Base_L_Upperarm`, `CC_Base_NeckTwist01` |
+| Reallusion CC3 / CC4 | `CC_Base_Hip`, `CC_Base_Spine01`, `CC_Base_L_Upperarm`, `CC_Base_NeckTwist01` |
+| Apple Reality Composer / ARKit-to-USD | `hips_joint`, `left_arm_joint`, `left_upLeg_joint` (trailing `_joint` stripped; `root_joint` stays unmapped, it is a transform above the skeleton) |
+| Kinect v2 / Azure Kinect body tracking | `SpineBase`, `SpineMid`, `SpineShoulder`, `ShoulderLeft`, `KneeRight`, `FootLeft` (side word last) |
+| MediaPipe Pose | `left_hip`, `left_knee`, `left_heel`, `left_foot_index` (landmark joints) |
 | 3ds Max Biped | `Bip01 Pelvis`, `Bip001 L UpperArm`, `Bip01 L Calf` |
 | CharacterStudio | `CH_Hips`, `CH_LeftUpLeg` |
 | Autodesk HumanIK / Maya / MotionBuilder | `Character1:Hips`, `subject:LeftArm`, `char:ns:Hips` |
@@ -288,7 +300,7 @@ text/image ──► mesh_forge ──► static GLB ──► rig_mesh ──�
 
 - **Don't ship raw converted GLBs.** A Mixamo character converts to 50+ MB; always run `optimize:glb`. The site streams these to every visitor.
 - **`trimesh` (the Python script) silently drops rigs.** It is for static geometry only. For anything animated, use `convert:fbx`.
-- **No Draco/meshopt in optimized output.** The main viewer and the studios wire Draco/KTX2/meshopt decoders (`getDecoders` in `src/viewer/internal.js`, which serves the decoder binaries from our own origin under `public/three/`, vendored by `scripts/copy-three-decoders.mjs` on every install and checked by `scripts/audit-deploy-artifacts.mjs` at deploy, with unpkg only as the backstop when a HEAD probe of the local copy fails), but many lighter surfaces load GLBs with a bare `GLTFLoader` and no decoder. `optimize:glb` deliberately stays within plain glTF 2.0 so its output loads everywhere; WebP textures do the heavy lifting.
+- **No Draco/meshopt in optimized output.** The main viewer and the studios wire Draco/KTX2/meshopt decoders (`getDecoders` in `src/viewer/internal.js`, which serves the decoder binaries from our own origin under `public/three/`, vendored by `scripts/copy-three-decoders.mjs` on every install and checked by `scripts/audit-deploy-artifacts.mjs` at deploy, with unpkg only as the backstop when a HEAD probe of the local copy comes back *not ok*; a probe that is merely slow loses the 1.5 s race and the load starts on the same-origin copy anyway, and a probe that errors is retried on the next load rather than demoting the whole session), but many lighter surfaces load GLBs with a bare `GLTFLoader` and no decoder. `optimize:glb` deliberately stays within plain glTF 2.0 so its output loads everywhere; WebP textures do the heavy lifting.
 - **FBX is build-time only.** Keep source FBX in `animation-sources/` (gitignored) so it never ships in the deploy bundle. `public/animations/` holds no FBX anymore; the six formerly-orphaned clips are built into the manifest (see `resolved_issues` in [public/animations/registry.json](../public/animations/registry.json)).
 - **Bone names matter.** A non-humanoid or oddly-named rig may fall below the 8-bone / 50%-coverage thresholds and refuse to animate. The canonicalizer handles the common conventions; truly custom skeletons need their bones renamed to the canonical set first.
 - **`.bak` files.** `optimize:glb` writes a `<name>.glb.bak` alongside its output — delete it before committing.
@@ -301,6 +313,8 @@ text/image ──► mesh_forge ──► static GLB ──► rig_mesh ──�
 |---|---|
 | [scripts/fbx-to-glb.mjs](../scripts/fbx-to-glb.mjs) | FBX → GLB (FBX2glTF) — `npm run convert:fbx` |
 | [scripts/build-animations.mjs](../scripts/build-animations.mjs) | FBX/GLB → retargeted clip JSON + manifest — `npm run build:animations` |
+| [scripts/build-original-animations.mjs](../scripts/build-original-animations.mjs) | Project-authored clips built from keyframe choreography, no source file. Runs first in `build:animations` |
+| [scripts/compact-clips.mjs](../scripts/compact-clips.mjs) | 7-significant-digit clip serialization (`compactClipJson`), shared by both clip builders |
 | [scripts/extract-glb-animations.mjs](../scripts/extract-glb-animations.mjs) | Extract baked animation out of a GLB — `npm run extract:animations` |
 | [scripts/sync-animation-registry.mjs](../scripts/sync-animation-registry.mjs) | Regenerate registry.json's `clips` from the built truth: `npm run sync:animation-registry` (chained into `build:animations`) |
 | [scripts/build-motion-signatures.mjs](../scripts/build-motion-signatures.mjs) | Measure every baked clip into signatures.json: `npm run build:motion-signatures` (check with `npm run audit:motion`) |

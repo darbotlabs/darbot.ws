@@ -189,8 +189,14 @@ normally against the reduced reserve.
 
 | | |
 |---|---|
-| TypeScript SDK | `@pump-fun/pump-swap-sdk@1.19.0` |
+| TypeScript SDK (PumpSwap) | `@pump-fun/pump-swap-sdk`, pinned in `package.json`; the field landed in 1.19.0 |
+| TypeScript SDK (bonding curve) | `@pump-fun/pump-sdk`, on the 2.x line since 2026-09-14 |
 | Rust SDK | `pump-rust-client@0.1.9` |
 | IDL | `contracts/idl/pump/pump_amm.json`, refreshed via `npm run pump:refresh-idls` |
+
+The exact versions we run last accepted are recorded in
+`data/pump-upstream-baseline.json` and re-checked by the upstream watch
+([docs/ops/pump-upstream-watch.md](../ops/pump-upstream-watch.md)), so read them
+there rather than from a number in this table.
 
 Upstream: <https://github.com/pump-fun/pump-public-docs#pumpswap-update-virtual-quote-reserves>

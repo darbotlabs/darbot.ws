@@ -1,6 +1,6 @@
 # Plan: ship Oracle and the autonomous trading agents as MCP servers
 
-**Status:** planned, not started. Written 2026-08-19.
+**Status:** planned, not started. Written 2026-08-19; still unstarted at 2026-09-17 (no `packages/oracle-mcp`, no `api/mcp-oracle.js` in the tree). Facts below re-verified 2026-09-17.
 **Goal:** make [Oracle](https://three.ws/oracle) and the autonomous trading agents first-class,
 discoverable MCP servers, publish them to the official MCP registry
 (`registry.modelcontextprotocol.io`), document them, and announce them in one plain-language X post.
@@ -15,15 +15,15 @@ tree and the live registry on 2026-08-19, so the plan starts from facts, not ass
 Oracle is the best thing we run and almost nobody can find it from an agent client.
 
 Its four MCP tools (`oracle_top_plays`, `oracle_coin`, `oracle_arm_watch`, `oracle_watch_status`)
-live inside the main `https://three.ws/api/mcp` server, buried among 40+ avatar, model, animation,
-sign-language, memory, and market tools. In the registry that server is listed as
+live inside the main `https://three.ws/api/mcp` server, buried among 50+ avatar, model, animation,
+sign-language, memory, and market tools (55 in `public/mcp-catalog.json` today). In the registry that server is listed as
 "3D avatars, embeds, glTF tools, agent memory, and on-chain agent identity". An agent looking for
 a conviction signal on a new launch has no way to find it, and a human browsing the registry has
 no reason to click.
 
 The same is true of the autonomous side. `oracle_arm_watch` is the single most interesting write
 tool on the platform (it arms an agent to trade a live conviction stream inside a spend leash), and
-it is discoverable only by reading a 40-tool list on an avatar server.
+it is discoverable only by reading a 55-tool list on an avatar server.
 
 The fix is not new capability. It is **packaging**: two focused servers, named for what they do,
 listed under their own registry entries.
@@ -47,7 +47,7 @@ listed under their own registry entries.
 
 | Surface | Location | Registry state |
 |---|---|---|
-| Sniper engine (library + CLI + MCP + x402 API) | `packages/agent-sniper`, `workers/agent-sniper` | `io.github.nirholas/agent-sniper` @ 0.1.5 published; local `server.json` is 0.1.6, so a bump is pending |
+| Sniper engine (library + CLI + MCP + x402 API) | `packages/agent-sniper`, `workers/agent-sniper` | `io.github.nirholas/agent-sniper` @ 0.1.6 in the registry; the tree and npm are both at 0.1.7, so a registry bump is still pending |
 | Autopilot control plane | `packages/autopilot-mcp` | `io.github.nirholas/autopilot-mcp` @ 0.2.0 published |
 | Copy-trade follows | `packages/copy-mcp` | published @ 0.1.1 |
 | Signal marketplace | `packages/signals-mcp` | published @ 0.1.1 |
@@ -55,8 +55,8 @@ listed under their own registry entries.
 | Market intel | `packages/intel-mcp`, `packages/kol-mcp` | published |
 | Oracle-armed agent loop | `api/oracle/watch.js`, `api/oracle/action-stream.js`, `api/oracle/agent-stats.js` | **No dedicated server. Only the two tools inside `/api/mcp`.** |
 
-61 distinct servers are already published under the `io.github.nirholas` namespace, so the
-publishing path is proven and boring. `scripts/publish-mcp-servers.mjs` (`npm run publish:mcp`)
+72 distinct servers are already published under the `io.github.nirholas` namespace (counted against
+the live registry on 2026-09-17), so the publishing path is proven and boring. `scripts/publish-mcp-servers.mjs` (`npm run publish:mcp`)
 handles npm plus registry, idempotently, and skips anything already at the target version.
 
 ### The publishing machinery (already built, do not rebuild)
@@ -90,8 +90,9 @@ Copy the structure of `api/mcp-3d.js` exactly: Streamable HTTP, shared OAuth/x40
 Registry name `io.github.nirholas/threews-oracle`, URL `https://three.ws/api/mcp-oracle`.
 
 Route it in `vercel.json` (both the handler entry and the
-`/api/mcp-oracle/.well-known/oauth-protected-resource` route, matching the `/api/mcp` precedent at
-`vercel.json:525`), and add the entry to `public/.well-known/mcp.json`.
+`/api/mcp-oracle/.well-known/oauth-protected-resource` route, matching the existing
+`/api/mcp/.well-known/oauth-protected-resource` → `/api/wk?name=oauth-protected-resource` entry),
+and add the entry to `public/.well-known/mcp.json`.
 
 **1b. stdio package: `packages/oracle-mcp`**
 
@@ -122,6 +123,13 @@ endpoints that are already live and public:
 The two write tools ship on the hosted remote only. The stdio package advertises them as
 "available on the hosted server" in its getting-started text rather than shipping a half-wired
 auth path locally.
+
+`oracle_arm_watch` has carried a second gate since 2026-09-17: arming a live mainnet watch refuses
+with `risk_ack_required` and a signing link unless the account has signed the Terms, the Risk
+Disclosure, and the Agent Wallet Agreement (`currentSignatureFor` in
+`api/_lib/real-funds-agreement.js`). Devnet and an already-live watch are exempt, and a lookup
+failure fails closed. The new server inherits that refusal verbatim; it is not something to
+re-implement or soften.
 
 **Honesty requirements, non-negotiable, already enforced by the existing tests in
 `tests/api/mcp-oracle-tools.test.js`:** a degraded feed or intel store reports as transient, never
@@ -163,6 +171,10 @@ right posture for a write-heavy, real-money server.
   move real SOL.
 - Arming live still routes through the platform's existing owner-confirmation path. This server
   does not become a way around the spend gate in `CLAUDE.md`.
+- `agent_arm` inherits the signed real-funds agreement gate described in Phase 1: an unsigned
+  account gets `risk_ack_required` and the signing link, never an armed agent. Every custodial
+  money endpoint behind these tools enforces it server-side, so the tool surfaces the refusal
+  rather than deciding it.
 
 ### Phase 3: publish to the registry
 
@@ -181,7 +193,7 @@ npm run smoke:mcp            # hit the hosted remotes for real
 
 Also in this phase, because they are one-line fixes that are currently drifted:
 
-- Bump `packages/agent-sniper` to publish 0.1.6 (registry has 0.1.5, the tree has 0.1.6).
+- Bump `packages/agent-sniper` in the registry to 0.1.7 (the registry has 0.1.6, the tree and npm have 0.1.7).
 - Add both new remotes to `public/.well-known/mcp.json` (7 entries today, 8 after Phase 1).
 - Add both new server keys to the `SERVERS` array in `scripts/publish-mcp-servers.mjs`. A server
   that is not in that array is invisible to the publisher, which is the single easiest way for
@@ -200,7 +212,7 @@ Per the documentation rules in `CLAUDE.md`, all of these apply and none are opti
 - `packages/oracle-mcp/README.md` and `packages/agent-trader-mcp/README.md`: what it does, install,
   full tool table, one runnable example each. Package README coverage is currently 100% and this
   plan must not be what breaks it.
-- `docs/mcp.md`: update the server count (it currently says 44) and add both servers to the hosted
+- `docs/mcp.md`: update the server count (it currently says 73) and add both servers to the hosted
   and install-and-run lists.
 - `docs/oracle.md`: expand the existing "the MCP path" section into a real quickstart with the new
   server name and a copy-pasteable client config.

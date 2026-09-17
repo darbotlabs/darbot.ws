@@ -49,10 +49,15 @@ so an audience match alone authenticates nobody. The token must carry
 in `CRON_OIDC_AUDIENCE`. With either var unset the OIDC path is off and only the
 secret is accepted.
 
-| Var | Value in production | Effect |
+| Var | Value to set | Effect |
 |---|---|---|
 | `CRON_OIDC_AUDIENCE` | the Cloud Run service URL | audiences the edge will accept, comma-separated |
 | `CRON_OIDC_SERVICE_ACCOUNT` | `three-ws@aerial-vehicle-466722-p5.iam.gserviceaccount.com` | service-account emails the edge will accept, comma-separated |
+
+Neither var is set on `three-ws-api` today, so the OIDC path is currently off and
+the edge accepts only `CRON_SECRET`; the live Cloud Scheduler jobs still
+authenticate with `Authorization: Bearer $CRON_SECRET`. The runbook below is the
+step that turns the second credential on, and it has not been run yet.
 
 The one case where the edge stands aside is "no credential configured at all"
 (no `CRON_SECRET`, no OIDC pair), which is a developer's machine: the request

@@ -31,7 +31,14 @@ Three cooperating pieces:
    submitted, its signed job token persists in `localStorage`
    (`forge:inflight`). On page load the forge resumes polling that token; all
    real state lives server-side, so a reload costs nothing. The record clears
-   on completion, terminal failure, or cancel.
+   on completion, terminal failure, or cancel. The poll loop itself is built on
+   [src/shared/resilient-poll.js](../src/shared/resilient-poll.js) (retry,
+   visibility-wake, attempt-based budget), because a generation runs for minutes
+   and on a phone the tab is backgrounded, the radio drops, and the edge answers
+   the odd 502, none of which mean the job died. A connection we finally gave up
+   waiting on throws with `kind = 'transport_lost'`, and that one case
+   deliberately **keeps** the inflight record rather than clearing it, which is
+   what makes the error's own "reopen /forge to pick it back up" true.
 
 2. **Server-side finalizer** ([api/cron/forge-finalize.js](../api/cron/forge-finalize.js),
    every minute via Cloud Scheduler): sweeps `forge_creations` rows still at
@@ -64,6 +71,15 @@ Three cooperating pieces:
    the user is on the site; it can be muted per browser from its bubble.
    Email delivery uses the platform Resend pipeline and skips undeliverable
    placeholder addresses.
+
+   **Developer webhooks are the one channel that ignores the attended /
+   unattended split.** `forge.completed` fires from `materializeCreation`, the
+   universal completion writer, so an API integrator learns every outcome
+   whether or not a browser was watching. `forge.failed` fires from
+   `notifyForgeFailed` instead, because this is the only place that can tell a
+   terminal failure from a failover that is still running: `markFailed` also runs
+   on the redispatch path, and telling a subscriber the job died while it is
+   still running would be a lie. See [api-reference.md](api-reference.md).
 
 ## Self-host poll recovery (the "task not found" grace)
 
@@ -107,6 +123,15 @@ worst backend/path and top error class so a page is actionable. It rolls into
 `degraded` 60 to 85%, `down` < 60%, `unknown` below 15 finished generations
 in-window. This is the forge twin of the x402 settlement-success sensor.
 
+The rate can only judge generations that got far enough to write a
+`forge_creations` row, so `classifyForgeStall` answers the other question: has
+the forge stopped **starting** generations? A failure upstream of that row (on
+2026-09-07, object storage rejecting the reference-image upload every lane
+needs) writes no rows at all, and no rows otherwise reads as a quiet hour. A
+lane averaging at least 3 starts an hour that has started nothing for 45 minutes
+reports `down` with the hint to check `object_storage` in the same payload
+first, because that shape is a shared dependency rather than a lane fault.
+
 ## Operational notes
 
 - The finalizer needs `CRON_SECRET` (the shared fail-closed cron gate,
@@ -118,6 +143,15 @@ in-window. This is the forge twin of the x402 settlement-success sensor.
 - The response body reports `{ swept, done, failed, failed_over, resubmitted,
   timed_out, still_running, unpollable }` per tick, so a quick manual hit
   shows queue health at a glance.
+- A finished mesh also gets a phone-sized delivery variant (`buildWebVariant`,
+  meshopt geometry plus WebP textures capped at 2048 px) written straight after
+  materialization, to a second key, so the stored original is never touched and
+  `download` and every API consumer keep the full-resolution mesh. Meshes forged
+  before 2026-09-04 are backfilled newest-first by
+  [api/cron/forge-web-variants.js](../api/cron/forge-web-variants.js) (every 10
+  minutes, `FORGE_WEB_VARIANT_BATCH` meshes per tick, default 6). A row whose
+  variant would not be smaller keeps `web_glb_url` null, and every reader already
+  treats null as "serve `glb_url`".
 
 Related: [3d-pipeline.md](3d-pipeline.md) for the generation lanes themselves,
 and the notification preference model in

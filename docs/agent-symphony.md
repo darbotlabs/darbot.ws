@@ -135,6 +135,14 @@ cross-links are asserted statically by
   explorer). New arrivals prepend a single row; screen readers get one short
   throttled announcement per arrival from a dedicated live region rather than
   a re-announcement of the whole list.
+- **Ledger states.** Three of them, and they never borrow each other's copy.
+  While the first read is in flight the strip shows six inert skeleton bars
+  (`aria-busy`). A reachable but idle feed says the economy is quiet. An
+  unreachable feed says so instead, with a "Try again now" button and links to
+  `/pulse` and `/economy`: claiming the platform is quiet while we cannot see
+  it would be a lie. The status pill is derived from two facts (did the last
+  feed read succeed, is the SSE tail open), so a page that never reached the
+  API can never read `live`.
 - **Background tabs.** The visualization loop stops and audio suspends when
   the tab is hidden, and both resume on return.
 
