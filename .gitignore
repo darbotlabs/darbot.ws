@@ -644,3 +644,6 @@ docs/ops/npm-publish-status.md
 # Packaged VS Code extensions belong on GitHub Releases, not in Git history.
 *.vsix
 HSO6cvibUAATRw9.jpg
+
+# Registry / extension build archives for the integrations (never committed)
+integrations/**/*.zip
