@@ -2117,7 +2117,7 @@
 		"price_lowest_first": "Price (lowest first)",
 		"reset_filters": "Reset filters",
 		"resource_details": "Resource details",
-		"results": "results <span id=\"qlabel\"></span>",
+		"results": "results",
 		"search": "Search",
 		"sign_in_with_x": "sign-in-with-x",
 		"solana_any": "Solana (any)",

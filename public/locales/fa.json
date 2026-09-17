@@ -2116,7 +2116,7 @@
 		"price_lowest_first": "قیمت (کمترین ابتدا)",
 		"reset_filters": "بازنشانی فیلترها",
 		"resource_details": "جزئیات منبع",
-		"results": "نتیجه <span id=\"qlabel\"></span>",
+		"results": "نتیجه",
 		"search": "جستجو",
 		"sign_in_with_x": "ورود با X",
 		"solana_any": "Solana (هر کدام)",

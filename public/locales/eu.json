@@ -2105,7 +2105,7 @@
 		"price_lowest_first": "Prezioa (merkeena lehenik)",
 		"reset_filters": "Iragazkiak berrezarri",
 		"resource_details": "Baliabidearen xehetasunak",
-		"results": "emaitza <span id=\"qlabel\"></span>",
+		"results": "emaitza",
 		"search": "Bilatu",
 		"sign_in_with_x": "sign-in-with-x",
 		"solana_any": "Solana (edozein)",

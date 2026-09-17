@@ -2116,7 +2116,7 @@
 		"price_lowest_first": "السعر (الأقل أولاً)",
 		"reset_filters": "إعادة تعيين الفلاتر",
 		"resource_details": "تفاصيل المورد",
-		"results": "نتيجة <span id=\"qlabel\"></span>",
+		"results": "نتيجة",
 		"search": "بحث",
 		"sign_in_with_x": "تسجيل الدخول باستخدام X",
 		"solana_any": "Solana (أي)",

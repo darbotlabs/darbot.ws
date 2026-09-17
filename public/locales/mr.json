@@ -2116,7 +2116,7 @@
 		"price_lowest_first": "किंमत (सर्वात कमी प्रथम)",
 		"reset_filters": "फिल्टर्स रीसेट करा",
 		"resource_details": "संसाधनाचे तपशील",
-		"results": "निकाल <span id=\"qlabel\"></span>",
+		"results": "निकाल",
 		"search": "शोधा",
 		"sign_in_with_x": "x सह साइन इन करा",
 		"solana_any": "Solana (कोणतेही)",

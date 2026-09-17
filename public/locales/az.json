@@ -2116,7 +2116,7 @@
 		"price_lowest_first": "Qiymət (ən aşağıdan başlayaraq)",
 		"reset_filters": "Filtrləri sıfırla",
 		"resource_details": "Resurs detalları",
-		"results": "nəticə <span id=\"qlabel\"></span>",
+		"results": "nəticə",
 		"search": "Axtarış",
 		"sign_in_with_x": "x-ilə-daxil-ol",
 		"solana_any": "Solana (istənilən)",

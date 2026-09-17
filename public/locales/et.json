@@ -2116,7 +2116,7 @@
 		"price_lowest_first": "Hind (madalaim esimesena)",
 		"reset_filters": "Lähtesta filtrid",
 		"resource_details": "Ressursi üksikasjad",
-		"results": "tulemust <span id=\"qlabel\"></span>",
+		"results": "tulemust",
 		"search": "Otsi",
 		"sign_in_with_x": "logi-sisse-x-ga",
 		"solana_any": "Solana (mis tahes)",
