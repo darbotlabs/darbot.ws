@@ -70,6 +70,11 @@ const TONE = {
 		icon: '·',
 		title: 'Conceptual page',
 	},
+	snapshot: {
+		cls: 'is-record',
+		icon: '#',
+		title: 'A record of a moment',
+	},
 };
 
 function fmtDate(iso) {
@@ -88,13 +93,21 @@ function fmtDate(iso) {
 function describe(entry) {
 	const when = fmtDate(entry.d);
 	const files = entry.f;
+	// A page someone read and confirmed is a stronger promise to the reader than
+	// one that merely has not drifted yet, so the review date leads when there is
+	// one. `v` is absent until a doc is stamped.
+	const checked = entry.v ? `Checked against the code ${fmtDate(entry.v)}` : null;
 	switch (entry.s) {
 		case 'fresh':
-			return `Last written ${when}. None of the ${entry.n} source file${entry.n === 1 ? '' : 's'} this page documents has changed since.`;
+			return checked
+				? `${checked}. None of the ${entry.n} source file${entry.n === 1 ? '' : 's'} it documents has changed since.`
+				: `Last written ${when}. None of the ${entry.n} source file${entry.n === 1 ? '' : 's'} this page documents has changed since.`;
 		case 'watch':
-			return `Last written ${when}. ${files} file${files === 1 ? '' : 's'} it documents changed since, so a detail here may have moved.`;
+			return `${checked || `Last written ${when}`}. ${files} file${files === 1 ? '' : 's'} it documents changed since, so a detail here may have moved.`;
 		case 'stale':
-			return `Last written ${when}. ${files} file${files === 1 ? '' : 's'} it documents changed since, and nobody has re-checked the page against them.`;
+			return `${checked || `Last written ${when}`}. ${files} file${files === 1 ? '' : 's'} it documents changed since, and nobody has re-checked the page against them.`;
+		case 'snapshot':
+			return `Written ${when}. This page records what was true at that point, so it is kept as written rather than updated to match today's code.`;
 		default:
 			return `Last written ${when}. This page explains concepts rather than specific files, so there is nothing to check it against.`;
 	}
@@ -120,6 +133,8 @@ function injectStyle() {
 .doc-freshness.is-stale{border-color:rgba(255,143,107,0.34);background:rgba(255,143,107,0.07)}
 .doc-freshness.is-stale .doc-freshness-chip{color:#ff8f6b}
 .doc-freshness.is-conceptual .doc-freshness-chip{opacity:0.62}
+.doc-freshness.is-record{border-color:rgba(157,184,255,0.3);background:rgba(157,184,255,0.06)}
+.doc-freshness.is-record .doc-freshness-chip{color:#9db8ff}
 .doc-freshness-text{flex:1 1 240px;min-width:0;opacity:0.78}
 /* The link is a control, not prose, so it cannot be dimmed the way
    .doc-freshness-text is: at 0.72 it measured 4.01:1 against the banner
@@ -131,6 +146,7 @@ function injectStyle() {
 :root[data-theme="light"] .doc-freshness.is-fresh .doc-freshness-chip{color:#0a8f66}
 :root[data-theme="light"] .doc-freshness.is-watch .doc-freshness-chip{color:#a16207}
 :root[data-theme="light"] .doc-freshness.is-stale .doc-freshness-chip{color:#c2410c}
+:root[data-theme="light"] .doc-freshness.is-record .doc-freshness-chip{color:#3556a8}
 :root[data-theme="light"] .doc-freshness-mark span{color:#fbfbfd}
 @media (max-width:520px){.doc-freshness{font-size:0.76rem;padding:9px 11px}}
 `;

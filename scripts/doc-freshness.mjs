@@ -13,11 +13,17 @@
  *   1. Read every doc and extract the repo paths, `npm run <script>` targets,
  *      and /api/ routes it mentions. Anything that resolves to a real file is a
  *      DEPENDENCY of that doc: source it claims to describe.
- *   2. Ask git when the doc was last edited, and whether any dependency has been
- *      committed to SINCE. Code that moved after the doc was last touched is
- *      code the doc has never been checked against.
+ *   2. Ask git when the doc was last edited, take the newer of that and its last
+ *      recorded review (data/docs-freshness-reviews.json), and ask whether any
+ *      dependency has been committed to SINCE. Code that moved after a doc was
+ *      last written or verified is code nobody has checked the doc against.
  *   3. Rank by how much moved. That ranking is a work queue, and every entry
  *      names the exact commits a writer needs to read.
+ *
+ * The review baseline is what makes the queue drainable. Reading a page and
+ * finding it already correct is real work with no diff to show for it, and
+ * without a stamp the only ways to record it were a cosmetic edit or leaving a
+ * permanent false positive. `npm run docs:review -- <doc>` records it instead.
  *
  * Nothing has to be annotated: this works on all 460 existing docs today,
  * because it reads the references authors already write.
@@ -46,6 +52,7 @@ const OUT = path.join(ROOT, 'public/docs-freshness.json');
 // reader download the whole report to render one chip.
 const SUMMARY = path.join(ROOT, 'public/docs-freshness-summary.json');
 const BUDGET = path.join(ROOT, 'data/docs-freshness-budget.json');
+const REVIEWS = path.join(ROOT, 'data/docs-freshness-reviews.json');
 
 const argv = process.argv.slice(2);
 const has = (n) => argv.includes('--' + n);
@@ -227,6 +234,10 @@ function buildHistory() {
 	).toString();
 
 	const byFile = new Map();
+	// Review stamps name a commit that need not have touched any doc dependency,
+	// so the timestamp of every commit is indexed too, by the same abbreviation
+	// `git rev-parse --short=9` produces.
+	const byCommit = new Map();
 	for (const chunk of raw.split('\x1e')) {
 		if (!chunk.trim()) continue;
 		const newline = chunk.indexOf('\n');
@@ -234,6 +245,7 @@ function buildHistory() {
 		const [sha, ts, ...subjectParts] = header.split('|');
 		if (!sha) continue;
 		const commit = { sha: sha.slice(0, 9), ts: Number(ts), subject: subjectParts.join('|') };
+		byCommit.set(commit.sha, commit);
 		if (newline === -1) continue;
 		for (const file of chunk.slice(newline + 1).split('\n')) {
 			if (!file) continue;
@@ -242,7 +254,42 @@ function buildHistory() {
 			list.push(commit);
 		}
 	}
-	return byFile;
+	return { byFile, byCommit };
+}
+
+// ── Review baselines ─────────────────────────────────────────────────────────
+
+/**
+ * Load the review stamps and resolve each one to the commit it was taken at.
+ *
+ * A stamp naming a commit this repository does not have is a hard error rather
+ * than a silent skip: it means someone hand-edited the store or stamped against
+ * a branch that never landed, and either way the baseline it claims is fiction.
+ */
+function loadReviews(byCommit) {
+	const store = JSON.parse(readFileSync(REVIEWS, 'utf8'));
+	const reviews = new Map();
+	const problems = [];
+	for (const [docPath, entry] of Object.entries(store.reviews || {})) {
+		if (!existsSync(path.join(ROOT, docPath))) {
+			problems.push(`${docPath}: stamped, but the doc no longer exists`);
+			continue;
+		}
+		const commit = byCommit.get(entry.commit);
+		if (!commit) {
+			problems.push(`${docPath}: stamped at ${entry.commit}, which is not a commit in this repo`);
+			continue;
+		}
+		reviews.set(docPath, {
+			sha: commit.sha,
+			ts: commit.ts,
+			date: new Date(commit.ts * 1000).toISOString().slice(0, 10),
+			kind: entry.kind === 'snapshot' ? 'snapshot' : 'verified',
+			by: entry.by || 'agent',
+			note: entry.note || null,
+		});
+	}
+	return { reviews, problems };
 }
 
 // ── Scoring ──────────────────────────────────────────────────────────────────
@@ -285,7 +332,8 @@ function classify(deps, signal) {
 }
 
 function analyze() {
-	const history = buildHistory();
+	const { byFile: history, byCommit } = buildHistory();
+	const { reviews, problems: reviewProblems } = loadReviews(byCommit);
 	const docs = collectDocs();
 	const now = Math.floor(Date.now() / 1000);
 
@@ -310,12 +358,17 @@ function analyze() {
 	const results = [];
 	for (const doc of parsed) {
 		const { path: docPath, markdown, deps, lastTouched } = doc;
+		const review = reviews.get(docPath) || null;
+		// The baseline is whichever clock is newer. A doc edited after its last
+		// review is measured from the edit; a doc verified after its last edit is
+		// measured from the review.
+		const baselineTs = Math.max(lastTouched?.ts || 0, review?.ts || 0);
 		const drift = [];
 		let commitCount = 0;
 		let signal = 0;
-		if (lastTouched) {
+		if (baselineTs) {
 			for (const dep of deps) {
-				const since = (history.get(dep) || []).filter((c) => c.ts > lastTouched.ts);
+				const since = (history.get(dep) || []).filter((c) => c.ts > baselineTs);
 				if (!since.length) continue;
 				commitCount += since.length;
 				const weight = specificity(share.get(dep) || 1);
@@ -349,7 +402,20 @@ function analyze() {
 						ageDays: Math.floor((now - lastTouched.ts) / DAY),
 					}
 				: null,
-			status: classify(deps, signal),
+			review: review
+				? {
+						sha: review.sha,
+						date: review.date,
+						kind: review.kind,
+						by: review.by,
+						note: review.note,
+						ageDays: Math.floor((now - review.ts) / DAY),
+					}
+				: null,
+			// A snapshot documents a moment, so today's code cannot make it wrong.
+			// Its dependencies stay visible (the evidence is still useful) but it is
+			// never ranked as work.
+			status: review?.kind === 'snapshot' ? 'snapshot' : classify(deps, signal),
 			deps: deps.length,
 			depFiles: deps.slice().sort(),
 			driftFiles: drift.length,
@@ -361,7 +427,7 @@ function analyze() {
 	}
 
 	results.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
-	return results;
+	return { results, reviewProblems };
 }
 
 /** The published URL a doc reads at, so the dashboard can link straight to it. */
@@ -408,39 +474,81 @@ function explain(results, docPath) {
 	console.log(
 		`  last edited   ${r.lastTouched?.date} (${r.lastTouched?.sha}), ${r.lastTouched?.ageDays}d ago`,
 	);
+	if (r.review) {
+		const note = r.review.note ? `: ${r.review.note}` : '';
+		console.log(
+			`  last reviewed ${r.review.date} (${r.review.sha}) by ${r.review.by}, ` +
+				`${r.review.kind}${note}`,
+		);
+	}
 	console.log(`  documents     ${r.deps} file(s)`);
+	if (r.status === 'snapshot') {
+		console.log(
+			`\n  A dated record, not a description of current behavior, so code moving under it ` +
+				`is not drift. Stamped with \`npm run docs:review -- ${r.path} --snapshot\`.\n`,
+		);
+		return;
+	}
 	if (!r.drift.length) {
 		console.log(`\n  Nothing it documents has changed since. This doc is verified.\n`);
 		return;
 	}
-	console.log(`\n  ${r.driftFiles} of them changed after this doc was last edited:\n`);
+	const clock =
+		r.review && r.review.date >= (r.lastTouched?.date || '') ? 'reviewed' : 'edited';
+	console.log(`\n  ${r.driftFiles} of them changed after this doc was last ${clock}:\n`);
 	for (const d of r.drift) {
 		const shared = d.sharedWith ? `, also documented by ${d.sharedWith} other doc(s)` : '';
 		console.log(`  ${d.file}  (${d.total} commit${d.total === 1 ? '' : 's'}${shared})`);
 		for (const c of d.commits) console.log(`      ${c.date}  ${c.sha}  ${c.subject}`);
 		console.log('');
 	}
+	console.log(
+		`  Read those commits, fix anything the doc gets wrong, then record the check:\n` +
+			`      npm run docs:review -- ${r.path} --note "<what you checked>"\n`,
+	);
 }
 
 // ── Entry ────────────────────────────────────────────────────────────────────
 
-const results = analyze();
+const { results, reviewProblems } = analyze();
 const totals = {
 	docs: results.length,
 	stale: results.filter((r) => r.status === 'stale').length,
 	watch: results.filter((r) => r.status === 'watch').length,
 	fresh: results.filter((r) => r.status === 'fresh').length,
 	unverifiable: results.filter((r) => r.status === 'unverifiable').length,
+	snapshot: results.filter((r) => r.status === 'snapshot').length,
+	reviewed: results.filter((r) => r.review).length,
 	trackedFiles: new Set(results.flatMap((r) => r.depFiles)).size,
 };
+
+/**
+ * A broken stamp is worse than no stamp: it claims a baseline nobody can check,
+ * and it silently suppresses drift for the doc it names. Both modes report it,
+ * and the gate refuses to pass with one outstanding.
+ */
+function printReviewProblems() {
+	if (!reviewProblems.length) return;
+	console.error(`\n${reviewProblems.length} broken review stamp(s):`);
+	for (const problem of reviewProblems) console.error(`  ${problem}`);
+	console.error(
+		`Fix data/docs-freshness-reviews.json, or drop the dead entries with ` +
+			`\`npm run docs:review -- --prune\`.`,
+	);
+}
 
 if (has('check')) {
 	const budget = JSON.parse(readFileSync(BUDGET, 'utf8'));
 	const over = totals.stale - budget.maxStale;
 	console.log(
 		`docs freshness: ${totals.stale} stale / ${totals.watch} watch / ${totals.fresh} fresh ` +
-			`/ ${totals.unverifiable} unverifiable (budget ${budget.maxStale} stale)`,
+			`/ ${totals.unverifiable} unverifiable / ${totals.snapshot} snapshot ` +
+			`(budget ${budget.maxStale} stale)`,
 	);
+	if (reviewProblems.length) {
+		printReviewProblems();
+		process.exit(1);
+	}
 	if (over > 0) {
 		printTable(results, 15);
 		console.error(
@@ -485,11 +593,19 @@ writeFileSync(
 			totals,
 			// Short keys: this file is fetched by every docs page that renders a
 			// badge, so its bytes are on the reader's critical path.
-			// s status, g signal, d date last edited, f files drifted, n deps known
+			// s status, g signal, d date last edited, f files drifted, n deps known,
+			// v date last reviewed (absent when the doc has never been stamped)
 			docs: Object.fromEntries(
 				results.map((r) => [
 					r.path,
-					{ s: r.status, g: r.signal, d: r.lastTouched?.date || null, f: r.driftFiles, n: r.deps },
+					{
+						s: r.status,
+						g: r.signal,
+						d: r.lastTouched?.date || null,
+						f: r.driftFiles,
+						n: r.deps,
+						...(r.review ? { v: r.review.date } : {}),
+					},
 				]),
 			),
 		},
@@ -501,7 +617,9 @@ writeFileSync(
 console.log(
 	`Analyzed ${totals.docs} docs against ${totals.trackedFiles} source files.\n` +
 		`  fresh ${totals.fresh}   watch ${totals.watch}   stale ${totals.stale}   ` +
-		`unverifiable ${totals.unverifiable}`,
+		`unverifiable ${totals.unverifiable}   snapshot ${totals.snapshot}\n` +
+		`  ${totals.reviewed} doc(s) carry a review stamp.`,
 );
+printReviewProblems();
 printTable(results, Number(opt('top', 20)));
 console.log(`\nWrote ${path.relative(ROOT, OUT)} (read by /docs/freshness).`);

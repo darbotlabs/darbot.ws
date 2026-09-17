@@ -51,8 +51,9 @@
 			<p class="df-lede">
 				Every doc names the files, npm scripts, and API routes it is about. That makes each page
 				measurable: bind it to the source it names, then ask git whether that source was committed
-				to after the doc was last written. Code that moved since is code the page has never been
-				checked against.
+				to after the doc was last written or last reviewed. Code that moved since is code the page
+				has never been checked against. Reading a page and finding it already correct counts too:
+				that check is recorded as a review, so real work never has to be faked with a cosmetic edit.
 			</p>
 			<p class="df-meta" id="df-meta">Loading the report…</p>
 
@@ -107,8 +108,12 @@
 					label: 'Conceptual',
 					blurb: 'Name no code, so nothing to check. Not a problem.',
 				},
+				snapshot: {
+					label: 'Records',
+					blurb: 'Dated records of a moment. Code moving under them is not drift.',
+				},
 			};
-			const ORDER = ['stale', 'watch', 'fresh', 'unverifiable'];
+			const ORDER = ['stale', 'watch', 'fresh', 'unverifiable', 'snapshot'];
 
 			let report = null;
 			let filters = new Set();
@@ -186,10 +191,38 @@
 				return list.slice().sort(by[sort]);
 			}
 
+			/**
+			 * Who last checked this page against the code, and when.
+			 *
+			 * Drift alone cannot say whether anyone is looking after a page: a doc
+			 * nobody has ever opened and a doc someone read yesterday and found
+			 * correct both show zero drift right after an edit. The stamp is the
+			 * difference, so it is stated plainly rather than folded into the score.
+			 */
+			function reviewHtml(d) {
+				if (!d.review) {
+					if (d.status === 'fresh' || d.status === 'unverifiable') return '';
+					return `<p class="df-review">No one has recorded a check of this page against the code.
+						After reading it, run <code>npm run docs:review -- ${esc(d.path)}</code>.</p>`;
+				}
+				const kind =
+					d.review.kind === 'snapshot'
+						? 'Kept as a dated record'
+						: 'Checked against the code';
+				return `<p class="df-review">
+					<b>${kind}</b> on ${fmtDate(d.review.date)} by ${esc(d.review.by)}
+					at <code>${esc(d.review.sha)}</code>${d.review.note ? `. ${esc(d.review.note)}` : ''}
+				</p>`;
+			}
+
 			function rowHtml(d) {
 				const gh = 'https://github.com/nirholas/three.ws/blob/main/' + d.path;
 				const commands = `npm run docs:freshness -- --doc ${d.path}`;
-				const evidence = d.drift.length
+				const evidence = d.status === 'snapshot'
+					? `<p class="df-empty-deps">This page records a moment: an audit, an incident, or a finished
+						piece of work. Rewriting it to match today's code would destroy the record, so it is
+						never counted as drift.</p>`
+					: d.drift.length
 					? d.drift
 							.map(
 								(dep) => `
@@ -246,6 +279,7 @@
 								<a class="df-btn" href="${esc(gh)}" rel="noopener">Edit on GitHub</a>
 								<button class="df-btn df-copy" type="button" data-copy="${esc(commands)}">Copy the explain command</button>
 							</div>
+							${reviewHtml(d)}
 							${evidence}
 						</div>
 					</details>

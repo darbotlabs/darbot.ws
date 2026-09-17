@@ -23,6 +23,9 @@
 	--df-watch: #ffd166;
 	--df-fresh: #7cf6c4;
 	--df-unver: rgba(242, 244, 248, 0.34);
+	/* Dated records: a distinct, calm hue, because a snapshot is neither a pass
+	   nor a warning. It is a doc that measurement does not apply to. */
+	--df-record: #9db8ff;
 	--df-radius: 14px;
 	--df-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -41,6 +44,7 @@
 	--df-watch: #a16207;
 	--df-fresh: #0a8f66;
 	--df-unver: rgba(13, 16, 23, 0.38);
+	--df-record: #3556a8;
 }
 
 * {
@@ -219,6 +223,9 @@ body {
 .df-bar .k-unverifiable {
 	background: var(--df-unver);
 }
+.df-bar .k-snapshot {
+	background: var(--df-record);
+}
 
 /* ── Controls ─────────────────────────────────────────────────────────────── */
 
@@ -346,6 +353,34 @@ body {
 }
 [data-status='unverifiable'] .df-dot {
 	background: var(--df-unver);
+}
+[data-status='snapshot'] .df-dot {
+	background: var(--df-record);
+}
+
+/* The review line sits under the evidence: who last checked this page against
+   the code, and when. It is the answer to "is anyone looking after this page?",
+   which the drift number alone cannot give. */
+.df-review {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	align-items: baseline;
+	margin: 0 0 14px;
+	padding: 9px 12px;
+	border: 1px solid var(--df-line);
+	border-radius: 10px;
+	background: var(--df-panel);
+	font-size: 0.82rem;
+	color: var(--df-dim);
+}
+.df-review b {
+	color: var(--df-text);
+	font-weight: 600;
+}
+.df-review code {
+	font-family: var(--df-mono);
+	font-size: 0.94em;
 }
 
 .df-name {

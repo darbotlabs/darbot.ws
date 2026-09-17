@@ -30,6 +30,10 @@ const GATE_GUARDS = {
 	'audit:motion': 'scripts/build-motion-signatures.mjs',
 	'audit:tour-global': 'scripts/sync-tour-global.mjs',
 	'audit:route-shadowing': 'scripts/audit-route-shadowing.mjs',
+	// Wired once the stale backlog was refreshed and review baselines existed. Its
+	// budget (data/docs-freshness-budget.json) is what keeps it green in a shared
+	// worktree: normal code churn has headroom, a real regression does not.
+	'check:docs-freshness': 'scripts/doc-freshness.mjs',
 };
 
 describe('guards wired into npm run gate', () => {
