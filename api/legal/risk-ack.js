@@ -1,56 +1,84 @@
-// /api/legal/risk-ack — record a user's acceptance of the Risk Disclosure.
+// /api/legal/risk-ack: sign, and check, the real-funds agreements.
 //
-//   POST /api/legal/risk-ack   { version, context?, path? }
-//     → 200 { ok: true, recorded }
-//     → 400 invalid_version, 413 payload_too_large,
-//       415 unsupported_media_type when the body is not a readable acceptance
+//   GET  /api/legal/risk-ack
+//     → 200 { authenticated, signed, version, signedAt, documents, history? }
+//       history (the account's past signatures) only with ?history=1 and a session.
 //
-// The client-side gate (public/risk-ack.js) fires this after the user accepts
-// the real-funds risk acknowledgment. The acceptance itself lives in the
-// browser (localStorage, versioned); this endpoint writes the durable
-// server-side record into audit_log — who (when signed in), which disclosure
-// version, from which feature ('trade', 'snipe', 'x402-pay', …), when, from
-// where. The audit-log-cleanup cron exempts 'risk-ack-accept' (and
-// 'tos-accept') rows from its 365-day retention, so acceptance records
-// persist indefinitely.
+//   POST /api/legal/risk-ack
+//     { version, documents: {tos, risk, agentWallet}, attestations: {eligible, noLiability},
+//       signatureName, context?, path? }
+//     → 200 { ok: true, recorded: true, version }
+//     → 400 invalid_body | invalid_version | document_not_accepted |
+//           attestation_missing | invalid_signature
+//     → 413 payload_too_large, 415 unsupported_media_type
+//     → 503 signature_not_recorded when the durable write did not land
 //
-// Anonymous acceptances are recorded too (userId null): the gate also runs in
-// third-party x402 embeds and pre-auth flows where no session exists.
+// The signing dialog (public/risk-ack.js) posts here before any real-funds
+// action. The row in legal_signatures is what requireRealFundsAgreement()
+// (api/_lib/real-funds-agreement.js) checks on every money-moving endpoint,
+// so a write that did not land is a failure the caller must see: the dialog
+// stays open and asks the person to sign again, rather than letting them walk
+// into a refusal on the very next request.
 //
-// `recorded` reports whether the durable write actually landed, and the write
-// is awaited rather than fired and forgotten: an acceptance the caller was
-// told about but that never reached the database is exactly the failure this
-// endpoint exists to prevent. A dropped write still answers 200, because the
-// user did accept and their money action must not stall on our bookkeeping.
+// Anonymous signatures are recorded too (user_id null): a visitor funding
+// someone else's agent, or paying through the x402 embed on a merchant site,
+// signs before any session exists. The audit-log-cleanup cron exempts the
+// matching 'risk-ack-accept' audit rows from retention, and legal_signatures
+// is never pruned.
 
 import { getSessionUser } from '../_lib/auth.js';
 import { cors, error, json, method, readJson, wrap, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
-import { logAuditNow } from '../_lib/audit.js';
-// The version constant is owned by the client gate, which is dependency-free
-// and importable from both worlds (see its header). Importing it here rather
-// than restating the number keeps the accepted version bound to the disclosure
-// that was actually shown; a client cannot record acceptance of a revision
-// that does not exist yet.
+import {
+	agreementRequirement,
+	currentSignatureFor,
+	recordRealFundsSignature,
+	signatureHistoryFor,
+	validateSignatureBody,
+} from '../_lib/real-funds-agreement.js';
 import { RISK_ACK_VERSION } from '../../public/risk-ack.js';
 
-const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const PATH = /^\/[\x20-\x7e]{0,199}$/;
-
 export default wrap(async function handler(req, res) {
-	// '*' origin: the acknowledgment modal also runs inside the drop-in x402
-	// embed on merchant sites; acceptance recording must not be blocked there.
-	// Those requests are credential-less, so '*' is safe.
-	if (cors(req, res, { origins: '*', methods: 'POST,OPTIONS' })) return;
-	if (!method(req, res, ['POST'])) return;
+	// '*' origin: the signing dialog also runs inside the drop-in x402 embed on
+	// merchant sites. Those requests are credential-less and sign anonymously,
+	// so '*' is safe; a session-bearing signature only comes from our origin.
+	if (cors(req, res, { origins: '*', methods: 'GET,POST,OPTIONS' })) return;
+	if (!method(req, res, ['GET', 'POST'])) return;
 
 	const rl = await limits.publicIp(clientIp(req));
 	if (!rl.success) return rateLimited(res, rl);
 
-	// Swallowing the read error collapsed every body failure into the version
-	// complaint below, so an oversized or non-JSON POST was told its `version`
-	// was wrong when the field was fine and the body was the problem. Report the
-	// real cause (413 oversized, 415 wrong content-type, 400 unparseable).
+	if (req.method === 'GET') return handleStatus(req, res);
+	return handleSign(req, res);
+});
+
+async function handleStatus(req, res) {
+	const user = await getSessionUser(req).catch(() => null);
+	const base = { version: RISK_ACK_VERSION, documents: agreementRequirement().documents };
+	if (!user) {
+		return json(res, 200, { authenticated: false, signed: false, signedAt: null, ...base }, { 'cache-control': 'no-store' });
+	}
+	let signature;
+	try {
+		signature = await currentSignatureFor(user.id);
+	} catch {
+		return error(res, 503, 'status_unavailable', 'could not read your signed agreements, try again');
+	}
+	const out = {
+		authenticated: true,
+		signed: !!signature,
+		signedAt: signature?.signedAt ?? null,
+		signatureName: signature?.signatureName ?? null,
+		...base,
+	};
+	const url = new URL(req.url, 'http://local');
+	if (url.searchParams.get('history') === '1') {
+		out.history = await signatureHistoryFor(user.id).catch(() => []);
+	}
+	return json(res, 200, out, { 'cache-control': 'no-store' });
+}
+
+async function handleSign(req, res) {
 	let body;
 	try {
 		body = await readJson(req, 10_000);
@@ -60,27 +88,19 @@ export default wrap(async function handler(req, res) {
 			status === 413 ? 'payload_too_large' : status === 415 ? 'unsupported_media_type' : 'bad_request';
 		return error(res, status, code, err?.message || 'could not read request body');
 	}
-	const version = Number(body?.version);
-	if (!Number.isInteger(version) || version < 1 || version > RISK_ACK_VERSION) {
-		return error(
-			res,
-			400,
-			'invalid_version',
-			`version must be an integer between 1 and ${RISK_ACK_VERSION}`,
-		);
-	}
-	const context = typeof body?.context === 'string' && SLUG.test(body.context) ? body.context : null;
-	const path = typeof body?.path === 'string' && PATH.test(body.path) ? body.path : null;
+
+	const parsed = validateSignatureBody(body);
+	if (!parsed.ok) return error(res, 400, parsed.code, parsed.message);
 
 	const user = await getSessionUser(req).catch(() => null);
-
-	const recorded = await logAuditNow({
-		userId: user?.id ?? null,
-		action: 'risk-ack-accept',
-		resourceId: null,
-		meta: { version, context, path },
-		req,
-	});
-
-	return json(res, 200, { ok: true, recorded });
-});
+	const recorded = await recordRealFundsSignature({ userId: user?.id ?? null, value: parsed.value, req });
+	if (!recorded) {
+		return error(
+			res,
+			503,
+			'signature_not_recorded',
+			'your signature could not be saved; nothing was charged, please sign again',
+		);
+	}
+	return json(res, 200, { ok: true, recorded: true, version: RISK_ACK_VERSION }, { 'cache-control': 'no-store' });
+}

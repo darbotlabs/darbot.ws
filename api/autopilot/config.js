@@ -12,6 +12,7 @@ import { sql } from '../_lib/db.js';
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { cors, json, method, readJson, wrap, error } from '../_lib/http.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { getAutopilotConfig, setAutopilotConfig, computeTrust } from '../_lib/autopilot.js';
 import { isUuid } from '../_lib/validate.js';
 
@@ -63,7 +64,6 @@ export default wrap(async (req, res) => {
 		return json(res, 200, { config, trust });
 	}
 
-	if (!(await requireCsrf(req, res, auth.userId))) return;
 	const body = await readJson(req);
 	const agentId = body.agentId || body.agent_id;
 	const agent = await ownedAgent(req, res, agentId, auth);
@@ -75,6 +75,18 @@ export default wrap(async (req, res) => {
 	if (body.auto_execute && typeof body.auto_execute === 'object') patch.auto_execute = body.auto_execute;
 	if ('daily_spend_sol' in body) patch.daily_spend_sol = body.daily_spend_sol;
 	if ('require_confirm' in body) patch.require_confirm = body.require_confirm === true;
+
+	// A patch that leaves autopilot enabled with the wallet_transfer scope, while
+	// arming it or setting its SOL cap, lets the agent spend real SOL, so it needs a
+	// signed real-funds agreement. Turning autopilot off or revoking the scope never
+	// does. Checked before CSRF so a refusal does not burn the single-use token.
+	const current = getAutopilotConfig(agent.meta);
+	const armedAfter =
+		('enabled' in patch ? patch.enabled : current.enabled) &&
+		(patch.scopes && 'wallet_transfer' in patch.scopes ? patch.scopes.wallet_transfer === true : current.scopes.wallet_transfer);
+	const touchesSpend = 'enabled' in patch || 'daily_spend_sol' in patch || (patch.scopes && 'wallet_transfer' in patch.scopes);
+	if (armedAfter && touchesSpend && !(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'autopilot-config' }))) return;
+	if (!(await requireCsrf(req, res, auth.userId))) return;
 
 	const config = await setAutopilotConfig(agentId, patch);
 	return json(res, 200, { config });

@@ -4,6 +4,7 @@
 // is autonomous, the autopilot then performs + settles the job through to payout.
 
 import { cors, error, json, method, readJson, wrap } from '../_lib/http.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { authWrite, loadOwnedAgent, ownershipError, requireUuid } from '../_lib/labor-auth.js';
 import { getBounty, getBid, listBidsForBounty, getJobByBounty } from '../_lib/agent-labor.js';
 import { applyAward } from '../_lib/labor-match.js';
@@ -37,6 +38,9 @@ export default wrap(async (req, res) => {
 	const rawBid = await getBid(bidId);
 	if (!rawBid || rawBid.bounty_id !== bountyId) return error(res, 404, 'bid_not_found', 'bid not found for this bounty');
 	if (rawBid.status !== 'pending') return error(res, 409, 'bid_unavailable', `that bid is ${rawBid.status}`);
+
+	// Awarding commits the poster's escrowed reward to this worker's payout.
+	if (!(await requireRealFundsAgreement(req, res, { userId, context: 'labor-award' }))) return;
 
 	const shaped = (await listBidsForBounty(bountyId)).find((b) => b.id === bidId);
 	const winner = { ...shaped, worker_user_id: rawBid.worker_user_id, price_atomics: String(rawBid.price_atomics) };

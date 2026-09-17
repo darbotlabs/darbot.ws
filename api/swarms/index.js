@@ -20,11 +20,23 @@ import { cors, method, json, error, wrap, readJson, rateLimited } from '../_lib/
 import { parseLimit, parseOffset } from '../_lib/http-params.js';
 import { resolveAccount } from '../_lib/account-auth.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits } from '../_lib/rate-limit.js';
 import {
 	createSwarm, joinSwarm, contributeToSwarm, exitSwarm, killSwarm,
-	setSwarmPaused, listSwarms, listSwarmsForUser, parseContributionLamports, SwarmError,
+	setSwarmPaused, listSwarms, listSwarmsForUser, parseContributionLamports, SwarmError, getSwarm,
 } from '../_lib/swarms.js';
+
+// Actions that move treasury funds or turn autonomous treasury trading on. kill,
+// pause and join move nothing, so they stay open without a signed agreement.
+const REAL_FUNDS_ACTIONS = new Set(['create', 'contribute', 'exit', 'resume']);
+
+async function swarmNetworkFor(body, action) {
+	if (action === 'create') return body.network === 'devnet' ? 'devnet' : 'mainnet';
+	if (!isUuid(body.swarm_id)) return undefined;
+	const swarm = await getSwarm(body.swarm_id);
+	return swarm?.network;
+}
 
 const isUuid = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
@@ -61,15 +73,20 @@ export default wrap(async (req, res) => {
 	// POST: all mutations require auth, CSRF (session callers), and a budget.
 	const auth = await resolveAccount(req, res);
 	if (!auth) return error(res, 401, 'unauthorized', 'sign in required');
-	if (!(await requireCsrf(req, res, auth.userId))) return;
-	const rl = await limits.swarmMutate(auth.userId);
-	if (!rl.success) return rateLimited(res, rl, 'too many swarm actions: slow down');
 	// Let readJson's own 415 / 400 surface (wrap() renders either from err.status).
 	// Swallowing it here answered a wrong content-type with `unknown action`, which
 	// sends the caller hunting through their action names for a body they never
-	// managed to send.
+	// managed to send. The body is read before CSRF so the agreement gate can refuse
+	// a money action without burning the single-use token.
 	const body = await readJson(req);
 	const action = String(body?.action || '');
+	if (REAL_FUNDS_ACTIONS.has(action)) {
+		const network = await swarmNetworkFor(body, action);
+		if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network, context: `swarm-${action}` }))) return;
+	}
+	if (!(await requireCsrf(req, res, auth.userId))) return;
+	const rl = await limits.swarmMutate(auth.userId);
+	if (!rl.success) return rateLimited(res, rl, 'too many swarm actions: slow down');
 
 	try {
 		switch (action) {

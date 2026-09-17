@@ -17,6 +17,7 @@ import { evmFallbackProvider } from '../_lib/evm/rpc.js';
 import { limits } from '../_lib/rate-limit.js';
 import { getSessionUser, isSameSiteOrigin } from '../_lib/auth.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { logAudit } from '../_lib/audit.js';
 import { sql } from '../_lib/db.js';
 import { getBalances, walletUsdTotal, invalidateBalances } from '../_lib/balances.js';
@@ -404,6 +405,7 @@ async function handleSend(req, res) {
 	if (!isSameSiteOrigin(req)) {
 		return error(res, 403, 'forbidden', 'cross-site request denied');
 	}
+	if (!(await requireRealFundsAgreement(req, res, { userId: user.id, context: 'portfolio-send' }))) return;
 	if (!(await requireCsrf(req, res, user.id))) return;
 
 	const rl = await limits.strict(`portfolio:send:${user.id}`);

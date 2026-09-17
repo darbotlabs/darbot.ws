@@ -26,6 +26,7 @@ import {
 } from '../../_lib/http.js';
 import { limits, clientIp } from '../../_lib/rate-limit.js';
 import { isUuid } from '../../_lib/validate.js';
+import { requireRealFundsAgreement } from '../../_lib/real-funds-agreement.js';
 import { loadAgentForSigning, solanaConnection } from '../../_lib/agent-pumpfun.js';
 import { submitProtected } from '../../_lib/execution-engine.js';
 import { buildAgentTradeFee } from '../../_lib/pump-platform-fee.js';
@@ -128,6 +129,8 @@ async function handleBuy(req, res, id) {
 	} catch (e) {
 		return error(res, 400, 'validation_error', e.errors?.[0]?.message || 'invalid body');
 	}
+
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: body.network, context: 'pumpfun-buy' }))) return;
 
 	const loaded = await loadAgentForSigning(id, auth.userId);
 	if (loaded.error) return error(res, loaded.error.status, loaded.error.code, loaded.error.msg);
@@ -437,6 +440,8 @@ async function handleLaunch(req, res, id) {
 		return error(res, 400, 'validation_error', e.errors?.[0]?.message || 'invalid body');
 	}
 
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: body.network, context: 'pumpfun-launch' }))) return;
+
 	const loaded = await loadAgentForSigning(id, auth.userId);
 	if (loaded.error) return error(res, loaded.error.status, loaded.error.code, loaded.error.msg);
 	const { keypair, meta } = loaded;
@@ -641,6 +646,10 @@ async function handlePay(req, res, id) {
 	} catch (e) {
 		return error(res, 400, 'validation_error', e.errors?.[0]?.message || 'invalid body');
 	}
+
+	// Every action except the read-only balances lookup signs a transaction with
+	// the custodial key, so it needs the signed real-funds agreements.
+	if (body.action !== 'balances' && !(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: body.network, context: 'pumpfun-pay' }))) return;
 
 	const loaded = await loadAgentForSigning(id, auth.userId, {
 		reason: `pumpfun.pay.${body.action}`,
@@ -1071,6 +1080,8 @@ async function handleSell(req, res, id) {
 		return error(res, 400, 'validation_error', e.errors?.[0]?.message || 'invalid body');
 	}
 
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: body.network, context: 'pumpfun-sell' }))) return;
+
 	const loaded = await loadAgentForSigning(id, auth.userId);
 	if (loaded.error) return error(res, loaded.error.status, loaded.error.code, loaded.error.msg);
 	const { keypair } = loaded;
@@ -1292,6 +1303,8 @@ async function handleSwap(req, res, id) {
 		return error(res, 400, 'validation_error', 'side=buy requires solAmount or usdcAmount');
 	if (body.side === 'sell' && !body.tokenAmount)
 		return error(res, 400, 'validation_error', 'side=sell requires tokenAmount');
+
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: body.network, context: 'pumpfun-swap' }))) return;
 
 	const loaded = await loadAgentForSigning(id, auth.userId, {
 		reason: `pumpfun.swap.${body.side}`,

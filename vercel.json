@@ -5619,6 +5619,14 @@
 			"dest": "/legal/risk.html"
 		},
 		{
+			"src": "/legal/agent-wallet/?",
+			"dest": "/legal/agent-wallet.html"
+		},
+		{
+			"src": "/legal/agreements/?",
+			"dest": "/legal/agreements.html"
+		},
+		{
 			"src": "/legal/nvidia-ngc-eula/?",
 			"dest": "/legal/nvidia-ngc-eula.html"
 		},

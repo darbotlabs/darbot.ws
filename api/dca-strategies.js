@@ -13,6 +13,7 @@ import { sql } from './_lib/db.js';
 import { getSessionUser } from './_lib/auth.js';
 import { cors, json, error, wrap, readJson, method, rateLimited } from './_lib/http.js';
 import { requireCsrf } from './_lib/csrf.js';
+import { requireRealFundsAgreement } from './_lib/real-funds-agreement.js';
 import { parse } from './_lib/validate.js';
 import { limits, clientIp } from './_lib/rate-limit.js';
 import {
@@ -154,6 +155,8 @@ export default wrap(async (req, res) => {
 			if (!paused) return error(res, 409, 'conflict', 'strategy changed while pausing');
 			return json(res, 200, { ok: true, data: paused });
 		}
+
+		if (!(await requireRealFundsAgreement(req, res, { userId: session.id, context: 'dca-resume' }))) return;
 
 		// Resuming onto a dead delegation would only fail on the next tick and
 		// re-pause the row, so refuse with the reason instead.
@@ -364,6 +367,7 @@ export default wrap(async (req, res) => {
 		LIMIT 1
 	`;
 	if (!agent) return error(res, 404, 'not_found', 'agent not found');
+	if (!(await requireRealFundsAgreement(req, res, { userId: session.id, context: 'dca-create' }))) return;
 
 	// Confirm delegation exists and is active, and belongs to this agent
 	const [delegation] = await sql`

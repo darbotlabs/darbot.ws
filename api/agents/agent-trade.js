@@ -20,6 +20,7 @@
 // skips the broadcast (paper mode) — an ops/test toggle, never the default.
 
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import { cors, json, method, error, readJson, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
@@ -401,6 +402,7 @@ async function handleExecute(req, res, id) {
 	// CSRF on the real, fund-moving path only — `simulate` is a dry run that never
 	// signs or records. Bearer/API-key callers (the primary consumers of this flat
 	// trade endpoint) are exempt inside requireCsrf.
+	if (!input.simulate && !(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: input.network, context: 'trade' }))) return;
 	if (!input.simulate && !(await requireCsrf(req, res, auth.userId))) return;
 
 	let result;

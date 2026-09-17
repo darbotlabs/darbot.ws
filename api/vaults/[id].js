@@ -19,6 +19,7 @@ import {
 	TERM_BOUNDS, clampTermBps,
 } from '../_lib/vault-accounting.js';
 import { isUuid } from '../_lib/validate.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 
 function idFromReq(req) {
 	const fromQuery = req.query?.id;
@@ -123,6 +124,7 @@ async function handlePatch(req, res, id) {
 	}
 	if (action === 'resume') {
 		if (vault.status === 'closed') return error(res, 409, 'closed', 'vault is closed');
+		if (!(await requireRealFundsAgreement(req, res, { userId: who.userId, network: vault.network, context: 'vault-resume' }))) return;
 		const next = await setVaultStatus(vault.id, 'open', { haltReason: null });
 		await recordVaultEvent({ vaultId: vault.id, type: 'resume', userId: who.userId, reason: 'owner resumed trading' });
 		return json(res, 200, { data: { vault: next } }, { 'cache-control': 'no-store' });

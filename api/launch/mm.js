@@ -19,6 +19,7 @@ import { cors, json, method, error, readJson, rateLimited, wrap } from '../_lib/
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import {
 	PRESETS, GUARDS, GRADUATION_ACTIONS, PolicyError,
@@ -33,6 +34,17 @@ const SSE_POLL_MS = 3_000;
 const SSE_MAX_MS = 10 * 60_000;
 // Lifecycle controls, as opposed to a create/update POST (no `action` param).
 const LIFECYCLE_ACTIONS = ['pause', 'resume', 'kill', 'withdraw'];
+
+// True when applying `patch` moves the maker INTO live trading (enabled, not
+// killed, mode live) from any state that was not already live. Only that
+// transition needs the signed real-funds agreement; pause, kill and simulate
+// edits never do.
+function armsLiveMaker(existing, patch) {
+	const live = (p) => p.enabled === true && p.kill_switch !== true && p.mode === 'live';
+	const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+	const before = existing || { enabled: false, kill_switch: false, mode: 'simulate' };
+	return live({ ...before, ...defined }) && !(existing && live(existing));
+}
 
 // An explicit network in the body wins over the query string: a POST carries its
 // own mint + network pair, and honouring the query there let a stale `?network=`
@@ -193,7 +205,9 @@ async function handlePost(req, res, url) {
 			return json(res, 200, { data: { policy: toPublicPolicy(row) } });
 		}
 		if (action === 'resume') {
-			const row = await upsertPolicy({ mint, network, agentId, userId: auth.userId, patch: { enabled: true, kill_switch: false } });
+			const resumePatch = { enabled: true, kill_switch: false };
+			if (armsLiveMaker(existing, resumePatch) && !(await requireRealFundsAgreement(req, res, { userId: auth.userId, network, context: 'market-maker-arm' }))) return;
+			const row = await upsertPolicy({ mint, network, agentId, userId: auth.userId, patch: resumePatch });
 			return json(res, 200, { data: { policy: toPublicPolicy(row) } });
 		}
 		if (action === 'kill') {
@@ -215,6 +229,7 @@ async function handlePost(req, res, url) {
 
 		// Create or update from the supplied fields/preset.
 		const patch = normalizePolicyPatch(body, { isCreate: !existing });
+		if (armsLiveMaker(existing, patch) && !(await requireRealFundsAgreement(req, res, { userId: auth.userId, network, context: 'market-maker-arm' }))) return;
 		const row = await upsertPolicy({ mint, network, agentId, userId: auth.userId, patch });
 		return json(res, existing ? 200 : 201, { data: { policy: toPublicPolicy(row) } });
 	} catch (e) {

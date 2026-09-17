@@ -32,6 +32,7 @@ import { authenticateBearer, extractBearer, getSessionUser } from '../_lib/auth.
 import { cors, error, json, method, readJson, wrap, rateLimited } from '../_lib/http.js';
 import { clientIp, limits } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { rpcFallbackFromEnv } from '../_lib/solana/rpc-fallback.js';
 import { isUuid } from '../_lib/validate.js';
 import { solanaConnection } from '../_lib/solana/connection.js';
@@ -193,6 +194,7 @@ async function handleCreate(req, res) {
 		if (!agent) return error(res, 404, 'not_found', 'buyer agent not found');
 		if (agent.user_id !== auth.userId) return error(res, 403, 'forbidden', 'not your agent');
 		buyerAgent = agent;
+		if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'agent-asset-purchase' }))) return;
 	}
 
 	const [price] = await sql`

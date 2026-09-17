@@ -36,6 +36,7 @@ import {
 	fundAgent,
 } from './wallet-api.js';
 import { openDepositSheet } from './wallet-deposit.js';
+import { ensureRiskAck } from './shared/risk-ack.js';
 
 const root = document.getElementById('wlt-root');
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -704,6 +705,7 @@ async function onReviewFund(form) {
 async function onConfirm() {
 	const p = state.pending;
 	if (!p) return;
+	if (!(await ensureRiskAck({ context: p.kind === 'fund' ? 'fund-agent' : 'master-send' }))) return;
 	state.busy = true;
 	render();
 	const res =
@@ -745,6 +747,9 @@ async function onConfirm() {
 async function onDeposit() {
 	const w = state.wallet;
 	if (!w) return;
+	// The deposit sheet reveals a custodial address; funding it is governed by
+	// the Agent Wallet Agreement, so the address is shown only after signing.
+	if (!(await ensureRiskAck({ context: 'deposit' }))) return;
 	let latest = null;
 	const arrival = await openDepositSheet({
 		solanaAddress: w.solana_address,

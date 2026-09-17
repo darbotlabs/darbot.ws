@@ -23,6 +23,7 @@ import { sql } from './_lib/db.js';
 import { getSessionUser, authenticateBearer, extractBearer } from './_lib/auth.js';
 import { cors, json, method, wrap, error, readJson, rateLimited } from './_lib/http.js';
 import { requireCsrf } from './_lib/csrf.js';
+import { requireRealFundsAgreement } from './_lib/real-funds-agreement.js';
 import { limits, clientIp } from './_lib/rate-limit.js';
 import { z } from 'zod';
 import { parse } from './_lib/validate.js';
@@ -187,6 +188,7 @@ export default wrap(async (req, res) => {
 			WHERE id = ${agentId} AND user_id = ${userId} AND deleted_at IS NULL
 		`;
 		if (!agent) return error(res, 403, 'forbidden', 'agent not found or not owned by you');
+		if (!(await requireRealFundsAgreement(req, res, { userId, context: 'recurring-payment-create' }))) return;
 
 		// Verify the delegation is active and belongs to this agent.
 		const [delegation] = await sql`
@@ -380,6 +382,7 @@ export default wrap(async (req, res) => {
 		}
 
 		if (body.action === 'resume') {
+			if (!(await requireRealFundsAgreement(req, res, { userId, context: 'recurring-payment-resume' }))) return;
 			// Resuming a schedule whose delegation is gone would just fail on the
 			// next tick and re-pause it. Say so instead of pretending it worked.
 			if (current.delegation_status !== 'active') {

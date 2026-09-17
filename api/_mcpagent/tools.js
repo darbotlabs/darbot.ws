@@ -32,6 +32,7 @@ import {
 	usdcToAtomics,
 	MonetizeError,
 } from '../_lib/agent-paid-services.js';
+import { currentSignatureFor, agreementRequirement } from '../_lib/real-funds-agreement.js';
 
 function rpcError(code, message, data) {
 	const e = new Error(message);
@@ -61,6 +62,42 @@ function signInRequired(text) {
 	return {
 		content: [{ type: 'text', text }],
 		structuredContent: { signed_in: false },
+		isError: true,
+	};
+}
+
+// Real funds only move for an account that signed the current real-funds
+// agreements. Returns null when the caller may proceed, otherwise a designed
+// tool result. A database failure fails closed: nothing moves unverified.
+async function agreementRequired(userId, resource) {
+	let signature;
+	try {
+		signature = await currentSignatureFor(userId);
+	} catch (err) {
+		console.error('[mcpagent] agreement lookup failed', err?.message || err);
+		return {
+			content: [
+				{
+					type: 'text',
+					text: 'Could not verify your signed real-funds agreements, so nothing was sent. Try again in a moment.',
+				},
+			],
+			structuredContent: { paid: false, reason: 'agreement_check_unavailable', resource },
+			isError: true,
+		};
+	}
+	if (signature) return null;
+	const requirement = agreementRequirement();
+	return {
+		content: [
+			{
+				type: 'text',
+				text:
+					'Sign the real-funds agreements (Terms of Service, Risk Disclosure, and Agent Wallet Agreement) before paying from your wallet. ' +
+					`Nothing was sent. Sign at ${requirement.sign_url}`,
+			},
+		],
+		structuredContent: { paid: false, reason: 'risk_ack_required', resource, ...requirement },
 		isError: true,
 	};
 }
@@ -308,6 +345,9 @@ export const toolDefs = [
 			// spend-disabled server still answers with the manual pay link, and
 			// before payExternalX402 so no money can move without the grant.
 			if (!hasScope(auth.scope, 'wallet:write')) return scopeRequired('wallet:write');
+
+			const unsigned = await agreementRequired(auth.userId, args.resource_url);
+			if (unsigned) return unsigned;
 
 			try {
 				const res = await payExternalX402({

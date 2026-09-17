@@ -15,6 +15,7 @@
 
 import { cors, json, method, error, readJson, rateLimited, serverError } from '../_lib/http.js';
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
 import { sql } from '../_lib/db.js';
@@ -152,6 +153,11 @@ async function handlePut(req, res, id) {
 	if ('armed' in body) patch.armed = body.armed === true;
 	if ('kill_switch' in body) patch.kill_switch = body.kill_switch === true;
 
+	// Arming hands the agent autonomous spending, so it needs a signed real-funds
+	// agreement. Disarming and the kill switch never do: stopping an agent must
+	// always be possible.
+	if (patch.armed === true && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(req), context: 'autopilot' }))) return;
+
 	// Arming is explicit consent — stamp approval + compile time server-side.
 	const nowIso = new Date().toISOString();
 	if (patch.armed === true) {
@@ -191,6 +197,7 @@ async function handleRun(req, res, id) {
 	// sibling wallet-intents runner, which has always defaulted to simulation.
 	// Spending is opt-in and explicit: dry_run must be literally false.
 	const dryRun = body?.dry_run !== false;
+	if (!dryRun && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network, context: 'autopilot' }))) return;
 
 	try {
 		const result = await runAutopilotCycle({

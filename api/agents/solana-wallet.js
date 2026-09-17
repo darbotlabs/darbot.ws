@@ -2,6 +2,7 @@
 // Dispatched from api/agents/[id].js with the `action` sub-path.
 
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import { confirmOrThrow, pollConfirmation } from '../_lib/solana/confirm.js';
 import { cors, json, method, error, readJson, rateLimited, serverError } from '../_lib/http.js';
@@ -587,6 +588,10 @@ async function handleWithdraw(req, res, id) {
 	// `simulate` request moves no funds and never touches the key (it returns a live
 	// preview, like the trade endpoint's preview), so it is CSRF-exempt — otherwise a
 	// read-back/quote would burn the owner's single-use token before they confirm.
+	// Real funds leave a custodial wallet only for an account that has signed
+	// the real-funds agreements. Checked before CSRF so a refusal does not burn
+	// the owner's single-use token.
+	if (!simulate && !(await requireRealFundsAgreement(req, res, { userId: auth.userId, network, context: 'withdraw' }))) return;
 	if (!simulate && !(await requireCsrf(req, res, auth.userId))) return;
 
 	const idempotencyKey =
@@ -1431,8 +1436,9 @@ async function handleVanity(req, res, id) {
 	}
 
 	// POST — sensitive: it grinds a new keypair and sweeps every holding to it,
-	// so it moves funds. Require CSRF, then gate behind the withdrawal per-user
-	// cap + per-IP burst.
+	// so it moves funds. Require a signed real-funds agreement and CSRF, then
+	// gate behind the withdrawal per-user cap + per-IP burst.
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'vanity' }))) return;
 	if (!(await requireCsrf(req, res, auth.userId))) return;
 	const rlUser = await limits.withdrawalPerUser(auth.userId);
 	if (!rlUser.success) return rateLimited(res, rlUser);

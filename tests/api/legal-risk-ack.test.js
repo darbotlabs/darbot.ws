@@ -1,7 +1,8 @@
-// Risk Disclosure acceptance endpoint (POST /api/legal/risk-ack). The client
-// gate that calls it (public/risk-ack.js) is covered in tests/risk-ack.test.js;
-// this file covers the server side: what it accepts, what it refuses, and
-// whether it tells the caller the truth about the durable record.
+// Real-funds agreement endpoint (GET/POST /api/legal/risk-ack). The client
+// dialog that calls it (public/risk-ack.js) is covered in tests/risk-ack.test.js;
+// this file covers the server side: what counts as a complete signature, what
+// it refuses, whether it tells the caller the truth about the durable record,
+// and the status read the client cross-checks against.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Readable } from 'node:stream';
@@ -40,7 +41,8 @@ vi.mock('../../api/_lib/auth.js', () => ({
 	getSessionUser: vi.fn(async () => sessionState.user),
 }));
 
-const { RISK_ACK_VERSION } = await import('../../public/risk-ack.js');
+const { RISK_ACK_VERSION, buildSignaturePayload } = await import('../../public/risk-ack.js');
+const { resetRealFundsAgreementCache } = await import('../../api/_lib/real-funds-agreement.js');
 const { default: handler } = await import('../../api/legal/risk-ack.js');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -83,129 +85,166 @@ async function invoke(body, opts) {
 	return { res, status: res.statusCode, body: json };
 }
 
+const signatureRows = () => sqlState.calls.filter((c) => /insert into legal_signatures/.test(c.query));
 const auditRows = () => sqlState.calls.filter((c) => /insert into audit_log/.test(c.query));
+const validSignature = (over = {}) => ({
+	...buildSignaturePayload({ name: 'Ada Lovelace', context: 'deposit', path: '/agents/abc' }),
+	...over,
+});
 
 beforeEach(() => {
 	sqlState.queue = [];
 	sqlState.calls = [];
 	rlState.success = true;
 	sessionState.user = null;
+	resetRealFundsAgreementCache();
 });
 
-// ── POST /api/legal/risk-ack ──────────────────────────────────────────────────
-
 describe('POST /api/legal/risk-ack', () => {
-	it('records an anonymous acceptance with its context and page', async () => {
-		const { status, body } = await invoke({ version: RISK_ACK_VERSION, context: 'trade', path: '/create' });
+	it('records an anonymous signature with every document version, a text fingerprint, and the typed name', async () => {
+		const { status, body } = await invoke(validSignature());
 		expect(status).toBe(200);
-		expect(body).toEqual({ ok: true, recorded: true });
-		const rows = auditRows();
+		expect(body).toEqual({ ok: true, recorded: true, version: RISK_ACK_VERSION });
+		const rows = signatureRows();
 		expect(rows).toHaveLength(1);
-		expect(rows[0].values[0]).toBeNull(); // user_id: anonymous
-		expect(rows[0].values).toContain('risk-ack-accept');
-		expect(rows[0].values).toContainEqual({ version: RISK_ACK_VERSION, context: 'trade', path: '/create' });
-		expect(rows[0].values).toContain('203.0.113.7');
+		const v = rows[0].values;
+		expect(v[0]).toBeNull(); // user_id: anonymous
+		expect(v[1]).toBe(RISK_ACK_VERSION);
+		const docs = JSON.parse(v[2]);
+		for (const key of ['tos', 'risk', 'agentWallet']) {
+			expect(docs[key].version).toBeGreaterThanOrEqual(1);
+			expect(docs[key].sha256).toMatch(/^[0-9a-f]{64}$/);
+		}
+		expect(v[3]).toBe('Ada Lovelace');
+		expect(JSON.parse(v[4])).toEqual({ eligible: true, noLiability: true });
+		expect(v).toContain('deposit');
+		expect(v).toContain('203.0.113.7');
+		expect(auditRows()).toHaveLength(1);
+		expect(auditRows()[0].values).toContain('risk-ack-accept');
 	});
 
-	it('attributes the acceptance to the signed-in user', async () => {
+	it('attributes the signature to the signed-in account', async () => {
 		sessionState.user = { id: 'user-42' };
-		const { status, body } = await invoke({ version: RISK_ACK_VERSION, context: 'x402-pay' });
+		const { status } = await invoke(validSignature());
 		expect(status).toBe(200);
-		expect(body.recorded).toBe(true);
-		expect(auditRows()[0].values[0]).toBe('user-42');
+		expect(signatureRows()[0].values[0]).toBe('user-42');
 	});
 
-	it('records anonymously when the session lookup fails', async () => {
+	it('signs anonymously when the session lookup fails', async () => {
 		const { getSessionUser } = await import('../../api/_lib/auth.js');
 		getSessionUser.mockRejectedValueOnce(new Error('expired token'));
-		const { status, body } = await invoke({ version: RISK_ACK_VERSION });
+		const { status } = await invoke(validSignature());
 		expect(status).toBe(200);
-		expect(body.recorded).toBe(true);
-		expect(auditRows()[0].values[0]).toBeNull();
-	});
-
-	it('refuses a disclosure version that does not exist', async () => {
-		const { status, body } = await invoke({ version: RISK_ACK_VERSION + 1 });
-		expect(status).toBe(400);
-		expect(body.error).toBe('invalid_version');
-		expect(auditRows()).toHaveLength(0);
+		expect(signatureRows()[0].values[0]).toBeNull();
 	});
 
 	it.each([
-		[{}],
-		[{ version: 0 }],
-		[{ version: 1.5 }],
-		[{ version: 'one' }],
-		[{ version: null }],
-	])('refuses a malformed version %#', async (body) => {
-		const { status } = await invoke(body);
+		['a stale version', { version: RISK_ACK_VERSION - 1 }, 'invalid_version'],
+		['a future version', { version: RISK_ACK_VERSION + 1 }, 'invalid_version'],
+		['a missing document', { documents: { tos: 3, risk: 2 } }, 'document_not_accepted'],
+		['an outdated document version', { documents: { tos: 2, risk: 2, agentWallet: 1 } }, 'document_not_accepted'],
+		['an unchecked attestation', { attestations: { eligible: true } }, 'attestation_missing'],
+		['a truthy-but-not-true attestation', { attestations: { eligible: 'yes', noLiability: true } }, 'attestation_missing'],
+		['no typed name', { signatureName: '' }, 'invalid_signature'],
+		['a name with no letters', { signatureName: '---' }, 'invalid_signature'],
+	])('refuses %s and records nothing', async (_label, over, code) => {
+		const { status, body } = await invoke(validSignature(over));
 		expect(status).toBe(400);
+		expect(body.error).toBe(code);
+		expect(signatureRows()).toHaveLength(0);
 		expect(auditRows()).toHaveLength(0);
 	});
 
-	// A body the endpoint could not read used to be reported as a bad `version`,
-	// pointing the caller at a field that was never the problem.
-	it('names the size limit rather than the version when the body is too large', async () => {
-		const { status, body } = await invoke({ version: RISK_ACK_VERSION, pad: 'a'.repeat(11_000) });
+	it('refuses a non-object body', async () => {
+		const { status, body } = await invoke([1, 2]);
+		expect(status).toBe(400);
+		expect(body.error).toBe('invalid_body');
+	});
+
+	it('names the size limit when the body is too large', async () => {
+		const { status, body } = await invoke(validSignature({ pad: 'a'.repeat(11_000) }));
 		expect(status).toBe(413);
 		expect(body.error).toBe('payload_too_large');
-		expect(auditRows()).toHaveLength(0);
+		expect(signatureRows()).toHaveLength(0);
 	});
 
-	it('names the content-type rather than the version when the body is not JSON', async () => {
-		const { status, body } = await invoke(null, {
-			contentType: 'application/x-www-form-urlencoded',
-			raw: 'version=1',
-		});
+	it('names the content-type when the body is not JSON', async () => {
+		const { status, body } = await invoke(null, { contentType: 'application/x-www-form-urlencoded', raw: 'version=2' });
 		expect(status).toBe(415);
 		expect(body.error).toBe('unsupported_media_type');
-		expect(auditRows()).toHaveLength(0);
 	});
 
 	it('refuses an unparseable body', async () => {
 		const { status, body } = await invoke(null, { raw: '{oops' });
 		expect(status).toBe(400);
 		expect(body.error).toBe('bad_request');
-		expect(auditRows()).toHaveLength(0);
 	});
 
 	it('drops a malformed context or path rather than storing it', async () => {
-		const { status } = await invoke({
-			version: RISK_ACK_VERSION,
-			context: 'NOT A SLUG!',
-			path: 'missing-leading-slash',
-		});
+		const { status } = await invoke(validSignature({ context: 'NOT A SLUG!', path: 'no-leading-slash' }));
 		expect(status).toBe(200);
-		expect(auditRows()[0].values).toContainEqual({ version: RISK_ACK_VERSION, context: null, path: null });
+		const v = signatureRows()[0].values;
+		expect(v[5]).toBeNull();
+		expect(v[6]).toBeNull();
 	});
 
-	it('reports recorded:false when the durable write fails', async () => {
-		// A deterministic SQL error, not a transient connection blip: db-retry
-		// surfaces it on the first attempt instead of retrying.
-		sqlState.queue = [new Error('relation "audit_log" does not exist')];
-		const { status, body } = await invoke({ version: RISK_ACK_VERSION, context: 'trade' });
-		expect(status).toBe(200);
-		expect(body).toEqual({ ok: true, recorded: false });
-	});
-
-	it('rejects a non-POST method', async () => {
-		const { status, body } = await invoke(null, { method: 'GET' });
-		expect(status).toBe(405);
-		expect(body.error).toBe('method_not_allowed');
+	it('answers 503 when the signature could not be stored, so the dialog asks again', async () => {
+		sqlState.queue = [new Error('relation "legal_signatures" does not exist')];
+		const { status, body } = await invoke(validSignature());
+		expect(status).toBe(503);
+		expect(body.error).toBe('signature_not_recorded');
+		expect(auditRows()).toHaveLength(0);
 	});
 
 	it('rate limits', async () => {
 		rlState.success = false;
-		const { status } = await invoke({ version: RISK_ACK_VERSION });
+		const { status } = await invoke(validSignature());
 		expect(status).toBe(429);
-		expect(auditRows()).toHaveLength(0);
+		expect(signatureRows()).toHaveLength(0);
 	});
 
-	it('allows any origin, so the x402 embed on a merchant site can record', async () => {
-		const { res, status } = await invoke({ version: RISK_ACK_VERSION }, { origin: 'https://merchant.example' });
+	it('allows any origin without credentials, so merchant-site embeds sign anonymously', async () => {
+		const { res, status } = await invoke(validSignature(), { origin: 'https://merchant.example' });
 		expect(status).toBe(200);
 		expect(res.headers['access-control-allow-origin']).toBe('*');
-		// No credentials on a wildcard origin: cross-site acceptances stay anonymous.
 		expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+	});
+});
+
+describe('GET /api/legal/risk-ack', () => {
+	it('reports an anonymous visitor as unauthenticated and unsigned without touching the database', async () => {
+		const { status, body } = await invoke(null, { method: 'GET' });
+		expect(status).toBe(200);
+		expect(body).toMatchObject({ authenticated: false, signed: false, version: RISK_ACK_VERSION });
+		expect(body.documents.map((d) => d.key)).toEqual(['tos', 'risk', 'agentWallet']);
+		expect(sqlState.calls).toHaveLength(0);
+	});
+
+	it('reports a signed account with when and by whom', async () => {
+		sessionState.user = { id: 'user-42' };
+		sqlState.queue = [[{ created_at: '2026-09-17T18:00:00.000Z', signature_name: 'Ada Lovelace', context: 'deposit' }]];
+		const { status, body } = await invoke(null, { method: 'GET' });
+		expect(status).toBe(200);
+		expect(body).toMatchObject({ authenticated: true, signed: true, signedAt: '2026-09-17T18:00:00.000Z', signatureName: 'Ada Lovelace' });
+		expect(sqlState.calls[0].values).toContain(RISK_ACK_VERSION);
+	});
+
+	it('reports an unsigned account', async () => {
+		sessionState.user = { id: 'user-42' };
+		sqlState.queue = [[]];
+		const { body } = await invoke(null, { method: 'GET' });
+		expect(body).toMatchObject({ authenticated: true, signed: false, signedAt: null });
+	});
+
+	it('answers 503 rather than a false "unsigned" when the lookup fails', async () => {
+		sessionState.user = { id: 'user-42' };
+		sqlState.queue = [new Error('relation "legal_signatures" does not exist')];
+		const { status } = await invoke(null, { method: 'GET' });
+		expect(status).toBe(503);
+	});
+
+	it('rejects other methods', async () => {
+		const { status } = await invoke(null, { method: 'DELETE' });
+		expect(status).toBe(405);
 	});
 });

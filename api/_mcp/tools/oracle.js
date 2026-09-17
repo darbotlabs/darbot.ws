@@ -25,6 +25,7 @@ import { sql } from '../../_lib/db.js';
 import { limits } from '../../_lib/rate-limit.js';
 import { readFeed, scoreCoin, getWatch, upsertWatch, recentActions, actionsSummary } from '../../_lib/oracle/store.js';
 import { isUuid } from '../../_lib/validate.js';
+import { currentSignatureFor, agreementRequirement } from '../../_lib/real-funds-agreement.js';
 
 const NETWORKS = new Set(['mainnet', 'devnet']);
 const CATEGORIES = new Set([
@@ -65,6 +66,30 @@ function mcpOk(payload) {
 
 function mcpErr(msg) {
 	return { content: [{ type: 'text', text: msg }], isError: true };
+}
+
+// Arming a live watch commits the agent's custodial SOL to autonomous buys, so it
+// needs the signed real-funds agreement. Returns null when the caller may proceed,
+// otherwise a designed tool error. A database failure fails closed.
+async function liveArmAgreementError(userId) {
+	let signature;
+	try {
+		signature = await currentSignatureFor(userId);
+	} catch (err) {
+		console.error('[mcp/oracle] agreement lookup failed', err?.message || err);
+		return mcpErr('Could not verify your signed real-funds agreements, so the watch was not armed live. Try again in a moment.');
+	}
+	if (signature) return null;
+	const requirement = agreementRequirement();
+	return {
+		content: [{
+			type: 'text',
+			text: 'Sign the real-funds agreements (Terms of Service, Risk Disclosure, and Agent Wallet Agreement) before arming a live watch. ' +
+				`Nothing was changed. Sign at ${requirement.sign_url}`,
+		}],
+		structuredContent: { armed: false, reason: 'risk_ack_required', ...requirement },
+		isError: true,
+	};
 }
 
 // Throws on a DB fault rather than swallowing it. Swallowing turned an outage
@@ -260,6 +285,14 @@ export const toolDefs = [
 				require_smart_money: !!args?.require_smart_money,
 				size_scaling:        args?.size_scaling !== false,
 			};
+
+			if (cfg.armed && cfg.mode === 'live' && network !== 'devnet') {
+				const current = await getWatch(agentId, network);
+				if (!(current?.armed === true && current?.mode === 'live')) {
+					const refusal = await liveArmAgreementError(auth.userId);
+					if (refusal) return refusal;
+				}
+			}
 
 			await upsertWatch(agentId, auth.userId, network, cfg);
 

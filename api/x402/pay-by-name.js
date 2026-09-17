@@ -54,6 +54,7 @@ import {
 	verifyPayment,
 } from '../_lib/x402-spec.js';
 import { logPaymentEvent } from '../_lib/x402/audit-log.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
@@ -382,6 +383,7 @@ async function handleSend(req, res, auth, body) {
 		return error(res, 400, 'invalid_recipient', 'resolved address is not a valid wallet (off-curve)');
 	}
 
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'pay-by-name' }))) return;
 	const loaded = await loadAgentForSigning(agentId, auth.userId, {
 		reason: 'x402_pay_by_name',
 		meta: { name: body?.name, amount_usdc: Number(amountAtoms) / 10 ** USDC_DECIMALS },

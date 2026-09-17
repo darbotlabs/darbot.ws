@@ -21,6 +21,7 @@ import { cors, json, method, error, readJson, rateLimited, serverError } from '.
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { limits } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import { loadUserProviderKeys } from '../_lib/provider-keys.js';
 import { getSpendLimits, getTradeLimits } from '../_lib/agent-trade-guards.js';
@@ -254,7 +255,6 @@ async function simulate(intent, owned, network) {
 async function handleCreate(req, res, id) {
 	const owned = await loadOwned(req, res, id);
 	if (owned.error) return;
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	const body = await readJsonObject(req, res);
 	if (!body) return;
@@ -262,6 +262,12 @@ async function handleCreate(req, res, id) {
 
 	const norm = normalizeIntent(body.intent);
 	if (!norm.ok) return error(res, 422, norm.error || 'invalid_intent', norm.message || 'the intent could not be validated');
+	// Arming a rule that can move funds needs the signed real-funds agreements;
+	// freeze and notify rules never spend. Checked before CSRF so a refusal does
+	// not burn the owner's single-use token.
+	const spends = !['freeze', 'notify'].includes(norm.intent.action?.type);
+	if (spends && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(req), context: 'wallet-intent' }))) return;
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	// Preserve a resolved destination + tip-back flag the compiler already grounded.
 	if (body.intent.action) {
 		const src = body.intent.action;
@@ -288,7 +294,6 @@ async function handleCreate(req, res, id) {
 async function handleUpdate(req, res, id, intentId) {
 	const owned = await loadOwned(req, res, id);
 	if (owned.error) return;
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	const body = await readJsonObject(req, res);
 	if (!body) return;
@@ -298,6 +303,12 @@ async function handleUpdate(req, res, id, intentId) {
 	if ('public_trait' in body) patch.public_trait = body.public_trait === true;
 	if ('title' in body) patch.title = body.title;
 	if ('intent' in body) patch.intent = body.intent;
+
+	// Enabling a rule or rewriting what it does re-arms autonomous spending.
+	// Disabling, renaming, and publishing never need the agreement.
+	const rearms = patch.enabled === true || 'intent' in patch;
+	if (rearms && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(req), context: 'wallet-intent' }))) return;
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	try {
 		const result = await updateIntent(id, owned.auth.userId, intentId, patch);
@@ -327,7 +338,6 @@ async function handleRun(req, res, id) {
 	if (!method(req, res, ['POST'])) return;
 	const owned = await loadOwned(req, res, id);
 	if (owned.error) return;
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	const rl = await limits.walletRead(owned.auth.userId);
 	if (!rl.success) return rateLimited(res, rl);
 
@@ -339,6 +349,8 @@ async function handleRun(req, res, id) {
 	const intentId = String(body.intent_id || '');
 	if (!UUID_RE.test(intentId)) return error(res, 400, 'validation_error', 'intent_id is required');
 	const dryRun = body.dry_run !== false; // default to a safe simulation
+	if (!dryRun && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(req), context: 'wallet-intent' }))) return;
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	try {
 		const result = await runIntentNow({ agentId: id, userId: owned.auth.userId, intentId, network: netOf(req), dryRun });

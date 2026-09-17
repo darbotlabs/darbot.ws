@@ -17,6 +17,7 @@ import { sql } from '../_lib/db.js';
 import { cors, json, method, error, readJson, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { isUuid } from '../_lib/validate.js';
 import { logAudit } from '../_lib/audit.js';
 import { normalizeStrategyConfig } from '../_lib/strategy-schema.js';
@@ -142,13 +143,16 @@ async function handleEquip(req, res, id) {
 	if (!owned) return;
 	const rl = await limits.authIp(clientIp(req));
 	if (!rl.success) return rateLimited(res, rl);
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	if (!owned.row.meta?.solana_address) return error(res, 409, 'wallet_preparing', 'this agent’s wallet is still provisioning');
 
 	const body = await readJson(req).catch(() => null);
 	const strategyId = body?.strategy_id;
 	if (!isUuid(strategyId)) return error(res, 400, 'validation_error', 'a valid strategy_id is required');
 	const network = netOf(body?.network);
+	// Equipping arms the strategy to trade the custodial wallet autonomously.
+	// Checked before CSRF so a refusal does not burn the owner's single-use token.
+	if (!(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network, context: 'strategy' }))) return;
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	// The strategy must be the caller's own OR a published one (forking is the path to
 	// owning the rules; equipping a published strategy runs it under YOUR spend policy).
@@ -193,10 +197,16 @@ async function handleUnequip(req, res, id) {
 async function handleToggle(req, res, id) {
 	const owned = await loadOwned(req, res, id);
 	if (!owned) return;
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	const body = await readJson(req).catch(() => ({}));
 	if (!isUuid(body?.equip_id)) return error(res, 400, 'validation_error', 'equip_id required');
 	const active = body.active !== false;
+	// Resuming re-arms autonomous trading; pausing never needs the agreement.
+	if (active) {
+		const [target] = await sql`SELECT network FROM agent_strategy_equips WHERE id = ${body.equip_id} AND agent_id = ${id}`;
+		if (!target) return error(res, 404, 'not_found', 'equip not found');
+		if (!(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: netOf(target.network), context: 'strategy' }))) return;
+	}
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	const [row] = await sql`UPDATE agent_strategy_equips SET active = ${active}, updated_at = now() WHERE id = ${body.equip_id} AND agent_id = ${id} RETURNING strategy_id`;
 	if (!row) return error(res, 404, 'not_found', 'equip not found');
 	await sql`UPDATE agent_strategies SET equips_count = (SELECT count(*) FROM agent_strategy_equips WHERE strategy_id = ${row.strategy_id} AND active = true) WHERE id = ${row.strategy_id}`.catch(() => {});
@@ -227,7 +237,6 @@ async function handleSweep(req, res, id) {
 	if (!owned) return;
 	const rl = await limits.authIp(clientIp(req));
 	if (!rl.success) return rateLimited(res, rl);
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	const killed = await killEngaged(owned.auth.userId);
 	const equips = await sql`
@@ -237,6 +246,14 @@ async function handleSweep(req, res, id) {
 		WHERE e.agent_id = ${id} AND e.active = true
 		ORDER BY e.last_eval_at ASC NULLS FIRST
 	`;
+	// A sweep can open new positions unless the kill switch is engaged, in which
+	// case it only runs exits. Devnet-only equips are exempt. Checked before CSRF
+	// so a refusal does not burn the owner's single-use token.
+	if (equips.length && !killed) {
+		const sweepNetwork = equips.some((e) => netOf(e.network) !== 'devnet') ? 'mainnet' : 'devnet';
+		if (!(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: sweepNetwork, context: 'strategy' }))) return;
+	}
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 	if (!equips.length) return json(res, 200, { data: { evaluated: 0, results: [] } });
 
 	const byNet = new Set(equips.map((e) => netOf(e.network)));

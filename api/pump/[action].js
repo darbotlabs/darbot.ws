@@ -112,6 +112,7 @@ import { solanaConnection, loadAgentForSigning } from '../_lib/agent-pumpfun.js'
 import { connectPumpFunFeed } from '../_lib/pumpfun-ws-feed.js';
 import { makeRuntime } from '../_lib/skill-runtime.js';
 import { loadWallet } from '../_lib/solana-wallet.js';
+import { requireRealFundsAgreement, currentSignatureFor } from '../_lib/real-funds-agreement.js';
 import {
 	checkBuyAllowed,
 	reserveSpend,
@@ -1684,6 +1685,13 @@ async function handleLaunchConfirm(req, res) {
 		try {
 			const { normalizePolicyPatch, upsertPolicy } = await import('../_lib/market-maker.js');
 			const patch = normalizePolicyPatch(p.mm, { isCreate: true });
+			// The launch itself is already on-chain, so an unsigned real-funds
+			// agreement must not fail this confirm. Attach the maker disarmed instead;
+			// arming it later goes through /api/launch/mm, which enforces the agreement.
+			if (p.network !== 'devnet' && patch.enabled === true && patch.kill_switch !== true && patch.mode === 'live') {
+				const signed = await currentSignatureFor(user.id).catch(() => null);
+				if (!signed) patch.enabled = false;
+			}
 			await upsertPolicy({ mint: p.mint, network: p.network, agentId: p.agent_id, userId: user.id, patch });
 		} catch (e) {
 			console.warn('[pump/launch-confirm] market-maker attach skipped:', e?.code || e?.message);
@@ -1834,6 +1842,7 @@ async function handleLaunchAgent(req, res) {
 	});
 	if (!agent) return error(res, 404, 'not_found', 'agent not found');
 	const resolvedAgentId = agent.id;
+	if (!(await requireRealFundsAgreement(req, res, { userId: user.id, network: body.network, context: 'pump-launch-agent' }))) return;
 
 	const loaded = await loadAgentForSigning(resolvedAgentId, user.id, {
 		reason: 'studio_pump_launch',
@@ -3507,6 +3516,7 @@ async function handleStrategyRun(req, res) {
 		if (!auth) return error(res, 401, 'unauthorized', 'sign in required for live mode');
 		if (!body.agentId)
 			return error(res, 400, 'validation_error', 'agentId required for live mode');
+		if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network, context: 'pump-strategy-run' }))) return;
 		try {
 			const r = await loadAgentWalletForStrategy(body.agentId, auth.userId);
 			wallet = r.wallet;
@@ -5028,7 +5038,7 @@ async function signSendWithAgent({ network, agentKeypair, instructions, extraSig
 // Resolve the agent + mint the caller controls, and assert the agent's custodial
 // wallet is the on-chain creator (agent_authority) of the coin. Returns
 // { agent, mintRow, loaded, creator } or sends an error and returns null.
-async function resolveAgentFeeContext(req, res, body) {
+async function resolveAgentFeeContext(req, res, body, { agreementContext = null } = {}) {
 	const user = await requireSessionUser(req, res);
 	if (!user) return null;
 
@@ -5050,6 +5060,9 @@ async function resolveAgentFeeContext(req, res, body) {
 	`;
 	if (!mintRow) {
 		error(res, 404, 'not_found', 'coin not found for this agent');
+		return null;
+	}
+	if (agreementContext && !(await requireRealFundsAgreement(req, res, { userId: user.id, network: body.network, context: agreementContext }))) {
 		return null;
 	}
 
@@ -5224,7 +5237,8 @@ async function handleFeeSharingAgent(req, res) {
 	if (!rl.success) return rateLimited(res, rl);
 
 	const body = parse(feeSharingAgentSchema, await readJson(req));
-	const ctx = await resolveAgentFeeContext(req, res, body);
+	// Redirects the coin's creator-fee revenue and pays config rent from the agent wallet.
+	const ctx = await resolveAgentFeeContext(req, res, body, { agreementContext: 'pump-fee-sharing' });
 	if (!ctx) return;
 
 	const newShareholders = body.shareholders.map((s) => {

@@ -26,6 +26,7 @@
 
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import { submitProtected } from '../_lib/execution-engine.js';
 import { cors, json, method, error, readJson, rateLimited, serverError } from '../_lib/http.js';
@@ -131,11 +132,14 @@ async function handleCheck(req, res) {
 // ── Option A: agent wallet pays + auto-attach ─────────────────────────────
 async function handleRegisterAgent(req, res, id, auth) {
 	if (!method(req, res, ['POST'])) return;
-	if (!(await requireCsrf(req, res, auth.userId))) return;
 	const body = await readJson(req).catch(() => ({}));
 	const domain = normalizeDomain(body?.domain);
 	if (!domain) return error(res, 400, 'validation_error', 'domain required (a–z, 0–9, hyphen)');
 	const space = Number.isInteger(body?.space) && body.space >= 1000 && body.space <= 10000 ? body.space : 1000;
+	// The agent's custodial wallet pays mainnet USDC for the domain. Checked
+	// before CSRF so a refusal does not burn the owner's single-use token.
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, network: 'mainnet', context: 'sns-register' }))) return;
+	if (!(await requireCsrf(req, res, auth.userId))) return;
 
 	const loaded = await loadAgentForSigning(id, auth.userId, { reason: 'sns_register' });
 	if (loaded.error) return error(res, loaded.error.status, loaded.error.code, loaded.error.msg);

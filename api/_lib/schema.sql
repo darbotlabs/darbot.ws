@@ -59,6 +59,26 @@ alter table users add column if not exists onboarding_tour_completed_at timestam
 alter table users add column if not exists tos_accepted_version int;
 alter table users add column if not exists tos_accepted_at timestamptz;
 
+-- Real-funds agreement signatures (api/_lib/migrations/20260917180000_legal_signatures.sql).
+-- Append-only; user_id has no FK so the record outlives account deletion.
+-- See api/_lib/real-funds-agreement.js.
+create table if not exists legal_signatures (
+	id              uuid        primary key default gen_random_uuid(),
+	user_id         uuid,
+	bundle_version  int         not null,
+	documents       jsonb       not null,
+	signature_name  text        not null,
+	attestations    jsonb       not null,
+	context         text,
+	path            text,
+	ip              text,
+	user_agent      text,
+	created_at      timestamptz not null default now()
+);
+create index if not exists legal_signatures_user_idx
+	on legal_signatures (user_id, bundle_version desc, created_at desc)
+	where user_id is not null;
+
 -- ── user_follows — the social graph ──────────────────────────────────────────
 -- A directed follow edge: follower_id follows following_id. Composite PK makes
 -- a follow idempotent (one edge per pair) and the toggle a single upsert/delete.

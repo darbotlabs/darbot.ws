@@ -15,7 +15,7 @@
 import { sql } from './db.js';
 import { logAuditNow } from './audit.js';
 
-export const TOS_VERSION = 2;
+export const TOS_VERSION = 3;
 
 /**
  * Parse the optional ToS-acceptance fields from an auth request body.

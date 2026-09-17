@@ -18,9 +18,22 @@
 import { cors, json, error, method, wrap, readJson, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { sql } from '../_lib/db.js';
 import { deliverSubscription } from '../_lib/signal-engine.js';
 import { requireUser, loadOwnedAgent, normNetwork, parseRowId } from './_common.js';
+
+// A live subscription pays x402 USDC and mirrors trades from the subscriber
+// agent's custodial wallet. Turning one on (or delivering it now) needs the
+// signed real-funds agreement; simulate mode, pause, stop and kill never do.
+function isLiveRunning(row) {
+	return !!row && row.mode === 'live' && row.status === 'active' && row.killed !== true;
+}
+
+async function loadSub(subId, userId) {
+	const [row] = await sql`select * from signal_subscriptions where id = ${subId} and owner_user_id = ${userId} limit 1`;
+	return row || null;
+}
 
 function num(v, fallback) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
 
@@ -110,6 +123,10 @@ export default wrap(async (req, res) => {
 		// Instant kill: the halt path, takes precedence.
 		if (body.killed != null) {
 			const killed = body.killed === true || body.killed === 'true';
+			if (!killed) {
+				const cur = await loadSub(subId, userId);
+				if (cur?.mode === 'live' && !isLiveRunning(cur) && !(await requireRealFundsAgreement(req, res, { userId, network: normNetwork(cur.network), context: 'signal-subscribe' }))) return;
+			}
 			const [row] = await sql`
 				update signal_subscriptions set killed = ${killed}, status = ${killed ? 'paused' : 'active'}, updated_at = now()
 				where id = ${subId} and owner_user_id = ${userId} returning *
@@ -120,11 +137,16 @@ export default wrap(async (req, res) => {
 		if (body.action === 'sync') {
 			const [row] = await sql`select * from signal_subscriptions where id = ${subId} and owner_user_id = ${userId} limit 1`;
 			if (!row) return error(res, 404, 'not_found', 'subscription not found');
+			if (row.mode === 'live' && !(await requireRealFundsAgreement(req, res, { userId, network: normNetwork(row.network), context: 'signal-subscribe' }))) return;
 			const result = await deliverSubscription(row, { maxEvents: 10 });
 			return json(res, 200, { ok: true, ...result });
 		}
 		if (body.status) {
 			const status = ['active', 'paused', 'stopped'].includes(body.status) ? body.status : 'paused';
+			if (status === 'active') {
+				const cur = await loadSub(subId, userId);
+				if (cur?.mode === 'live' && !isLiveRunning(cur) && !(await requireRealFundsAgreement(req, res, { userId, network: normNetwork(cur.network), context: 'signal-subscribe' }))) return;
+			}
 			// Resuming clears any kill; pausing/stopping leaves the kill flag untouched.
 			const [row] = status === 'active'
 				? await sql`
@@ -160,6 +182,10 @@ export default wrap(async (req, res) => {
 	const slippageBps = Math.round(Math.max(0, Math.min(5000, num(body.slippage_bps, 300))));
 	const firewallLevel = body.firewall_level === 'warn' ? 'warn' : 'block';
 	const copyExits = body.copy_exits !== false;
+	if (mode === 'live') {
+		const [cur] = await sql`select mode, status, killed from signal_subscriptions where subscriber_agent_id = ${body.agent_id} and feed_id = ${feed.id} limit 1`;
+		if (!isLiveRunning(cur) && !(await requireRealFundsAgreement(req, res, { userId, network, context: 'signal-subscribe' }))) return;
+	}
 
 	// New subscriptions start at the current emission head: never charged for or
 	// made to mirror a backlog of signals emitted before they subscribed.

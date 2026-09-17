@@ -10,6 +10,7 @@
 import { cors, error, json, method, rateLimited, readJson, wrap } from '../_lib/http.js';
 import { limits } from '../_lib/rate-limit.js';
 import { sql } from '../_lib/db.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { authWrite, loadOwnedAgent, ownershipError, requireSolanaWallet, requireUuid } from '../_lib/labor-auth.js';
 import { TOKEN_MINT } from '../_lib/token/config.js';
 import { getTokenPriceUsd } from '../_lib/token/price.js';
@@ -70,6 +71,8 @@ export default wrap(async (req, res) => {
 	} catch (e) {
 		return ownershipError(res, e);
 	}
+
+	if (!(await requireRealFundsAgreement(req, res, { userId, context: 'labor-post' }))) return;
 
 	// Value the reward in real USD for the spend policy. Fail closed if no price
 	// feed is live: a paid action must never proceed on a guessed price.

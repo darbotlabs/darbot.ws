@@ -26,6 +26,7 @@
 import { authenticateBearer, extractBearer, getSessionUser } from '../_lib/auth.js';
 import { cors, error, json, method, rateLimited, readJson, wrap } from '../_lib/http.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits } from '../_lib/rate-limit.js';
 import { sql } from '../_lib/db.js';
 import { randomUUID } from 'node:crypto';
@@ -183,6 +184,11 @@ export default wrap(async (req, res) => {
 			max_usd: maxUsd,
 		});
 	}
+
+	// Every hire pays mainnet USDC from the hirer's custodial wallet, so the caller
+	// must have signed the real-funds agreements before any hire is recorded or
+	// any spend is reserved.
+	if (!(await requireRealFundsAgreement(req, res, { userId, context: 'a2a-hire' }))) return;
 
 	if (!resolveSpendEnabled()) {
 		return error(res, 501, 'spend_disabled', 'autonomous agent spending is not enabled on this server (set THREEWS_AGENT_PAY_ENABLED=1)');

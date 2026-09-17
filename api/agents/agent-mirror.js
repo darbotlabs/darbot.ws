@@ -20,6 +20,7 @@ import { sql } from '../_lib/db.js';
 import { cors, json, method, error, readJson, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { isUuid } from '../_lib/validate.js';
 import { logAudit } from '../_lib/audit.js';
 import { normalizeFollowInput, SKIP_LABELS } from '../_lib/mirror-engine.js';
@@ -139,7 +140,6 @@ async function handleUpsert(req, res, id) {
 	if (!method(req, res, ['POST'])) return;
 	const owned = await loadOwned(req, res, id);
 	if (!owned) return;
-	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	const rl = await limits.authIp(clientIp(req));
 	if (!rl.success) return rateLimited(res, rl);
@@ -153,6 +153,13 @@ async function handleUpsert(req, res, id) {
 	if (leaderId === id) return error(res, 400, 'cannot_follow_self', 'an agent cannot mirror itself');
 
 	const network = netOf(body.network);
+	const enabled = body.enabled === false ? false : true;
+
+	// An enabled follow trades the follower's custodial wallet autonomously, so it
+	// needs signed real-funds agreements. Saving a paused follow does not. Checked
+	// before CSRF so a refusal does not burn the owner's single-use token.
+	if (enabled && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network, context: 'mirror' }))) return;
+	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	// The leader must exist and be public (you can only copy a transparent agent).
 	const [leader] = await sql`SELECT id, name, is_public FROM agent_identities WHERE id = ${leaderId} AND deleted_at IS NULL`;
@@ -166,7 +173,6 @@ async function handleUpsert(req, res, id) {
 	const norm = normalizeFollowInput(body);
 	if (!norm.ok) return error(res, 400, 'validation_error', norm.error);
 	const v = norm.value;
-	const enabled = body.enabled === false ? false : true;
 
 	// Cursor starts at the leader's latest trade so a new follow mirrors only
 	// trades made AFTER the follow began — never backfills history.
@@ -245,6 +251,12 @@ async function handleSync(req, res, id) {
 	if (!method(req, res, ['POST'])) return;
 	const owned = await loadOwned(req, res, id);
 	if (!owned) return;
+
+	const follows = await sql`SELECT * FROM agent_mirror_follows WHERE follower_agent_id = ${id} AND enabled = true`;
+	// Syncing executes mirrored trades from the custodial wallet. Devnet-only
+	// follows are exempt; checked before CSRF so a refusal keeps the token.
+	const syncNetwork = follows.some((f) => f.network !== 'devnet') ? 'mainnet' : 'devnet';
+	if (follows.length && !(await requireRealFundsAgreement(req, res, { userId: owned.auth.userId, network: syncNetwork, context: 'mirror' }))) return;
 	if (!(await requireCsrf(req, res, owned.auth.userId))) return;
 
 	const rl = await limits.authIp(clientIp(req));
@@ -254,7 +266,6 @@ async function handleSync(req, res, id) {
 		return error(res, 409, 'mirror_killed', 'mirroring is paused by the kill switch — turn it off to sync');
 	}
 
-	const follows = await sql`SELECT * FROM agent_mirror_follows WHERE follower_agent_id = ${id} AND enabled = true`;
 	const out = [];
 	for (const f of follows) {
 		// Attach leader name for the custody label without an extra round trip later.

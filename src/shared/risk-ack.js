@@ -39,14 +39,19 @@ function _mod() {
 	return import(/* @vite-ignore */ `${origin}/risk-ack.js`);
 }
 
-// Same core wording as RISK_ACK_CONFIRM_TEXT in public/risk-ack.js — inlined
-// because this path only runs when that module failed to load.
+// Same core wording as RISK_ACK_CONFIRM_TEXT in public/risk-ack.js, inlined
+// because this path only runs when that module failed to load. It records
+// nothing server-side (the module that records is the one that failed), so a
+// signed-in account is still refused by the server until it signs through the
+// real dialog; the degraded confirm only keeps anonymous flows usable.
 const DEGRADED_CONFIRM_TEXT =
-	'Real funds — risk acknowledgment\n\n' +
-	'three.ws is experimental software. Losses can be total, fast, and irreversible; ' +
-	'autonomous features can trade and pay on your behalf without asking again; nothing here is financial advice; ' +
-	'and three.ws is not responsible for any losses. Full text: three.ws/legal/risk\n\n' +
-	'Press OK to accept that you use real funds entirely at your own risk, or Cancel to stop.';
+	'Real funds: sign the agreements\n\n' +
+	'three.ws is experimental technology. By pressing OK you agree to the Terms of Service (three.ws/legal/tos), ' +
+	'the Risk Disclosure (three.ws/legal/risk), and the Agent Wallet Agreement (three.ws/legal/agent-wallet). ' +
+	'You confirm you are 18 or older and that real-funds use is lawful where you live. You accept that anything ' +
+	'you deposit, trade, or send can be lost completely for any reason, nothing is insured, and three.ws is not ' +
+	'responsible for any loss.\n\n' +
+	'Press OK to accept, or Cancel to stop.';
 
 let _degradedSessionAck = false;
 
@@ -61,10 +66,10 @@ function _degradedConfirm() {
 }
 
 /**
- * Ensure the user has accepted the current Risk Disclosure — shows the
- * acknowledgment dialog if not. Resolves true when accepted, false when
- * declined; the caller must abort the money action on false. Never rejects.
- * @param {{context?: string}} [opts]
+ * Ensure the user has signed the current real-funds agreements, showing the
+ * signing dialog if not. Resolves true when signed, false when declined; the
+ * caller must abort the money action on false. Never rejects.
+ * @param {{context?: string, force?: boolean}} [opts]
  * @returns {Promise<boolean>}
  */
 export async function ensureRiskAck(opts) {
@@ -83,7 +88,7 @@ export async function ensureRiskAck(opts) {
 	}
 }
 
-/** @returns {Promise<boolean>} whether the current disclosure version is already accepted. Never rejects. */
+/** @returns {Promise<boolean>} whether this browser holds a current signature. Never rejects. */
 export async function hasRiskAck() {
 	try {
 		const m = await _mod();
@@ -91,4 +96,38 @@ export async function hasRiskAck() {
 	} catch {
 		return _degradedSessionAck;
 	}
+}
+
+/**
+ * Whether the visitor has signed, confirming the account's server record when
+ * signed in. Never prompts, never rejects.
+ * @returns {Promise<boolean>}
+ */
+export async function hasRiskAckVerified() {
+	try {
+		const m = await _mod();
+		return await m.hasRiskAckVerified();
+	} catch {
+		return _degradedSessionAck;
+	}
+}
+
+/**
+ * fetch() that opens the signing dialog when the server answers 403
+ * risk_ack_required, then retries once after the user signs. When the gate
+ * module cannot load, the original response is returned untouched so the
+ * caller's normal error handling shows the server's message.
+ * @param {RequestInfo|URL} input
+ * @param {RequestInit} [init]
+ * @param {{context?: string}} [opts]
+ * @returns {Promise<Response>}
+ */
+export async function fetchWithRiskAck(input, init, opts) {
+	let m;
+	try {
+		m = await _mod();
+	} catch {
+		return fetch(input, init);
+	}
+	return m.fetchWithRiskAck(input, init, opts);
 }

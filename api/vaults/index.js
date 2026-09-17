@@ -16,6 +16,7 @@ import { createVault, listVaults, listBackedVaults, recordVaultEvent } from '../
 import { generateVaultWallet } from '../_lib/vault-wallet.js';
 import { usdcToAtomics, sharePriceE6, roiBps, toBig, TERM_BOUNDS, clampTermBps } from '../_lib/vault-accounting.js';
 import { isUuid } from '../_lib/validate.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 
 function clampInt(v, bound) {
 	return clampTermBps(v, bound) ?? bound.def;
@@ -96,6 +97,7 @@ async function handleOpen(req, res) {
 
 	// Reputation gate: only a verifiably-skilled agent can open a vault.
 	try { await assertReputationVerified(agentId, network); } catch (e) { return error(res, e.status || 403, e.code || 'forbidden', e.message, e.detail || {}); }
+	if (!(await requireRealFundsAgreement(req, res, { userId, network, context: 'vault-open' }))) return;
 
 	// Required risk terms.
 	const maxPerTradeUsdc = Number(body.maxPerTradeUsdc ?? body.max_per_trade_usdc);

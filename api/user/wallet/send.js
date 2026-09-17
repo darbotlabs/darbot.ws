@@ -3,6 +3,7 @@
 // Body: { destination: string, amount: number | "max", asset: "SOL" | "<usdc-mint>" }
 
 import { getSessionUser } from '../../_lib/auth.js';
+import { requireRealFundsAgreement } from '../../_lib/real-funds-agreement.js';
 import { sql } from '../../_lib/db.js';
 import { cors, json, error, wrap, method, readJson } from '../../_lib/http.js';
 import { requireCsrf } from '../../_lib/csrf.js';
@@ -41,6 +42,7 @@ export default wrap(async (req, res) => {
 	const network = 'mainnet';
 	const asset = typeof body.asset === 'string' && body.asset.trim() ? body.asset.trim() : 'SOL';
 	const simulate = body.simulate === true;
+	if (!simulate && !(await requireRealFundsAgreement(req, res, { userId: session.id, network, context: 'master-send' }))) return;
 
 	// The body is parsed before the limiters on purpose: a simulate moves no
 	// funds, so it must not draw on the 5-per-DAY withdrawal budget. Charging

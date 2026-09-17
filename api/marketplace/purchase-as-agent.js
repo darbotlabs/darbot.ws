@@ -33,6 +33,7 @@ import { sql } from '../_lib/db.js';
 import { authenticateBearer, extractBearer, getSessionUser } from '../_lib/auth.js';
 import { cors, error, json, method, readJson, wrap, rateLimited, respondError } from '../_lib/http.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { clientIp, limits } from '../_lib/rate-limit.js';
 import { recoverSolanaAgentKeypair } from '../_lib/agent-wallet.js';
 import { confirmSkillPurchase, resolvePayoutAddress, logEvent } from '../_lib/purchase-confirm.js';
@@ -99,6 +100,7 @@ export default wrap(async (req, res) => {
 	`;
 	if (!buyer) return error(res, 404, 'not_found', 'buyer agent not found');
 	if (buyer.user_id !== auth.userId) return error(res, 403, 'forbidden', 'not your agent');
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'agent-skill-purchase' }))) return;
 
 	// Self-dealing detection (buyer and seller owned by same user)
 	const [seller] = await sql`

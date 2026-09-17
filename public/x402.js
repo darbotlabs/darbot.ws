@@ -39,12 +39,12 @@
 
 const VERSION = '0.2.0';
 
-// Real-funds gate: before the first payment, the user must accept the three.ws
-// Risk Disclosure (three.ws/legal/risk). Loaded lazily and failure-tolerant on
-// purpose — this modal is a drop-in embed on merchant sites, and a payment
-// must never brick because the gate module 404'd or was blocked. If risk-ack.js
-// can't load, degrade to a native confirm() with the same core wording,
-// remembered for the page session.
+// Real-funds gate: before the first payment, the user must sign the three.ws
+// real-funds agreements (three.ws/legal/agreements). Loaded lazily and
+// failure-tolerant on purpose: this modal is a drop-in embed on merchant sites,
+// and a payment must never brick because the gate module 404'd or was blocked.
+// If risk-ack.js can't load, degrade to a native confirm() with the same core
+// wording, remembered for the page session.
 let _riskAckSessionOk = false;
 
 async function ensureRiskAckSafe(context) {
@@ -58,11 +58,12 @@ async function ensureRiskAckSafe(context) {
 		if (_riskAckSessionOk) return true;
 		try {
 			_riskAckSessionOk = globalThis.confirm?.(
-				'Real funds — risk acknowledgment\n\n' +
-				'three.ws is experimental software. Losses can be total, fast, and irreversible; ' +
-				'nothing here is financial advice; and three.ws is not responsible for any losses. ' +
-				'Full text: three.ws/legal/risk\n\n' +
-				'Press OK to accept that you use real funds entirely at your own risk, or Cancel to stop.',
+				'Real funds: sign the agreements\n\n' +
+				'three.ws is experimental technology. By pressing OK you agree to the Terms of Service (three.ws/legal/tos), ' +
+				'the Risk Disclosure (three.ws/legal/risk), and the Agent Wallet Agreement (three.ws/legal/agent-wallet). ' +
+				'You confirm you are 18 or older and accept that funds can be lost completely for any reason, nothing is ' +
+				'insured, and three.ws is not responsible for any loss.\n\n' +
+				'Press OK to accept, or Cancel to stop.',
 			) === true;
 		} catch {
 			_riskAckSessionOk = false;

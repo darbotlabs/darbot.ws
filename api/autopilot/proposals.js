@@ -19,6 +19,7 @@ import { sql } from '../_lib/db.js';
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { cors, json, method, readJson, wrap, error, rateLimited } from '../_lib/http.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
 import {
 	generateProposals, executeProposal, dismissProposal, undoProposal, dryRunProposal,
@@ -103,8 +104,6 @@ async function handleList(req, res, auth) {
 }
 
 async function handleAct(req, res, auth) {
-	if (!(await requireCsrf(req, res, auth.userId))) return;
-
 	const body = await readJson(req);
 	const agentId = body.agentId || body.agent_id;
 	const action = body.action;
@@ -114,6 +113,25 @@ async function handleAct(req, res, auth) {
 
 	const agent = await ownedAgent(req, res, agentId, auth);
 	if (!agent) return;
+
+	// Every action other than 'generate' operates on a specific proposal.
+	let proposalId = null;
+	let proposal = null;
+	if (action !== 'generate') {
+		proposalId = body.proposalId || body.proposal_id;
+		if (!proposalId) return error(res, 400, 'validation_error', 'proposalId required');
+		if (!isUuid(proposalId)) return error(res, 400, 'validation_error', 'proposalId must be a uuid');
+		const [row] = await sql`SELECT * FROM agent_autopilot_proposals WHERE id = ${proposalId} AND agent_id = ${agentId}`;
+		if (!row) return error(res, 404, 'not_found', 'proposal not found');
+		proposal = decorateProposal(row);
+	}
+
+	// Executing a wallet_transfer sends real SOL from the agent's custodial wallet,
+	// so it needs a signed real-funds agreement. Checked before CSRF so a refusal
+	// does not burn the owner's single-use token.
+	if (action === 'execute' && proposal.kind === 'wallet_transfer' &&
+		!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'autopilot-transfer' }))) return;
+	if (!(await requireCsrf(req, res, auth.userId))) return;
 
 	if (action === 'generate') {
 		const rl = await limits.authIp(clientIp(req));
@@ -145,14 +163,6 @@ async function handleAct(req, res, auth) {
 		const trust = await computeTrust({ agentId });
 		return json(res, 200, { created, autoRan, source: result.source, scanned: result.scanned, trust });
 	}
-
-	// All remaining actions operate on a specific proposal.
-	const proposalId = body.proposalId || body.proposal_id;
-	if (!proposalId) return error(res, 400, 'validation_error', 'proposalId required');
-	if (!isUuid(proposalId)) return error(res, 400, 'validation_error', 'proposalId must be a uuid');
-	const [row] = await sql`SELECT * FROM agent_autopilot_proposals WHERE id = ${proposalId} AND agent_id = ${agentId}`;
-	if (!row) return error(res, 404, 'not_found', 'proposal not found');
-	const proposal = decorateProposal(row);
 
 	try {
 		if (action === 'dryrun') {

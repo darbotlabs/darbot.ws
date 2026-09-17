@@ -49,6 +49,7 @@ import { thumbnailUrl } from './_lib/r2.js';
 import { logger } from './_lib/usage.js';
 import { getSessionUser, authenticateBearer, extractBearer } from './_lib/auth.js';
 import { recoverSolanaAgentKeypair } from './_lib/agent-wallet.js';
+import { requireRealFundsAgreement } from './_lib/real-funds-agreement.js';
 import { SpendLimitError, reserveSpendUsd, updateCustodyEvent, releaseSpendReservation } from './_lib/agent-trade-guards.js';
 import { validatePublicUrl, resolvePublicHost, pinnedAgent, SsrfError } from './_lib/ssrf.js';
 import { BUILDER_CODE } from './_lib/x402-builder-code.js';
@@ -1065,6 +1066,7 @@ async function handleExternalPay(req, res, input, ip) {
 	// CSRF on the settle path (funds move + the agent key signs). The preview branch
 	// above returns before this point, so a live price probe never burns a token.
 	// Bearer/API-key callers are exempt inside requireCsrf.
+	if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'x402-pay' }))) return;
 	if (!(await requireCsrf(req, res, auth.userId))) return;
 
 	const spendGuard = { agentId, userId: auth.userId, meta: loaded.meta, network: 'mainnet' };
@@ -1208,6 +1210,7 @@ export default wrap(async (req, res) => {
 	if (routing.mode === 'agent') {
 		const auth = await requireAuth(req);
 		if (!auth) return json(res, 401, { error: 'authentication_required' });
+		if (!(await requireRealFundsAgreement(req, res, { userId: auth.userId, context: 'x402-pay' }))) return;
 		const loaded = await loadAgentKeypairForUser(routing.agentId, auth.userId);
 		if (!loaded) return json(res, 403, { error: 'agent_not_found_or_no_solana_wallet' });
 		// CSRF: this tool call pays from the agent's own wallet. Bearer callers exempt.

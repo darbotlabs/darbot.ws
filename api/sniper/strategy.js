@@ -17,6 +17,7 @@
 import { cors, json, method, readJson, wrap, error, rateLimited } from '../_lib/http.js';
 import { getSessionUser, authenticateBearer, extractBearer } from '../_lib/auth.js';
 import { requireCsrf } from '../_lib/csrf.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
 import { sql } from '../_lib/db.js';
 import { solanaConnection } from '../_lib/solana/connection.js';
@@ -311,12 +312,6 @@ async function listStrategies(req, res, userId) {
 // ── POST — upsert/arm strategy ───────────────────────────────────────────────
 
 async function upsertStrategy(req, res, userId) {
-	// Arming a sniper commits the agent's real custodial funds to autonomous
-	// trading, so this state-changing write gets the same CSRF gate as withdraw
-	// and the spend-limit endpoints. Machine (bearer) callers are exempt inside
-	// requireCsrf, which is why the client already sends the token.
-	if (!(await requireCsrf(req, res, userId))) return;
-
 	const body = await readJson(req);
 	// Treasury auto-funding moves SOL from the platform's launcher master into an
 	// agent wallet, so consent for it is granted by an operator against the row
@@ -456,6 +451,19 @@ async function upsertStrategy(req, res, userId) {
 		BigInt(next.min_claim_lamports) > BigInt(next.max_claim_lamports)) {
 		return error(res, 400, 'bad_request', 'min_claim_lamports cannot exceed max_claim_lamports');
 	}
+
+	// Only the transition INTO an armed state needs the signed agreement: disarming,
+	// the kill switch, and edits to an already-armed or disarmed strategy stay open.
+	const wasArmed = cur.enabled === true && cur.kill_switch !== true;
+	const willArm = next.enabled === true && next.kill_switch !== true;
+	if (willArm && !wasArmed && !(await requireRealFundsAgreement(req, res, { userId, network: p.network, context: 'sniper-arm' }))) return;
+
+	// Arming a sniper commits the agent's real custodial funds to autonomous
+	// trading, so this state-changing write gets the same CSRF gate as withdraw
+	// and the spend-limit endpoints. Machine (bearer) callers are exempt inside
+	// requireCsrf, which is why the client already sends the token. It runs after
+	// validation and the agreement gate so a refused save does not burn the token.
+	if (!(await requireCsrf(req, res, userId))) return;
 
 	const [row] = await sql`
 		insert into agent_sniper_strategies

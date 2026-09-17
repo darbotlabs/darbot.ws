@@ -3,6 +3,13 @@
 	"entries": [
 		{
 			"date": "2026-09-17",
+			"title": "Sign the real-funds agreements once before using real money",
+			"summary": "three.ws is experimental technology, and agent wallets are custodial software, not bank accounts. Before you deposit into an agent wallet, trade, send, withdraw, arm autopilot, or pay with real funds, you now sign three agreements in one step: the Terms of Service, the Risk Disclosure, and the new Agent Wallet Agreement. You tick each one, confirm you are eligible and that you understand funds can be lost for any reason with nothing insured, and type your name as your signature. An agent's deposit address now appears only after signing, and every deposit is covered by the Agent Wallet Agreement. When you are signed in, the signature is saved to your account and the servers refuse real-funds actions from unsigned accounts, including through the API, so it cannot be skipped. You can review every signature you have made at /legal/agreements. Devnet stays free of this step.",
+			"tags": ["security", "feature"],
+			"link": "/legal/agreements"
+		},
+		{
+			"date": "2026-09-17",
 			"title": "Coin pages show the numbers, not a score",
 			"summary": "Every coin launched on three.ws used to carry a quality score, a conviction tier and risk labels on its page, in the launch feed and on its share image. A high score can read as investment advice and a low one as FUD about someone's launch, so all of them are gone. In their place is a Token stats panel with the facts traders look up in terminals: volume, buys, sells, net buy and price change over 5 minutes, 1 hour, 6 hours and 24 hours, plus holders, the top 10 share, how much the dev holds, how much early buyers still hold, mint and freeze authority, bonding curve progress, liquidity and whether a DEX Screener profile was paid for. The Holders panel lists the ten largest wallets with links to each one, and leaves the bonding curve and pool out of the ranking. If the full holder index is unavailable, the page still shows the largest holders and says so instead of going blank.",
 			"tags": ["improvement"],

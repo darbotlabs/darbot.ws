@@ -10,6 +10,7 @@
 // account yet). Mirrors the simulate contract in send.js.
 
 import { getSessionUser } from '../../_lib/auth.js';
+import { requireRealFundsAgreement } from '../../_lib/real-funds-agreement.js';
 import { sql } from '../../_lib/db.js';
 import { cors, json, error, wrap, method, readJson } from '../../_lib/http.js';
 import { requireCsrf } from '../../_lib/csrf.js';
@@ -49,6 +50,7 @@ export default wrap(async (req, res) => {
 	// Parsed before the limiter so a preview does not spend the 5-per-DAY
 	// withdrawal budget. See the matching note in send.js.
 	const simulate = body.simulate === true;
+	if (!simulate && !(await requireRealFundsAgreement(req, res, { userId: session.id, context: 'fund-agent' }))) return;
 	const rl = simulate
 		? await limits.walletSimulate(session.id)
 		: await limits.withdrawalPerUser(session.id);

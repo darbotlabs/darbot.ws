@@ -17,6 +17,7 @@
 
 import { tipAgent, TipError, TIP_TOKENS } from './agent-tip.js';
 import { getWalletStatus } from './agent-wallet-chip.js';
+import { ensureRiskAck } from './risk-ack.js';
 
 const STYLE_ID = 'tws-tip-modal-styles';
 
@@ -268,6 +269,9 @@ export function openTipModal(agent, opts = {}) {
 
 	async function send() {
 		if (state.sending || !(Number(state.amount) > 0)) return;
+		// A tip is a deposit into an agent wallet: governed by the Agent Wallet
+		// Agreement, so it waits for a signature like every other real-funds action.
+		if (network !== 'devnet' && !(await ensureRiskAck({ context: 'tip' }))) return;
 		state.error = null;
 		state.sending = 'connecting';
 		render();

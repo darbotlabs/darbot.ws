@@ -21,6 +21,7 @@ import { sql } from '../_lib/db.js';
 import { isUuid } from '../_lib/validate.js';
 import { z } from 'zod';
 import { getWatch, upsertWatch, recentActions, actionsSummary } from '../_lib/oracle/store.js';
+import { requireRealFundsAgreement } from '../_lib/real-funds-agreement.js';
 
 const NETWORKS = new Set(['mainnet', 'devnet']);
 const TIERS = new Set(['prime', 'strong', 'lean', 'watch']);
@@ -127,6 +128,11 @@ export default wrap(async (req, res) => {
 		if (rawDaily != null && !(rawDaily >= perTrade)) {
 			return error(res, 400, 'validation_error', 'max_daily_sol must be at least per_trade_sol to arm a live agent');
 		}
+		// Only the move INTO live-armed needs the signed agreement; re-saving an
+		// already live-armed watch, simulate mode, and disarming stay open.
+		const current = await getWatch(cfg.agent_id, network);
+		const wasLiveArmed = current?.armed === true && current?.mode === 'live';
+		if (!wasLiveArmed && !(await requireRealFundsAgreement(req, res, { userId, network, context: 'oracle-watch-arm' }))) return;
 	}
 
 	// Sanitize telegram_chat_id: allow numeric IDs (positive or negative) and

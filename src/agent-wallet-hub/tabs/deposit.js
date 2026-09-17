@@ -31,6 +31,7 @@ import { fetchAgentSolanaWallet, fetchAgentSolanaActivity } from '../../agent-so
 import { renderQRToSVG } from '../../erc8004/qr.js';
 import { buildSolanaPayUri } from '../../shared/solana-pay.js';
 import { formatSol, timeAgo, explorerAddressUrl, explorerTxUrl } from '../util.js';
+import { ensureRiskAck, hasRiskAckVerified } from '../../shared/risk-ack.js';
 
 // Balance is server-cached for 60s, so a faster poll just re-reads the cache.
 // 15s keeps the "waiting for your deposit" loop feeling live without hammering RPC.
@@ -70,6 +71,13 @@ a.awh-dep-qr:focus-visible { outline: var(--focus-ring-width,2px) solid var(--fo
 .awh-dep-amount-hint.is-err { color: var(--warn,#fbbf24); }
 
 .awh-dep-how { font-size: var(--text-sm,.764rem); color: var(--ink-dim,#888); line-height: 1.55; margin: 0; }
+.awh-dep-terms { margin-top: 8px; }
+.awh-dep-terms a, .awh-dep-gate a { color: var(--ink-bright,#fff); }
+.awh-dep-gate { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.awh-dep-gate-h { margin: 0; font-weight: 600; color: var(--ink-bright,#fff); font-size: var(--text-md,.8125rem); }
+.awh-dep-gate-p { margin: 0; font-size: var(--text-sm,.764rem); color: var(--ink-dim,#888); line-height: 1.55; }
+.awh-dep-gate-docs { margin: 0; padding-left: 18px; font-size: var(--text-sm,.764rem); line-height: 1.7; }
+.awh-dep-gate-docs a:focus-visible { outline: 2px solid var(--focus-ring-color, currentColor); outline-offset: 2px; border-radius: 3px; }
 
 .awh-dep-status { display: flex; align-items: center; gap: 10px; }
 .awh-dep-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
@@ -140,6 +148,11 @@ registerWalletTab({
 			// stale address remains fundable during an API error or old deployment.
 			depositsEnabled: null,
 			depositsDisabledReason: null,
+			// The deposit address stays hidden on mainnet until the visitor has
+			// signed the real-funds agreements (Agent Wallet Agreement included).
+			// null = not yet checked, so nothing fundable renders while unknown.
+			agreementSigned: null,
+			signing: false,
 			amount: '', // user-entered SOL amount for the QR/deep-link
 			amountError: false,
 			// Live confirmation tracking.
@@ -311,6 +324,11 @@ registerWalletTab({
 				return;
 			}
 
+			if (net !== 'devnet' && state.agreementSigned !== true) {
+				renderAgreementGate();
+				return;
+			}
+
 			const uri = solanaUri();
 			panel.innerHTML = `
 				<div class="awh-card">
@@ -356,6 +374,8 @@ registerWalletTab({
 						<strong>How to fund:</strong> scan the QR with your phone's wallet (Phantom, Solflare, Backpack…),
 						tap “Open in a wallet app” on mobile, or copy the address and send SOL from any wallet or exchange.
 					</p>
+					${net === 'devnet' ? '' : `<p class="awh-dep-how awh-dep-terms">Deposits are irreversible, uninsured, and made entirely at your own risk under the
+						<a href="/legal/agent-wallet" target="_blank" rel="noopener">Agent Wallet Agreement</a>. three.ws is not responsible for any loss of funds sent to this wallet.</p>`}
 				</div>
 
 				<div class="awh-card" data-host="status" role="status" aria-live="polite">${statusBlock()}</div>
@@ -387,6 +407,44 @@ registerWalletTab({
 
 			const amountInput = panel.querySelector('[data-input="amount"]');
 			amountInput?.addEventListener('input', onAmountInput);
+		}
+
+		function renderAgreementGate() {
+			const checking = state.agreementSigned === null;
+			panel.innerHTML = `
+				<div class="awh-card">
+					<div class="awh-dep-who">
+						${avatar ? `<img class="awh-dep-who-av" src="${escapeHtml(avatar)}" alt="" loading="lazy" data-fallback="remove" />` : ''}
+						<div class="awh-dep-who-txt">Before you fund <strong>${escapeHtml(agentName)}</strong></div>
+					</div>
+					<div class="awh-dep-gate">
+						<p class="awh-dep-gate-h">Sign the real-funds agreements to see the deposit address.</p>
+						<p class="awh-dep-gate-p">Agent wallets are experimental, custodial software, not bank accounts. Anything sent here
+						can be lost completely (bugs, hacks, lost keys, agent decisions, the service shutting down), nothing is insured,
+						withdrawal is never guaranteed, and three.ws is not responsible for any loss. If you fund an agent you do not own,
+						those funds belong to that agent.</p>
+						<ul class="awh-dep-gate-docs">
+							<li><a href="/legal/agent-wallet" target="_blank" rel="noopener">Agent Wallet Agreement</a></li>
+							<li><a href="/legal/risk" target="_blank" rel="noopener">Risk Disclosure</a></li>
+							<li><a href="/legal/tos" target="_blank" rel="noopener">Terms of Service</a></li>
+						</ul>
+						<div class="awh-dep-actions">
+							<button class="awh-btn awh-btn--primary" type="button" data-act="sign" ${checking || state.signing ? 'disabled aria-busy="true"' : ''}>
+								${checking ? 'Checking your agreements…' : state.signing ? 'Waiting for signature…' : 'Review and sign'}
+							</button>
+						</div>
+					</div>
+				</div>`;
+			panel.querySelector('[data-act="sign"]')?.addEventListener('click', async () => {
+				if (state.signing) return;
+				state.signing = true;
+				renderAgreementGate();
+				const signed = await ensureRiskAck({ context: 'deposit' });
+				state.signing = false;
+				if (destroyed) return;
+				state.agreementSigned = signed === true;
+				render();
+			});
 		}
 
 		function onAmountInput(e) {
@@ -447,7 +505,11 @@ registerWalletTab({
 		}
 
 		async function loadInitial() {
-			const res = await readBalance();
+			const [res, signed] = await Promise.all([
+				readBalance(),
+				state.agreementSigned === true ? true : hasRiskAckVerified(),
+			]);
+			state.agreementSigned = signed === true;
 			state.depositsEnabled = res.depositsEnabled === true;
 			state.depositsDisabledReason = res.depositsDisabledReason || null;
 			if (res.ok) {
