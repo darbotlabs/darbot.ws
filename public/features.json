@@ -1,5 +1,5 @@
 {
-	"generated_at": "2026-09-17T06:50:17.707Z",
+	"generated_at": "2026-09-17T07:21:10.800Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json",
 	"site": {
 		"name": "three.ws",
@@ -8165,8 +8165,28 @@
 				{
 					"path": "/legal/risk",
 					"title": "Risk Disclosure",
-					"description": "Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, no liability.",
+					"description": "Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, uninsured custodial agent wallets, no liability.",
 					"added": "2026-07-03",
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
+					"path": "/legal/agent-wallet",
+					"title": "Agent Wallet Agreement",
+					"description": "The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.",
+					"added": "2026-09-17",
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
+					"path": "/legal/agreements",
+					"title": "Real-Funds Agreements",
+					"description": "Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.",
+					"added": "2026-09-17",
 					"auth": null,
 					"indexable": true,
 					"tags": [],

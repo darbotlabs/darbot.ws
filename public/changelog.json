@@ -1,11 +1,31 @@
 {
-	"generated_at": "2026-09-17T06:50:17.737Z",
+	"generated_at": "2026-09-17T07:21:10.824Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
 	"entries": [
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Agent Wallet Agreement",
+			"summary": "The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.",
+			"link": "/legal/agent-wallet",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Real-Funds Agreements",
+			"summary": "Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.",
+			"link": "/legal/agreements",
+			"tags": [
+				"launch"
+			]
+		},
 		{
 			"date": "2026-09-17",
 			"type": "update",
@@ -46,6 +66,17 @@
 			"tags": [
 				"feature",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Sign the real-funds agreements once before using real money",
+			"summary": "three.ws is experimental technology, and agent wallets are custodial software, not bank accounts. Before you deposit into an agent wallet, trade, send, withdraw, arm autopilot, or pay with real funds, you now sign three agreements in one step: the Terms of Service, the Risk Disclosure, and the new Agent Wallet Agreement. You tick each one, confirm you are eligible and that you understand funds can be lost for any reason with nothing insured, and type your name as your signature. An agent's deposit address now appears only after signing, and every deposit is covered by the Agent Wallet Agreement. When you are signed in, the signature is saved to your account and the servers refuse real-funds actions from unsigned accounts, including through the API, so it cannot be skipped. You can review every signature you have made at /legal/agreements. Devnet stays free of this step.",
+			"link": "/legal/agreements",
+			"tags": [
+				"security",
+				"feature"
 			]
 		},
 		{
@@ -23180,7 +23211,7 @@
 			"date": "2026-07-03",
 			"type": "launch",
 			"title": "Risk Disclosure",
-			"summary": "Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, no liability.",
+			"summary": "Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, uninsured custodial agent wallets, no liability.",
 			"link": "/legal/risk",
 			"tags": [
 				"launch"

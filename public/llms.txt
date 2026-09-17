@@ -846,7 +846,9 @@ Long-form announcements, launches, and writing from three.ws.
 - [End-User License Agreement](https://three.ws/legal/eula): License terms for the three.ws Seeker/Saga mobile app: what the license covers, camera and selfie data, updates, and termination.
 - [NVIDIA NGC Container EULA](https://three.ws/legal/nvidia-ngc-eula): License terms for three.ws container images distributed through the NVIDIA NGC catalog: what the license covers, the model weights the image does not ship, and the data the container does not collect.
 - [Terms of Service](https://three.ws/legal/tos): The agreement between you and three.ws: your account, acceptable use, payments and on-chain activity, liability, and DMCA takedowns.
-- [Risk Disclosure](https://three.ws/legal/risk): Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, no liability.
+- [Risk Disclosure](https://three.ws/legal/risk): Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, uninsured custodial agent wallets, no liability.
+- [Agent Wallet Agreement](https://three.ws/legal/agent-wallet): The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.
+- [Real-Funds Agreements](https://three.ws/legal/agreements): Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.
 - [Content Policy](https://three.ws/legal/content-policy): What you may publish, mint, and monetise on three.ws: prohibited content, agent behaviour, marketplace listings, and how we enforce.
 
 ## News

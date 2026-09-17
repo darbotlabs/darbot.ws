@@ -1,14 +1,34 @@
 {
-	"generated_at": "2026-09-17T06:50:17.765Z",
+	"generated_at": "2026-09-17T07:21:10.854Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3692,
+	"total": 3695,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Agent Wallet Agreement",
+			"summary": "The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.",
+			"link": "/legal/agent-wallet",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Real-Funds Agreements",
+			"summary": "Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.",
+			"link": "/legal/agreements",
+			"tags": [
+				"launch"
+			]
+		},
 		{
 			"date": "2026-09-17",
 			"type": "update",
@@ -49,6 +69,17 @@
 			"tags": [
 				"feature",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Sign the real-funds agreements once before using real money",
+			"summary": "three.ws is experimental technology, and agent wallets are custodial software, not bank accounts. Before you deposit into an agent wallet, trade, send, withdraw, arm autopilot, or pay with real funds, you now sign three agreements in one step: the Terms of Service, the Risk Disclosure, and the new Agent Wallet Agreement. You tick each one, confirm you are eligible and that you understand funds can be lost for any reason with nothing insured, and type your name as your signature. An agent's deposit address now appears only after signing, and every deposit is covered by the Agent Wallet Agreement. When you are signed in, the signature is saved to your account and the servers refuse real-funds actions from unsigned accounts, including through the API, so it cannot be skipped. You can review every signature you have made at /legal/agreements. Devnet stays free of this step.",
+			"link": "/legal/agreements",
+			"tags": [
+				"security",
+				"feature"
 			]
 		},
 		{
@@ -1589,37 +1620,6 @@
 			"tags": [
 				"improvement",
 				"fix"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Your avatar shows up again on every page, instead of a stand-in robot",
-			"summary": "When you were signed in, the little avatar that rides along with you across the site had quietly been replaced by a generic robot on every page. The models themselves were fine and sitting safely in storage the whole time: what broke was the signed request the site uses to read them. Our storage provider stopped accepting that credential, and the page that serves your avatar had only that one way to fetch it, so it gave up and returned an error while the same file was being served correctly on the public storage address the entire time. That page now falls back to the public address and streams the model through as usual when the signed read is refused, so your avatar keeps loading through an outage like this one. It still prefers the signed path and returns to it automatically the moment storage is healthy again, and nothing about who is allowed to see a private avatar changed.",
-			"link": "/avatars",
-			"tags": [
-				"fix"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Your avatars show up on the dashboard again, and a failed one says why",
-			"summary": "The avatar previews on your dashboard, and every three.ws avatar embedded through the <threews-avatar> tag, were being pointed straight at the storage bucket that holds the 3D file. That address is on a different domain to the page asking for it, and the browser refuses cross-domain reads it has not been given permission for, so the model was blocked before a single byte arrived and the preview sat empty. Stored avatars now load through three.ws itself, which is the same origin as the page, carries your session so a private avatar stays private, and already knows to fall back to the public copy of the file when the signed read is refused. That last part is why this was invisible on our own site and total everywhere else: the bucket permits three.ws by name and nothing else, so a dashboard preview, a developer running the site locally, and a customer embedding an avatar on their own domain all failed for the same reason. When a model genuinely cannot be loaded, the frame no longer paints the raw network error, complete with an internal URL, into the box. It now says whether the avatar is private, gone, or the service is down, and what to do next. My Agents got the same treatment: a failed load explains the cause and gives you a Try again button instead of telling you to refresh the page, its keyboard focus outlines are visible again, and the page respects a reduced-motion preference.",
-			"link": "/dashboard",
-			"tags": [
-				"fix",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Awesome 3D Agents",
-			"summary": "A curated, link-checked list of everything you need to give an AI agent a body: text-to-3D models, capture and Gaussian splatting, avatars, rigging, motion generation, lipsync and voice, web renderers, asset pipelines, and the agent frameworks that drive them. Searchable and filterable, and published as an awesome list on GitHub.",
-			"link": "/awesome",
-			"tags": [
-				"launch"
 			]
 		}
 	]

@@ -4946,7 +4946,19 @@ The agreement between you and three.ws: your account, acceptable use, payments a
 
 URL: https://three.ws/legal/risk
 
-Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, no liability.
+Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, uninsured custodial agent wallets, no liability.
+
+### Agent Wallet Agreement
+
+URL: https://three.ws/legal/agent-wallet
+
+The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.
+
+### Real-Funds Agreements
+
+URL: https://three.ws/legal/agreements
+
+Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.
 
 ### Content Policy
 

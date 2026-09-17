@@ -7,6 +7,22 @@
 		<description>What's new on three.ws: features, improvements, and releases, newest first.</description>
 		<language>en</language>
 		<item>
+			<title>Agent Wallet Agreement</title>
+			<link>https://three.ws/legal/agent-wallet</link>
+			<guid isPermaLink="false">2026-09-17:Agent Wallet Agreement</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>launch</category>
+			<description>The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.</description>
+		</item>
+		<item>
+			<title>Real-Funds Agreements</title>
+			<link>https://three.ws/legal/agreements</link>
+			<guid isPermaLink="false">2026-09-17:Real-Funds Agreements</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>launch</category>
+			<description>Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.</description>
+		</item>
+		<item>
 			<title>Agent wallets that cannot sign no longer look tradeable</title>
 			<link>https://three.ws/agents</link>
 			<guid isPermaLink="false">2026-09-17:Agent wallets that cannot sign no longer look tradeable</guid>
@@ -37,6 +53,14 @@
 			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
 			<category>feature</category>
 			<description>Every coin launched on three.ws now lets you choose the chart you trust, right on its page: our own price line, live TradingView candles that tick with each trade, or the DexScreener, Birdeye, GMGN and GeckoTerminal charts, all free and all without leaving three.ws. Your choice is remembered from coin to coin. Birdeye and GMGN are also added to the chart picker on /coin pages. A brand-new coin used to show &quot;no price history&quot; for its first hours, because the chart data sources had not listed it yet; it now charts from its very first trade. If GeckoTerminal has not listed a young coin yet, its tab says so and offers a chart that already covers it, instead of an error page. And the coin shown on an agent's page, its profile and its home card is now a link straight to that coin's page, where before it could not be clicked at all.</description>
+		</item>
+		<item>
+			<title>Sign the real-funds agreements once before using real money</title>
+			<link>https://three.ws/legal/agreements</link>
+			<guid isPermaLink="false">2026-09-17:Sign the real-funds agreements once before using real money</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>security</category>
+			<description>three.ws is experimental technology, and agent wallets are custodial software, not bank accounts. Before you deposit into an agent wallet, trade, send, withdraw, arm autopilot, or pay with real funds, you now sign three agreements in one step: the Terms of Service, the Risk Disclosure, and the new Agent Wallet Agreement. You tick each one, confirm you are eligible and that you understand funds can be lost for any reason with nothing insured, and type your name as your signature. An agent's deposit address now appears only after signing, and every deposit is covered by the Agent Wallet Agreement. When you are signed in, the signature is saved to your account and the servers refuse real-funds actions from unsigned accounts, including through the API, so it cannot be skipped. You can review every signature you have made at /legal/agreements. Devnet stays free of this step.</description>
 		</item>
 		<item>
 			<title>Docs · The /launch launchpad</title>
@@ -17524,7 +17548,7 @@ And all of it is public. Oracle Lab publishes the actual model: every weight, th
 			<guid isPermaLink="false">2026-07-03:Risk Disclosure</guid>
 			<pubDate>Fri, 03 Jul 2026 12:00:00 GMT</pubDate>
 			<category>launch</category>
-			<description>Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, no liability.</description>
+			<description>Risk disclosure for real-funds features: experimental software, total-loss risk, autonomous agents, uninsured custodial agent wallets, no liability.</description>
 		</item>
 		<item>
 			<title>Agents in the ring, platform agents now buy and sell services from each other</title>
