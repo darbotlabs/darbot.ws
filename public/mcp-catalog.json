@@ -9647,7 +9647,7 @@
 		{
 			"name": "extract_solana_memo_media",
 			"title": "Extract media from a Solana transaction memo",
-			"description": "Fetch a finalized Solana transaction, inspect top-level and inner SPL Memo instructions, and render every supported embedded image data URI inline. The response always identifies the source signature and reports rejected media without returning unsafe bytes. This is chain data, not a claim of authorship or safety.",
+			"description": "Fetch a confirmed Solana transaction (legacy, v0, or v1), inspect top-level and inner SPL Memo instructions, and render every supported embedded image data URI inline. The response identifies the source signature, fee payer, slot, and transaction version, and reports rejected media without returning unsafe bytes. This is chain data, not a claim of authorship or safety.",
 			"server": {
 				"id": "solana-memo-media-mcp",
 				"title": "@three-ws/solana-memo-media-mcp",
@@ -9659,7 +9659,7 @@
 			"annotations": {
 				"readOnlyHint": true,
 				"destructiveHint": null,
-				"idempotentHint": false,
+				"idempotentHint": true,
 				"openWorldHint": true
 			},
 			"price": {
@@ -9673,7 +9673,7 @@
 						"type": "string",
 						"minLength": 32,
 						"maxLength": 128,
-						"description": "Finalized Solana transaction signature in base58."
+						"description": "Solana transaction signature in base58."
 					}
 				},
 				"required": [
@@ -9686,7 +9686,7 @@
 		{
 			"name": "find_solana_memo_media",
 			"title": "Find recent memo media for a Solana address",
-			"description": "Search a public Solana address’s recent finalized transactions and return only validated image data URIs carried by SPL Memo instructions. It is intentionally bounded to limit RPC load. Use the returned signatures to verify provenance in an explorer.",
+			"description": "Scan a Solana address's recent confirmed transactions and return only validated image data URIs carried by SPL Memo instructions. Signatures whose memo summary holds no data URI are skipped without fetching the transaction, so a scan costs one RPC call plus one per candidate. Pass a memo program id as the address to watch every memo written to it. Use the returned signatures to verify provenance in an explorer.",
 			"server": {
 				"id": "solana-memo-media-mcp",
 				"title": "@three-ws/solana-memo-media-mcp",
@@ -9717,9 +9717,15 @@
 					"limit": {
 						"type": "integer",
 						"minimum": 1,
-						"maximum": 20,
-						"default": 10,
-						"description": "Recent finalized signatures to inspect, from 1 to 20 (default 10)."
+						"maximum": 1000,
+						"default": 100,
+						"description": "Recent signatures to scan, from 1 to 1000 (default 100)."
+					},
+					"before": {
+						"type": "string",
+						"minLength": 32,
+						"maxLength": 128,
+						"description": "Continue the scan from signatures older than this one (the previous response's next_before)."
 					}
 				},
 				"required": [
@@ -9732,7 +9738,7 @@
 		{
 			"name": "get_solana_memo_media_status",
 			"title": "Solana memo media capability",
-			"description": "Report the local decoding policy and ordered Solana RPC failover hosts. No network call is made and no data is stored.",
+			"description": "Report the local decoding policy, recognized memo programs, and ordered Solana RPC failover hosts. No network call is made and no data is stored.",
 			"server": {
 				"id": "solana-memo-media-mcp",
 				"title": "@three-ws/solana-memo-media-mcp",

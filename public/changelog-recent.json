@@ -1,14 +1,25 @@
 {
-	"generated_at": "2026-09-16T21:09:38.691Z",
+	"generated_at": "2026-09-17T01:21:37.042Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3688,
+	"total": 3689,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Ask your AI assistant to show the picture inside a Solana transaction",
+			"summary": "Some Solana transactions carry a small image written straight into their memo, which explorers show as thousands of characters of unreadable text. A new free MCP server, @three-ws/solana-memo-media-mcp, lets Claude, Cursor or any other MCP client fetch a transaction by its signature and show you the image directly, alongside who signed it and a fingerprint of the exact bytes. It can also scan an account's recent history and pick out only the transactions that carry images. It needs no account, key or wallet, never writes anything, and only shows PNG, JPEG, WebP and GIF files whose contents match their label. The Onchain Viewer at /onchain was also fixed: it only recognised the newest memo program, so memos written through the standard Solana memo program were reported as missing. It now reads all three.",
+			"link": "/docs/mcp-solana-memo-media",
+			"tags": [
+				"feature",
+				"fix"
+			]
+		},
 		{
 			"date": "2026-09-16",
 			"type": "launch",
@@ -1606,16 +1617,6 @@
 			"title": "Hood Desk",
 			"summary": "A live onchain trading desk for any Robinhood Chain (4663) wallet: book value, native balance history rebuilt from the indexer, an activity tape of swaps and transfers, positions priced against Chainlink NAV and the deepest Uniswap pool, the NAV premium ridge layered by pool depth, counterparty flow, and memecoin movers.",
 			"link": "/markets/robinhood/desk",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "My Creations",
-			"summary": "Everything you have made on three.ws in one newest-first grid: the agents you built, the 3D avatars you saved, and every model you forged, including models forged in this browser before you had an account. Open, edit, or copy a link to any of them in one click.",
-			"link": "/mine",
 			"tags": [
 				"launch"
 			]

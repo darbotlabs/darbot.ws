@@ -4,6 +4,10 @@
 
 Public history for [three.ws](https://three.ws), newest first. New pages come from `added` dates in data/pages.json; everything else is curated in data/changelog.json. Also available as [JSON](https://three.ws/changelog.json) and [RSS](https://three.ws/changelog.xml), live at [three.ws/changelog](https://three.ws/changelog).
 
+## 2026-09-17
+
+- **Ask your AI assistant to show the picture inside a Solana transaction**: Some Solana transactions carry a small image written straight into their memo, which explorers show as thousands of characters of unreadable text. A new free MCP server, @three-ws/solana-memo-media-mcp, lets Claude, Cursor or any other MCP client fetch a transaction by its signature and show you the image directly, alongside who signed it and a fingerprint of the exact bytes. It can also scan an account's recent history and pick out only the transactions that carry images. It needs no account, key or wallet, never writes anything, and only shows PNG, JPEG, WebP and GIF files whose contents match their label. The Onchain Viewer at /onchain was also fixed: it only recognised the newest memo program, so memos written through the standard Solana memo program were reported as missing. It now reads all three. (`/docs/mcp-solana-memo-media`) `[feature, fix]`
+
 ## 2026-09-16
 
 - **Docs · The /launch launchpad** (`/docs/launchpad`): How three.ws/launch launches a pump.fun coin for a 3D agent: agent-linked metadata, the 1% dev-buy fee, v0 lookup-table and Solana transaction v1 formats, claiming creator rewards on three.ws, and the API behind it.

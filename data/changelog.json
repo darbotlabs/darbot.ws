@@ -2,6 +2,16 @@
 	"$comment": "Curated changelog entries for three.ws, the editorial layer of the public changelog. New PAGE launches are tracked automatically via the `added` field in data/pages.json; this file is for everything else holders care about: improvements, fixes, SDK releases, trading/payments capabilities, security work. scripts/build-page-index.mjs merges both sources into CHANGELOG.md, public/changelog.json, and public/changelog.xml. Newest first. Allowed tags: feature, improvement, fix, sdk, infra, docs, security. `link` is optional and must be a live three.ws path.",
 	"entries": [
 		{
+			"date": "2026-09-17",
+			"title": "Ask your AI assistant to show the picture inside a Solana transaction",
+			"summary": "Some Solana transactions carry a small image written straight into their memo, which explorers show as thousands of characters of unreadable text. A new free MCP server, @three-ws/solana-memo-media-mcp, lets Claude, Cursor or any other MCP client fetch a transaction by its signature and show you the image directly, alongside who signed it and a fingerprint of the exact bytes. It can also scan an account's recent history and pick out only the transactions that carry images. It needs no account, key or wallet, never writes anything, and only shows PNG, JPEG, WebP and GIF files whose contents match their label. The Onchain Viewer at /onchain was also fixed: it only recognised the newest memo program, so memos written through the standard Solana memo program were reported as missing. It now reads all three.",
+			"tags": [
+				"feature",
+				"fix"
+			],
+			"link": "/docs/mcp-solana-memo-media"
+		},
+		{
 			"date": "2026-09-16",
 			"title": "A flat 1% fee on trades made through three.ws",
 			"summary": "Trades that three.ws builds or runs for you now carry a 1% fee, paid in the same transaction as the trade: buys and sells in the coin trade window, trades from your agent's wallet, and trades your agents make through strategies, mirror trading, orders, market making and sniping. The fee is shown before you confirm, both in the trade window and in the agent wallet's trade tab. Trades you make on other apps are not affected, and three.ws's own agents are never charged.",
