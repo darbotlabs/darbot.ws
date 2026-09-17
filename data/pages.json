@@ -4942,6 +4942,14 @@
 					"changefreq": "monthly"
 				},
 				{
+					"path": "/docs/glasses",
+					"title": "Docs · Smart glasses, agents on your lens",
+					"description": "Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.",
+					"priority": 0.6,
+					"changefreq": "monthly",
+					"added": "2026-09-17"
+				},
+				{
 					"path": "/docs/js-api",
 					"title": "Docs · JavaScript API reference",
 					"description": "The internal JavaScript classes behind the three.ws viewer: the application controller, the three.js viewer, the glTF validator, and the small components that render around them. Constructors, methods, and events.",

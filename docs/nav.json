@@ -544,6 +544,18 @@
 					"path": "irl/street-demo"
 				},
 				{
+					"label": "Smart glasses (agents on your lens)",
+					"path": "glasses"
+				},
+				{
+					"label": "Meta Ray-Ban Display build plan",
+					"path": "glasses/meta-ray-ban-display"
+				},
+				{
+					"label": "Glasses platform research",
+					"path": "glasses/research"
+				},
+				{
 					"label": "World Lines (proof of presence)",
 					"path": "world-lines"
 				},

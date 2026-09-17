@@ -28275,6 +28275,16 @@
 				"improvement",
 				"fix"
 			]
+		},
+		{
+			"date": "2026-09-17",
+			"title": "A plan for meeting agents through smart glasses",
+			"summary": "three.ws already lets you pin a 3D agent at a real place and walk up to it, and /irl can already mirror the nearest-agent cue to Brilliant Labs Frame and Even Realities G1 lenses over Bluetooth. New documentation maps the whole glasses lane: how the work splits between the lens (who is near, which way, how far) and the phone (the 3D body in AR), a full build plan for Meta Ray-Ban Display glasses and the Neural Band, and an honest survey of every platform, repository and package involved, including which ones have shut down and should not be built on.",
+			"tags": [
+				"docs",
+				"feature"
+			],
+			"link": "/docs/glasses"
 		}
 	]
 }
