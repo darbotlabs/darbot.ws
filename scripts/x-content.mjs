@@ -23,7 +23,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { QUEUE_PATH, loadQueue, validateQueue } from '../api/_lib/x-content/queue.js';
-import { dueAt, pickDue } from '../api/_lib/x-content/schedule.js';
+import { anchorAssignments, dueAt, pickDue } from '../api/_lib/x-content/schedule.js';
 import { runTick } from '../api/_lib/x-content/runner.js';
 import { dbStore, memoryStore } from '../api/_lib/x-content/state.js';
 import { VIDEO_LIMITS, mediaType, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
@@ -86,14 +86,21 @@ async function plan() {
 	const { problems } = validateQueue(queue, root, { state });
 	const published = new Map((state.published || []).map((row) => [row.id, row]));
 	console.log(`ledger: ${s.label}\n`);
-	for (const item of [...queue.items].sort((a, b) => dueAt(a, queue.cadence) - dueAt(b, queue.cadence))) {
+	// Without the production seed the times below are the unseeded ones, which
+	// are not the times production will use. Say so rather than printing a
+	// schedule the operator would trust.
+	const seed = process.env.X_CONTENT_SCHEDULE_SEED || null;
+	if (!seed) console.log('note  X_CONTENT_SCHEDULE_SEED is not set here, so these are placeholder times; production picks the real ones\n');
+	const anchors = anchorAssignments(queue.items, seed);
+	const landsAt = (item) => dueAt(item, queue.cadence, { seed, anchorMinutes: anchors.get(item.id) ?? null });
+	for (const item of [...queue.items].sort((a, b) => landsAt(a) - landsAt(b))) {
 		const row = published.get(item.id);
-		const when = row ? `posted ${row.publishedAt}` : `lands ${new Date(dueAt(item, queue.cadence)).toISOString()}`;
+		const when = row ? `posted ${row.publishedAt}` : `lands ${new Date(landsAt(item)).toISOString()}`;
 		const flag = problems[item.id].length ? `  (${problems[item.id].length} problem(s))` : '';
 		console.log(`${when.padEnd(33)} ${item.status.padEnd(8)} ${item.kind.padEnd(7)} ${item.lane.padEnd(10)} ${item.pattern.padEnd(10)} ${item.id}${flag}${row ? `  ${row.url}` : ''}`);
 	}
 	const publishable = queue.items.filter((item) => !problems[item.id].length);
-	const next = pickDue({ items: publishable, state, cadence: queue.cadence, quality: queue.quality });
+	const next = pickDue({ items: publishable, state, cadence: queue.cadence, quality: queue.quality, seed });
 	console.log(`\nnow: ${next.item ? `${next.item.id} is due` : next.reason}`);
 }
 
@@ -418,7 +425,7 @@ async function approve() {
 			continue;
 		}
 		item.status = 'approved';
-		console.log(`ok    ${item.id}: approved for ${dueAt(item, queue.cadence) ? new Date(dueAt(item, queue.cadence)).toISOString() : item.notBefore}`);
+		console.log(`ok    ${item.id}: approved, lands on ${item.notBefore.slice(0, 10)} at a moment only the schedule seed decides`);
 	}
 	writeFileSync(resolve(root, QUEUE_PATH), `${JSON.stringify(queue, null, '\t')}\n`);
 	if (blocked) process.exit(1);

@@ -26,6 +26,8 @@ export async function runTick({ root, store, now = Date.now(), dryRun = true, re
 		quality: queue.quality,
 		requestedId,
 		anyStatus: dryRun,
+		// The queue is public; the minute an item lands is not. See schedule.js.
+		seed: env.X_CONTENT_SCHEDULE_SEED || null,
 	});
 	if (!decision.item) return { published: null, reason: decision.reason, blocked };
 

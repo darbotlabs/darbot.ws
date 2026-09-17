@@ -1,6 +1,6 @@
 # Announcement pack: A print priced from the mesh, not from a guess
 
-**Surface:** [`/materialize`](https://three.ws/materialize) · **Stage:** drafted · **Slot:** 2026-09-19 23:00 UTC · **Announced externally:** never
+**Surface:** [`/materialize`](https://three.ws/materialize) · **Stage:** drafted · **Slot:** 2026-09-19 · **Announced externally:** never
 
 Ranked 22 of 322 never-announced surfaces by `npm run announce:rank` (score 73). Drafted by hand and packed by `npm run announce:kit`, from the evidence brief in [`data/announce-plan/briefs/materialize.json`](../../data/announce-plan/briefs/materialize.json), against [the announcement voice](../announce-voice.md). Every fact below comes from that brief; nothing in this pack was written from memory.
 
@@ -11,7 +11,7 @@ Ranked 22 of 322 never-announced surfaces by `npm run announce:rank` (score 73).
 | Field | Value |
 |---|---|
 | Pack id | `materialize` |
-| Publish slot | 2026-09-19 23:00 UTC, jittered inside 90 minutes by the scheduler |
+| Publish slot | 2026-09-19. The minute is decided at send time from the production schedule seed, so it is not knowable from this repository |
 | Lane and pattern | developer / mechanism |
 | Audience | Engineers who will read the code |
 | Primary channel | X, @trythreews, through the reviewed content queue |

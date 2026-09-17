@@ -12,7 +12,7 @@
 // Pure: no I/O, so the rules are unit-tested and the CLI shows the same
 // decision the cron will make.
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -24,14 +24,61 @@ export const DEFAULT_CADENCE = {
 	quietHoursUtc: null,
 };
 
-export function jitterMinutes(id, windowMinutes) {
-	const digest = createHash('sha256').update(String(id)).digest();
+// ── Why the schedule carries a secret ────────────────────────────────────────
+// The queue is a committed file in a public repository, so the day an item
+// posts is public by construction. Without a seed the minute is public too:
+// the jitter was a plain hash of the item's id, which anyone holding the repo
+// can compute, and an announcement whose exact minute is knowable days ahead
+// can be camped, front-run, or pre-empted.
+//
+// `X_CONTENT_SCHEDULE_SEED` (production env, never committed) turns that hash
+// into an HMAC. Same properties for us (stable per item, so a preview, a retry
+// and the real tick all agree), no properties at all for anyone without the
+// seed. It also deals out the day's anchor times, so which of the day's posts
+// goes first is unknowable as well. With no seed configured the behaviour is
+// exactly what it was, which keeps local previews and the tests honest.
+
+export function jitterMinutes(id, windowMinutes, seed = null) {
+	const digest = seed
+		? createHmac('sha256', String(seed)).update(String(id)).digest()
+		: createHash('sha256').update(String(id)).digest();
 	return digest.readUInt32BE(0) % Math.max(1, windowMinutes);
 }
 
-export function dueAt(item, cadence = DEFAULT_CADENCE) {
+const startOfUtcDay = (timestamp) => Date.parse(`${new Date(timestamp).toISOString().slice(0, 10)}T00:00:00Z`);
+const minutesOfUtcDay = (timestamp) => (timestamp - startOfUtcDay(timestamp)) / MINUTE;
+
+// The anchor each of a day's items takes, as minutes past midnight UTC. The
+// anchors are the ones the plan already chose; the seed only decides which item
+// gets which, so no item ever moves outside the day, the quiet hours, or the
+// cadence it was planned under.
+export function anchorAssignments(items, seed = null) {
+	const assignments = new Map();
+	if (!seed) return assignments;
+	const byDay = new Map();
+	for (const item of items) {
+		const at = Date.parse(item.notBefore);
+		if (!Number.isFinite(at)) continue;
+		const day = startOfUtcDay(at);
+		if (!byDay.has(day)) byDay.set(day, []);
+		byDay.get(day).push(item);
+	}
+	for (const [, dayItems] of byDay) {
+		const anchors = dayItems.map((item) => minutesOfUtcDay(Date.parse(item.notBefore))).sort((left, right) => left - right);
+		const order = [...dayItems].sort((left, right) => {
+			const rank = (item) => createHmac('sha256', String(seed)).update(`order:${item.id}`).digest('hex');
+			return rank(left).localeCompare(rank(right));
+		});
+		order.forEach((item, index) => assignments.set(item.id, anchors[index]));
+	}
+	return assignments;
+}
+
+export function dueAt(item, cadence = DEFAULT_CADENCE, { seed = null, anchorMinutes = null } = {}) {
 	const window = Number(item.windowMinutes ?? cadence.windowMinutes ?? DEFAULT_CADENCE.windowMinutes);
-	return Date.parse(item.notBefore) + jitterMinutes(item.id, window) * MINUTE;
+	const planned = Date.parse(item.notBefore);
+	const base = anchorMinutes === null || anchorMinutes === undefined ? planned : startOfUtcDay(planned) + anchorMinutes * MINUTE;
+	return base + jitterMinutes(item.id, window, seed) * MINUTE;
 }
 
 export function inQuietHours(now, quiet) {
@@ -55,16 +102,18 @@ function trailingRun(published, field, value) {
 
 // `requestedId` names one item and skips pacing; `anyStatus` lets a preview of
 // that item run before it is approved.
-export function pickDue({ items, state, now = Date.now(), cadence: rawCadence = {}, quality = {}, requestedId = null, anyStatus = false }) {
+export function pickDue({ items, state, now = Date.now(), cadence: rawCadence = {}, quality = {}, requestedId = null, anyStatus = false, seed = null }) {
 	const cadence = { ...DEFAULT_CADENCE, ...rawCadence };
 	const published = [...(state?.published || [])].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
 	const publishedIds = new Set(published.map((row) => row.id));
 	const inflight = state?.inflight || {};
 
-	const candidates = items
+	const eligible = items
 		.filter((item) => (item.status === 'approved' || (anyStatus && requestedId)) && !publishedIds.has(item.id))
-		.filter((item) => !requestedId || item.id === requestedId)
-		.map((item) => ({ item, at: dueAt(item, cadence) }))
+		.filter((item) => !requestedId || item.id === requestedId);
+	const anchors = anchorAssignments(eligible, seed);
+	const candidates = eligible
+		.map((item) => ({ item, at: dueAt(item, cadence, { seed, anchorMinutes: anchors.get(item.id) ?? null }) }))
 		.sort((a, b) => a.at - b.at);
 
 	if (requestedId) {

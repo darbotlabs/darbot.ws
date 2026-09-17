@@ -1,6 +1,6 @@
 # Announcement pack: The Forge, opened at its top tier
 
-**Surface:** [`/forge-max`](https://three.ws/forge-max) · **Stage:** drafted · **Slot:** 2026-09-18 23:00 UTC · **Announced externally:** never
+**Surface:** [`/forge-max`](https://three.ws/forge-max) · **Stage:** drafted · **Slot:** 2026-09-18 · **Announced externally:** never
 
 Ranked 19 of 322 never-announced surfaces by `npm run announce:rank` (score 75). Drafted by hand and packed by `npm run announce:kit`, from the evidence brief in [`data/announce-plan/briefs/forge-max.json`](../../data/announce-plan/briefs/forge-max.json), against [the announcement voice](../announce-voice.md). Every fact below comes from that brief; nothing in this pack was written from memory.
 
@@ -11,7 +11,7 @@ Ranked 19 of 322 never-announced surfaces by `npm run announce:rank` (score 75).
 | Field | Value |
 |---|---|
 | Pack id | `forge-max` |
-| Publish slot | 2026-09-18 23:00 UTC, jittered inside 90 minutes by the scheduler |
+| Publish slot | 2026-09-18. The minute is decided at send time from the production schedule seed, so it is not knowable from this repository |
 | Lane and pattern | developer / number |
 | Audience | Engineers who will read the code |
 | Primary channel | X, @trythreews, through the reviewed content queue |

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { copyProblems, weightedLength } from '../api/_lib/x-content/quality.js';
 import { attachmentProblems, mediaProblems, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
 import { markdownToContentState, attachArticleMedia } from '../api/_lib/x-content/articles.js';
-import { dueAt, inQuietHours, jitterMinutes, pickDue } from '../api/_lib/x-content/schedule.js';
+import { anchorAssignments, dueAt, inQuietHours, jitterMinutes, pickDue } from '../api/_lib/x-content/schedule.js';
 import { validateItem, validateQueue, loadQueue } from '../api/_lib/x-content/queue.js';
 import { previewClient, publishItem } from '../api/_lib/x-content/publisher.js';
 
@@ -361,5 +361,42 @@ describe('review', () => {
 		expect(parseReview(JSON.stringify({ verdict: 'publish', scores: { ...scores, clarity: 3 }, issues: [] })).verdict).toBe('revise');
 		expect(() => parseReview(JSON.stringify({ verdict: 'ship', scores, issues: [] }))).toThrow(/verdict/);
 		expect(() => parseReview('no json here')).toThrow(/no JSON/);
+	});
+});
+
+describe('schedule seed', () => {
+	const day = [
+		{ id: 'forge-max', notBefore: '2026-10-01T13:00:00Z', windowMinutes: 90 },
+		{ id: 'materialize', notBefore: '2026-10-01T18:00:00Z', windowMinutes: 90 },
+		{ id: 'walk-sdk', notBefore: '2026-10-01T23:00:00Z', windowMinutes: 90 },
+	];
+
+	it('changes the minute an item lands, and keeps it stable per seed', () => {
+		const open = dueAt(day[0], {});
+		const secret = dueAt(day[0], {}, { seed: 'production-seed' });
+		expect(secret).not.toBe(open);
+		expect(dueAt(day[0], {}, { seed: 'production-seed' })).toBe(secret);
+		expect(dueAt(day[0], {}, { seed: 'another-seed' })).not.toBe(secret);
+	});
+
+	it('is a plain hash with no seed, so previews and tests are unchanged', () => {
+		expect(jitterMinutes('genesis', 60)).toBe(jitterMinutes('genesis', 60, null));
+		expect(jitterMinutes('genesis', 60, 'seed')).not.toBe(jitterMinutes('genesis', 60));
+	});
+
+	it('deals the day\'s anchors out by seed without leaving the day', () => {
+		const assignments = anchorAssignments(day, 'production-seed');
+		expect([...assignments.values()].sort((left, right) => left - right)).toEqual([13 * 60, 18 * 60, 23 * 60]);
+		expect(anchorAssignments(day, null).size).toBe(0);
+		const orders = new Set(['s1', 's2', 's3', 's4', 's5'].map((seed) => [...anchorAssignments(day, seed)].map(([id]) => id).join(',')));
+		expect(orders.size).toBeGreaterThan(1);
+	});
+
+	it('still respects the cadence when the seed moves an item', () => {
+		const approved = day.map((item) => ({ ...item, status: 'approved', lane: 'developer', pattern: 'mechanism' }));
+		const now = Date.parse('2026-10-02T04:00:00Z');
+		const picked = pickDue({ items: approved, state: {}, now, cadence: { windowMinutes: 90, minimumMinutesApart: 240, dailyCap: 3, quietHoursUtc: ['05:00', '12:00'] }, seed: 'production-seed' });
+		expect(approved.map((item) => item.id)).toContain(picked.item.id);
+		expect(picked.dueAt).toBeLessThanOrEqual(now);
 	});
 });

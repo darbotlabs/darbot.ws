@@ -160,6 +160,46 @@ npm run x:content -- review --status review
 npm run x:content -- approve --status review
 ```
 
+## The schedule is public, the timing is not
+
+This repository is public, so the queue is public: anyone can read which surface is announced on
+which day, and read the copy before it goes out. That is tolerable for what this backlog contains,
+because every one of these surfaces already shipped and is already live on three.ws. There is no
+unreleased information in a pack. What is worth protecting is the *moment*, which is what lets
+somebody camp a post, reply-farm it, pre-empt it, or trade the attention spike around a token-lane
+announcement.
+
+Until 2026-09-17 the moment was public too. The jitter was `sha256(item id)`, and the id is in the
+committed queue, so the exact minute of every queued post was computable by anyone, days ahead.
+
+It now comes from `X_CONTENT_SCHEDULE_SEED`, an HMAC key that lives only in the production
+environment:
+
+| Knowable from the repository | Decided by the seed |
+|---|---|
+| The day an item is eligible | The minute inside its window |
+| That the account posts up to three times a day in a handful of anchor windows | Which of the day's items takes which anchor, and therefore the order |
+
+The seed keeps every property the cron needs: stable per item, so a preview, a retry and the real
+tick all agree, and a half-sent thread resumes at the same moment it was going to use. With no seed
+configured the behaviour is exactly what it always was, so local previews and the tests are
+unaffected; `npm run x:content -- plan` says out loud when it is printing unseeded placeholder
+times rather than the real schedule.
+
+```bash
+# Generate one and put it on the service (once):
+openssl rand -hex 32
+gcloud run services update three-ws-api --region us-central1 --update-env-vars X_CONTENT_SCHEDULE_SEED=<value>
+```
+
+Rotating the seed reshuffles every unpublished item's minute and order, which is a reasonable thing
+to do and costs nothing. It does not move anything to a different day.
+
+**What this does not hide** is the copy itself. If an announcement is genuinely market-moving
+(a launch, a partnership, a listing), it should not sit in a public queue for a week beforehand
+whatever the timing defence says: post it from a pack that is written and committed the same day,
+or hold it out of this pipeline entirely.
+
 ## Credentials
 
 The factory needs a model for the drafting step and the editorial review. It uses the shared chain
@@ -168,6 +208,9 @@ standing Google Cloud approval), then `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `N
 On a workstation, `gcloud auth application-default login` is enough. Everything else (ranking,
 planning, briefs, media capture, packing, the whole gate) runs with no model at all:
 `npm run announce:kit -- --brief-only` is the offline half.
+
+`X_CONTENT_SCHEDULE_SEED` is separate and belongs on the Cloud Run service, not in a checkout: see
+the section above.
 
 ## Where things live
 

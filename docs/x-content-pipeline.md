@@ -26,6 +26,7 @@ pipeline, enforced before anything is sent:
 | Hype copy | [api/_lib/x-content/quality.js](../api/_lib/x-content/quality.js) rejects launch openers ("Introducing", "We're excited"), hype vocabulary, hashtags, emoji, stacked exclamation marks, all-caps shouting, and en or em dashes. |
 | Repeats | A head that reads too much like another queued item, or like anything @trythreews already posted (the scraped archive in `data/archives/` plus everything this pipeline published), is rejected. |
 | Clockwork timing | Each item lands at a stable, jittered minute inside a window after its `notBefore`, with a minimum gap, a daily cap, and quiet hours. |
+| A schedule anyone can read off the repository | The jitter is an HMAC under `X_CONTENT_SCHEDULE_SEED` (production only), which also deals out the day's anchor times. The day is public; the minute and the order are not. Unset, it falls back to the old public hash, and `plan` says so. |
 | Same format on repeat | Lane (audience) and pattern (post shape) rotate. A due item waits if it would repeat the previous lane or pattern too many times, unless it has been waiting a full day. |
 | Retry double-posts | Every created media id, post id, and Article id is written to the ledger the moment X returns it. A crash mid-thread resumes at the next unposted reply. |
 
