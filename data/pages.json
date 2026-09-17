@@ -1488,6 +1488,14 @@
 					"added": "2026-06-12"
 				},
 				{
+					"path": "/fee-bridge",
+					"title": "Fee Bridge",
+					"description": "Route a pump.fun coin's creator fees to any X account. Recipients sign in with X and withdraw USDC on Solana, no wallet needed up front; 20% of every converted dollar buys $THREE for the treasury.",
+					"priority": 0.7,
+					"changefreq": "daily",
+					"added": "2026-09-17"
+				},
+				{
 					"path": "/drops",
 					"title": "3D Drops",
 					"description": "Launch a supply-capped collection of AI-forged 3D characters. Pick a style, define weighted trait layers, and three.ws rolls the whole supply from a published seed: verifiable rarity, rigged animation-ready art, forged on reveal.",
@@ -2988,6 +2996,14 @@
 					"priority": 0.6,
 					"changefreq": "monthly",
 					"added": "2026-09-16"
+				},
+				{
+					"path": "/docs/fee-bridge",
+					"title": "Docs · Fee Bridge",
+					"description": "How the Fee Bridge pays a coin's creator fees to an X handle in USDC: routing a coin, the 80/20 conversion, claiming with X, the API, and the exactly-once safety model.",
+					"priority": 0.6,
+					"changefreq": "monthly",
+					"added": "2026-09-17"
 				},
 				{
 					"path": "/docs/analytics-retention",

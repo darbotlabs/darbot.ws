@@ -7,12 +7,44 @@
 		<description>What's new on three.ws: features, improvements, and releases, newest first.</description>
 		<language>en</language>
 		<item>
+			<title>Docs · Fee Bridge</title>
+			<link>https://three.ws/docs/fee-bridge</link>
+			<guid isPermaLink="false">2026-09-17:Docs · Fee Bridge</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>launch</category>
+			<description>How the Fee Bridge pays a coin's creator fees to an X handle in USDC: routing a coin, the 80/20 conversion, claiming with X, the API, and the exactly-once safety model.</description>
+		</item>
+		<item>
+			<title>Fee Bridge</title>
+			<link>https://three.ws/fee-bridge</link>
+			<guid isPermaLink="false">2026-09-17:Fee Bridge</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>launch</category>
+			<description>Route a pump.fun coin's creator fees to any X account. Recipients sign in with X and withdraw USDC on Solana, no wallet needed up front; 20% of every converted dollar buys $THREE for the treasury.</description>
+		</item>
+		<item>
+			<title>Agent wallets that cannot sign no longer look tradeable</title>
+			<link>https://three.ws/agents</link>
+			<guid isPermaLink="false">2026-09-17:Agent wallets that cannot sign no longer look tradeable</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>fix</category>
+			<description>A small number of agent wallets hold a balance that three.ws cannot currently sign for. Their Portfolio tab used to show a live net worth with Trade buttons, and the Trade tab showed a working form, so the first sign of trouble was a failed withdrawal. Portfolio and Trade now say up front that trading and withdrawals are paused for that wallet, hide the actions that cannot work, and link straight to support. The explanation is also clearer: the balance has not moved, it is still on chain at the same address, and you should not create a replacement wallet while access is being restored.</description>
+		</item>
+		<item>
 			<title>Ask your AI assistant to show the picture inside a Solana transaction</title>
 			<link>https://three.ws/docs/mcp-solana-memo-media</link>
 			<guid isPermaLink="false">2026-09-17:Ask your AI assistant to show the picture inside a Solana transaction</guid>
 			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
 			<category>feature</category>
 			<description>Some Solana transactions carry a small image written straight into their memo, which explorers show as thousands of characters of unreadable text. A new free MCP server, @three-ws/solana-memo-media-mcp, lets Claude, Cursor or any other MCP client fetch a transaction by its signature and show you the image directly, alongside who signed it and a fingerprint of the exact bytes. It can also scan an account's recent history and pick out only the transactions that carry images. It needs no account, key or wallet, never writes anything, and only shows PNG, JPEG, WebP and GIF files whose contents match their label. The Onchain Viewer at /onchain was also fixed: it only recognised the newest memo program, so memos written through the standard Solana memo program were reported as missing. It now reads all three.</description>
+		</item>
+		<item>
+			<title>Fee Bridge: pay a coin's creator fees to any X account in USDC</title>
+			<link>https://three.ws/fee-bridge</link>
+			<guid isPermaLink="false">2026-09-17:Fee Bridge: pay a coin's creator fees to any X account in USDC</guid>
+			<pubDate>Thu, 17 Sep 2026 12:00:00 GMT</pubDate>
+			<category>feature</category>
+			<description>A coin's creator fees can now go to a person by their X handle instead of a wallet address. Route the fees to the Fee Bridge from a coin's Fees &amp; rewards panel (or register any pump.fun coin on /fee-bridge), and every ten minutes the bridge converts them to USDC: 80% is credited to the handle and 20% buys $THREE for the treasury. The handle's owner signs in with X, links a Solana wallet and withdraws, and balances over $5 are then paid automatically. Anyone can look up what a handle has earned, and every payout links to its transaction.</description>
 		</item>
 		<item>
 			<title>Docs · The /launch launchpad</title>

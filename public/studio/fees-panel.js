@@ -14,6 +14,9 @@
 //     resolve-github-shareholder so the split pays a real, claimable address.
 //   • Distribute / claim-if-delegated — anyone (creator, agent, or a delegated
 //     shareholder) can crank distribution to release accrued shares.
+//   • Pay an X account in USDC: route 100% of creator fees to the three.ws Fee
+//     Bridge and register the handle (/api/fee-bridge/*). The bridge converts the
+//     fees to USDC the handle's owner withdraws after signing in with X.
 //
 // Entry:
 //   mountFeesPanel(el, {
@@ -275,6 +278,8 @@ export function mountFeesPanel(container, opts = {}) {
 		rows: [],                      // [{ address, pct, gh?:{login,avatar} }]
 		githubRepo: '', githubBusy: false, githubError: '',
 		ghMode: 'contributors', // 'contributors' = split a repo; 'owner' = repo owner/creator gets 100%
+		bridge: null,                  // /api/fee-bridge/coin payload, mainnet only
+		usdOpen: false, usdHandle: '', usdError: '',
 	};
 
 	let _alive = true;
@@ -308,6 +313,19 @@ export function mountFeesPanel(container, opts = {}) {
 		}
 		s.loading = false;
 		render();
+		loadBridge();
+	}
+
+	// The Fee Bridge runs on mainnet only. A failure leaves the option hidden
+	// rather than blocking the panel, which works without it.
+	async function loadBridge() {
+		if (network !== 'mainnet') return;
+		try {
+			const r = await fetch(`/api/fee-bridge/coin?mint=${encodeURIComponent(mint)}`, { credentials: 'include' });
+			if (!r.ok) return;
+			s.bridge = await r.json();
+			render();
+		} catch { /* option stays hidden */ }
 	}
 
 	// Resolve the agent custodial wallet address once, so we know whether to use
@@ -448,46 +466,138 @@ export function mountFeesPanel(container, opts = {}) {
 
 		s.busy = 'Saving split…'; s.actionError = ''; s.actionOk = null; render();
 		try {
-			if (isAgentCreator()) {
-				const r = await fetch('/api/pump/fee-sharing-agent', {
-					method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ ...agentBody(), mint, network, shareholders }),
-				});
-				const d = await r.json();
-				if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
-				s.editing = false;
-				finishAction('Reward split saved on-chain', d.signatures?.[d.signatures.length - 1]);
-			} else {
-				// Connected-wallet creator: create config (if needed) then set shares,
-				// signing each step in the wallet.
-				if (!s.wallet) { await connectWallet(); if (!s.wallet) { s.busy = ''; render(); return; } }
-				if (!s.info?.has_sharing_config) {
-					s.busy = 'Creating config…'; render();
-					const cr = await fetch('/api/pump/create-fee-sharing-prep', {
-						method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ mint, creator_address: creator, wallet_address: s.wallet.address, network }),
-					});
-					const cd = await cr.json();
-					if (!cr.ok) throw new Error(cd.error_description || cd.error || `HTTP ${cr.status}`);
-					await signSendPrep(cd.tx_base64);
-				}
-				s.busy = 'Setting shares…'; render();
-				const current = (s.info?.sharing_config?.shareholders || []).map((h) => h.address);
-				const ur = await fetch('/api/pump/update-fee-shares-prep', {
-					method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({
-						mint, wallet_address: s.wallet.address, network,
-						current_shareholders: current.length ? current : [creator],
-						new_shareholders: shareholders,
-					}),
-				});
-				const ud = await ur.json();
-				if (!ur.ok) throw new Error(ud.error_description || ud.error || `HTTP ${ur.status}`);
-				const sig = await signSendPrep(ud.tx_base64);
-				s.editing = false;
-				finishAction('Reward split saved on-chain', sig);
-			}
+			const sig = await writeSplit(shareholders);
+			if (sig === null) { s.busy = ''; render(); return; }
+			s.editing = false;
+			finishAction('Reward split saved on-chain', sig);
 		} catch (e) { failAction(e); }
+	}
+
+	// Write a shareholder split on-chain with whichever signer controls the coin.
+	// Returns the last signature, or null when the user dismissed the wallet connect.
+	async function writeSplit(shareholders) {
+		if (isAgentCreator()) {
+			const r = await fetch('/api/pump/fee-sharing-agent', {
+				method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ ...agentBody(), mint, network, shareholders }),
+			});
+			const d = await r.json();
+			if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
+			return d.signatures?.[d.signatures.length - 1];
+		} else {
+			// Connected-wallet creator: create config (if needed) then set shares,
+			// signing each step in the wallet.
+			if (!s.wallet) { await connectWallet(); if (!s.wallet) return null; }
+			if (!s.info?.has_sharing_config) {
+				s.busy = 'Creating config…'; render();
+				const cr = await fetch('/api/pump/create-fee-sharing-prep', {
+					method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ mint, creator_address: creator, wallet_address: s.wallet.address, network }),
+				});
+				const cd = await cr.json();
+				if (!cr.ok) throw new Error(cd.error_description || cd.error || `HTTP ${cr.status}`);
+				await signSendPrep(cd.tx_base64);
+			}
+			s.busy = 'Setting shares…'; render();
+			const current = (s.info?.sharing_config?.shareholders || []).map((h) => h.address);
+			const ur = await fetch('/api/pump/update-fee-shares-prep', {
+				method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					mint, wallet_address: s.wallet.address, network,
+					current_shareholders: current.length ? current : [creator],
+					new_shareholders: shareholders,
+				}),
+			});
+			const ud = await ur.json();
+			if (!ur.ok) throw new Error(ud.error_description || ud.error || `HTTP ${ur.status}`);
+			return signSendPrep(ud.tx_base64);
+		}
+	}
+
+	// ── Fee Bridge: pay an X account in USDC ────────────────────────────────────
+
+	function parseXHandle(raw) {
+		const h = String(raw || '').trim()
+			.replace(/^https?:\/\//i, '').replace(/^(?:www\.|mobile\.)?(?:x|twitter)\.com\//i, '')
+			.replace(/^@/, '').split(/[/?#]/)[0];
+		return /^[A-Za-z0-9_]{1,15}$/.test(h) ? h : null;
+	}
+
+	async function registerBridgeHandle(handle) {
+		const r = await fetch('/api/fee-bridge/register', {
+			method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ mint, handle }),
+		});
+		const d = await r.json();
+		if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
+		return d;
+	}
+
+	// Route 100% of creator fees to the bridge wallet, then register the handle.
+	// A coin whose split already routes to the bridge only needs the registration.
+	async function routeToBridge() {
+		if (s.busy) return;
+		const handle = parseXHandle(s.usdHandle);
+		if (!handle) { s.usdError = 'Enter the X handle to pay, like @handle.'; render(); return; }
+		const bridgeWallet = s.bridge?.bridge_wallet;
+		if (!bridgeWallet) { s.usdError = 'The Fee Bridge is not available right now.'; render(); return; }
+		s.usdError = ''; s.actionError = ''; s.actionOk = null;
+		try {
+			let sig;
+			if (!s.bridge.routes_to_bridge) {
+				s.busy = 'Routing fees…'; render();
+				sig = await writeSplit([{ address: bridgeWallet, share_bps: 10_000 }]);
+				if (sig === null) { s.busy = ''; render(); return; }
+			}
+			s.busy = 'Registering @' + handle + '…'; render();
+			const reg = await registerBridgeHandle(handle);
+			s.usdOpen = false;
+			finishAction(`Creator fees now pay @${reg.handle} in USDC`, sig);
+			loadBridge();
+		} catch (e) {
+			s.busy = '';
+			s.usdError = friendlyError(e.message || String(e));
+			render();
+			loadBridge();
+		}
+	}
+
+	function renderBridge(info) {
+		const b = s.bridge;
+		if (!b?.bridge_wallet || info.is_cashback_coin || info.is_holder_reward) return '';
+		if (b.registration) {
+			return `<div class="fp-note you">Paying <b>@${esc(b.registration.handle)}</b> in USDC through the Fee Bridge.
+				${b.registration.status === 'active' ? '' : ' Fees no longer route to the bridge.'}
+				<a href="/fee-bridge?handle=${encodeURIComponent(b.registration.handle)}" target="_blank" rel="noopener">View payouts ↗</a></div>`;
+		}
+		const canSign = isAgentCreator() || connectedIsCreator();
+		// A config still seeded with just the creator can be re-pointed; a real split
+		// or a revoked admin cannot, so the option is not offered there.
+		const holders = info.sharing_config?.shareholders || [];
+		const onlyCreator = holders.length === 1 && holders[0].address === creator;
+		const locked = info.has_sharing_config && !b.routes_to_bridge && (info.sharing_config?.admin_revoked || (holders.length && !onlyCreator));
+		if (locked || (!b.routes_to_bridge && !info.is_graduated)) return '';
+		if (!s.usdOpen && !b.routes_to_bridge) {
+			return `<div class="fp-cta" id="fp-usd" role="button" tabindex="0">
+				<span class="fp-cta-ic">$</span>
+				<div class="fp-cta-b">
+					<div class="fp-cta-t">Pay an X account in USDC</div>
+					<div class="fp-cta-s">Route creator fees to any X handle. They sign in with X and withdraw dollars, no wallet needed up front.</div>
+				</div>
+				<span class="fp-cta-arrow">→</span>
+			</div>`;
+		}
+		const busy = !!s.busy;
+		return `<div class="fp-deleg">
+			<div class="fp-deleg-title">${b.routes_to_bridge ? 'Finish setup: name the X account these fees pay' : 'Pay an X account in USDC'}</div>
+			<div class="fp-gh">
+				<input id="fp-usd-input" placeholder="@handle" value="${esc(s.usdHandle)}" spellcheck="false" autocomplete="off" />
+				<button class="fp-btn primary${busy ? ' busy' : ''}" id="fp-usd-go" ${busy || (!canSign && !b.routes_to_bridge) ? 'disabled' : ''}>${busy ? esc(s.busy) : b.routes_to_bridge ? 'Register' : 'Route fees'}</button>
+			</div>
+			${s.usdError ? `<div class="fp-err">${esc(s.usdError)}</div>` : ''}
+			<div class="fp-note">100% of creator fees go to the Fee Bridge. Each batch converts to USDC: <b>80%</b> is credited to the handle and <b>20%</b> buys $THREE for the treasury. ${b.routes_to_bridge ? '' : '<b>This fee split is usually permanent</b>, so check the handle before you sign.'}</div>
+			${b.routes_to_bridge ? '' : `<div class="fp-deleg-foot"><button class="fp-btn ghost" id="fp-usd-cancel" ${busy ? 'disabled' : ''}>Cancel</button></div>`}
+		</div>`;
 	}
 
 	// ── GitHub import ─────────────────────────────────────────────────────────────
@@ -682,6 +792,7 @@ export function mountFeesPanel(container, opts = {}) {
 			<div class="fp-head"><span class="fp-head-t">Fees &amp; rewards</span>${badge}</div>
 			${renderClaim(info)}
 			${okBlock}${errBlock}
+			${s.editing ? '' : renderBridge(info)}
 			${renderDelegation(info)}
 			${renderSignerHint(info)}
 		</div>`;
@@ -838,6 +949,18 @@ export function mountFeesPanel(container, opts = {}) {
 			setup.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEditing(); } });
 		}
 		q('#fp-connect')?.addEventListener('click', connectWallet);
+
+		// Fee Bridge
+		const usd = q('#fp-usd');
+		if (usd) {
+			const open = () => { s.usdOpen = true; s.usdError = ''; render(); q('#fp-usd-input')?.focus(); };
+			usd.addEventListener('click', open);
+			usd.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+		}
+		q('#fp-usd-input')?.addEventListener('input', (e) => { s.usdHandle = e.target.value; });
+		q('#fp-usd-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); routeToBridge(); } });
+		q('#fp-usd-go')?.addEventListener('click', routeToBridge);
+		q('#fp-usd-cancel')?.addEventListener('click', () => { s.usdOpen = false; s.usdError = ''; render(); });
 
 		// Editor
 		q('#fp-add')?.addEventListener('click', addRow);

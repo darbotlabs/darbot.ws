@@ -37,7 +37,7 @@
 		"api/tournaments/[id]/[action].js": {
 			"maxDuration": 120
 		},
-		"{api/agents/networth,api/avatars/from-forge,api/pay/execute,api/pay/simulate,api/cron/launcher-claimer,api/seed/synthesize,api/cron/x402-ring-tick}.js": {
+		"{api/agents/networth,api/avatars/from-forge,api/pay/execute,api/pay/simulate,api/cron/launcher-claimer,api/cron/fee-bridge,api/seed/synthesize,api/cron/x402-ring-tick}.js": {
 			"maxDuration": 60
 		},
 		"{api/club/tips-stream,api/feed-stream,api/pump/trades-stream,api/oracle/stream,api/oracle/action-stream,api/sniper/stream,api/sniper/radar-stream,api/agent-screen-stream}.js": {
@@ -4877,6 +4877,14 @@
 			"dest": "/contributors.html"
 		},
 		{
+			"src": "/fee-bridge",
+			"dest": "/fee-bridge.html"
+		},
+		{
+			"src": "/fee-bridge/",
+			"dest": "/fee-bridge.html"
+		},
+		{
 			"src": "/bazaar",
 			"dest": "/bazaar.html"
 		},
@@ -5023,6 +5031,10 @@
 		{
 			"src": "/api/three-token/([^/]+)",
 			"dest": "/api/three-token/[action]?action=$1"
+		},
+		{
+			"src": "/api/fee-bridge/([^/]+)",
+			"dest": "/api/fee-bridge/[action]?action=$1"
 		},
 		{
 			"src": "/api/token/([^/]+)",
@@ -6486,6 +6498,10 @@
 		{
 			"path": "/api/cron/launcher-claimer",
 			"schedule": "*/5 * * * *"
+		},
+		{
+			"path": "/api/cron/fee-bridge",
+			"schedule": "*/10 * * * *"
 		},
 		{
 			"path": "/api/cron/solana-agents-crawl",

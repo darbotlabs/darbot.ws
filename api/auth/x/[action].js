@@ -40,13 +40,14 @@ function b64urlDecode(s) {
 	return Buffer.from(s, 'base64url').toString('utf8');
 }
 
-async function signState({ state, codeVerifier, userId, agentId, scopeSet }) {
+async function signState({ state, codeVerifier, userId, agentId, scopeSet, returnTo }) {
 	const payload = {
 		s: state,
 		v: codeVerifier,
 		u: userId,
 		a: agentId,
 		k: scopeSet,
+		r: returnTo || null,
 		e: Math.floor(Date.now() / 1000) + STATE_TTL_SEC,
 	};
 	const body = b64urlEncode(JSON.stringify(payload));
@@ -75,6 +76,7 @@ async function verifyState(token, expectedState) {
 		userId: payload.u,
 		agentId: payload.a,
 		scopeSet: resolveScopeSet(payload.k).name,
+		returnTo: resolveReturnTo(payload.r),
 	};
 }
 
@@ -128,7 +130,17 @@ export function decryptToken(ciphertext) {
 // editor's posting tab, which is about the write access that grant deliberately
 // does not carry. The callback and the connect endpoint both route through this
 // so a refusal lands on the same surface a success would.
-function connectReturnUrl({ scopeSet, agentId, outcome }) {
+// Surfaces that start a connect for their own flow and want the browser back on
+// them. An allowlist, never a raw path, so the parameter cannot become an open
+// redirect.
+const RETURN_SURFACES = new Set(['/fee-bridge']);
+
+function resolveReturnTo(value) {
+	return typeof value === 'string' && RETURN_SURFACES.has(value) ? value : null;
+}
+
+function connectReturnUrl({ scopeSet, agentId, outcome, returnTo = null }) {
+	if (returnTo) return `${returnTo}?x=${outcome}`;
 	if (scopeSet === 'read') {
 		const q = new URLSearchParams({ tab: 'connected-accounts', x: outcome });
 		if (agentId) q.set('agent_id', agentId);
@@ -148,6 +160,7 @@ async function handleConnect(req, res) {
 	const url = new URL(req.url, env.APP_ORIGIN);
 	const agentId = url.searchParams.get('agent_id') || null;
 	const scopeSet = resolveScopeSet(url.searchParams.get('scope'));
+	const returnTo = resolveReturnTo(url.searchParams.get('return_to'));
 
 	if (!env.X_OAUTH_CLIENT_ID || !env.X_OAUTH_CLIENT_SECRET) {
 		// Every Connect X button on the site is an anchor or a location assignment,
@@ -158,7 +171,7 @@ async function handleConnect(req, res) {
 		if (wantsHtmlNavigation(req)) {
 			return redirect(
 				res,
-				connectReturnUrl({ scopeSet: scopeSet.name, agentId, outcome: 'unconfigured' }),
+				connectReturnUrl({ scopeSet: scopeSet.name, agentId, outcome: 'unconfigured', returnTo }),
 			);
 		}
 		return error(res, 501, 'not_configured', 'X OAuth is not configured');
@@ -180,6 +193,7 @@ async function handleConnect(req, res) {
 		userId: user.id,
 		agentId,
 		scopeSet: scopeSet.name,
+		returnTo,
 	});
 	res.setHeader('set-cookie', stateCookie(signed));
 
@@ -221,11 +235,11 @@ async function handleCallback(req, res) {
 	res.setHeader('set-cookie', stateCookie('', { clear: true }));
 	if (!stateData) return error(res, 400, 'invalid_state', 'OAuth state expired or invalid');
 
-	const { codeVerifier, userId, agentId: stateAgentId, scopeSet } = stateData;
+	const { codeVerifier, userId, agentId: stateAgentId, scopeSet, returnTo } = stateData;
 	// Return to the surface that started the connect, the same one a refusal at
 	// /connect lands on.
 	const backTo = (outcome) =>
-		connectReturnUrl({ scopeSet, agentId: stateAgentId, outcome });
+		connectReturnUrl({ scopeSet, agentId: stateAgentId, outcome, returnTo });
 	const successRedirect = backTo('connected');
 	const errorRedirect = backTo('error');
 	const deniedRedirect = backTo('denied');

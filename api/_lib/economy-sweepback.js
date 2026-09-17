@@ -215,6 +215,12 @@ export async function sweepBack({ connection, mode = 'excess', includeTokens = t
 	const wallets = new Map();
 	for (const spec of SOLANA_SIGNERS) {
 		if (spec.isMaster || spec.network === 'devnet') continue;
+		// Money held for third parties (unpaid Fee Bridge recipients) is not platform
+		// float: no mode, not even drain, may consolidate it.
+		if (spec.holdsUserFunds) {
+			skipped.push({ name: spec.name, reason: 'holds_user_funds' });
+			continue;
+		}
 		const { keypair, configured, decodeError } = await loadSignerKeypair(spec);
 		if (!configured) continue;
 		if (decodeError || !keypair) {
@@ -426,6 +432,12 @@ export async function reclaimIdleSol({ connection, network = 'mainnet', dryRun =
 	const wallets = new Map();
 	for (const spec of SOLANA_SIGNERS) {
 		if (spec.isMaster || spec.network === 'devnet') continue;
+		// Money held for third parties (unpaid Fee Bridge recipients) is not platform
+		// float: no mode, not even drain, may consolidate it.
+		if (spec.holdsUserFunds) {
+			skipped.push({ name: spec.name, reason: 'holds_user_funds' });
+			continue;
+		}
 		const { keypair, configured, decodeError } = await loadSignerKeypair(spec);
 		if (!configured) continue;
 		if (decodeError || !keypair) {

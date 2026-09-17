@@ -1,14 +1,44 @@
 {
-	"generated_at": "2026-09-17T01:21:37.042Z",
+	"generated_at": "2026-09-17T04:38:40.527Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3689,
+	"total": 3693,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Docs · Fee Bridge",
+			"summary": "How the Fee Bridge pays a coin's creator fees to an X handle in USDC: routing a coin, the 80/20 conversion, claiming with X, the API, and the exactly-once safety model.",
+			"link": "/docs/fee-bridge",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Fee Bridge",
+			"summary": "Route a pump.fun coin's creator fees to any X account. Recipients sign in with X and withdraw USDC on Solana, no wallet needed up front; 20% of every converted dollar buys $THREE for the treasury.",
+			"link": "/fee-bridge",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Agent wallets that cannot sign no longer look tradeable",
+			"summary": "A small number of agent wallets hold a balance that three.ws cannot currently sign for. Their Portfolio tab used to show a live net worth with Trade buttons, and the Trade tab showed a working form, so the first sign of trouble was a failed withdrawal. Portfolio and Trade now say up front that trading and withdrawals are paused for that wallet, hide the actions that cannot work, and link straight to support. The explanation is also clearer: the balance has not moved, it is still on chain at the same address, and you should not create a replacement wallet while access is being restored.",
+			"link": "/agents",
+			"tags": [
+				"fix"
+			]
+		},
 		{
 			"date": "2026-09-17",
 			"type": "update",
@@ -18,6 +48,16 @@
 			"tags": [
 				"feature",
 				"fix"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Fee Bridge: pay a coin's creator fees to any X account in USDC",
+			"summary": "A coin's creator fees can now go to a person by their X handle instead of a wallet address. Route the fees to the Fee Bridge from a coin's Fees & rewards panel (or register any pump.fun coin on /fee-bridge), and every ten minutes the bridge converts them to USDC: 80% is credited to the handle and 20% buys $THREE for the treasury. The handle's owner signs in with X, links a Solana wallet and withdraws, and balances over $5 are then paid automatically. Anyone can look up what a handle has earned, and every payout links to its transaction.",
+			"link": "/fee-bridge",
+			"tags": [
+				"feature"
 			]
 		},
 		{
@@ -1579,46 +1619,6 @@
 			"tags": [
 				"fix",
 				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Awesome 3D Agents",
-			"summary": "A curated, link-checked list of everything you need to give an AI agent a body: text-to-3D models, capture and Gaussian splatting, avatars, rigging, motion generation, lipsync and voice, web renderers, asset pipelines, and the agent frameworks that drive them. Searchable and filterable, and published as an awesome list on GitHub.",
-			"link": "/awesome",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Docs · Robinhood Portfolios",
-			"summary": "How Robinhood Portfolios works: the manifest that makes a generated basket binding, in-kind issuance that needs no price oracle, the descending-price rebalance auction nobody can front-run, what happens when a tokenized equity is halted, and the lineage fee budget that leaves sybils nothing to farm.",
-			"link": "/docs/robinhood-portfolios",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Docs · SEO and crawler rendering",
-			"summary": "How a JavaScript site is served to search engines: the four server-side render paths, the contract that keeps a page and its sitemap entry agreeing, and how to audit the live origin.",
-			"link": "/docs/seo",
-			"tags": [
-				"launch"
-			]
-		},
-		{
-			"date": "2026-09-07",
-			"type": "launch",
-			"title": "Hood Desk",
-			"summary": "A live onchain trading desk for any Robinhood Chain (4663) wallet: book value, native balance history rebuilt from the indexer, an activity tape of swaps and transfers, positions priced against Chainlink NAV and the deepest Uniswap pool, the NAV premium ridge layered by pool depth, counterparty flow, and memecoin movers.",
-			"link": "/markets/robinhood/desk",
-			"tags": [
-				"launch"
 			]
 		}
 	]

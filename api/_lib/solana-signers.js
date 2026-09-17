@@ -33,6 +33,9 @@
  *   balances (revenue, payout float, tip inventory). The sweepback module
  *   (api/_lib/economy-sweepback.js) never takes its tokens in excess mode —
  *   only an explicit drain consolidates them to the master.
+ * @property {boolean} [holdsUserFunds] this wallet holds money owed to third
+ *   parties (unpaid Fee Bridge recipients), so no sweepback or reclaim mode ever
+ *   moves its SOL or tokens to the master, drain included.
  */
 
 /** @type {SignerSpec[]} */
@@ -110,6 +113,16 @@ export const SOLANA_SIGNERS = [
 		minSol: 0.05,
 		holdsTokens: true,
 		purpose: 'holds platform USDC revenue; pays gas for the run-three-buyback cron (market-buy $THREE → treasury)',
+		network: 'mainnet',
+	},
+	{
+		name: 'fee-bridge',
+		env: 'FEE_BRIDGE_SECRET_KEY_B64',
+		minSol: 0.05,
+		holdsTokens: true,
+		holdsUserFunds: true,
+		purpose:
+			'Fee Bridge wallet: receives coin creator fees routed to X handles, cranks distribution, swaps SOL to USDC and buys $THREE for the treasury, and holds unpaid recipient USDC until it is withdrawn (fee-bridge cron)',
 		network: 'mainnet',
 	},
 	{
