@@ -326,6 +326,90 @@
 			"mentions": {
 				"@solana": "three_burn signs and broadcasts one Solana mainnet transaction (packages/three-token-mcp/src/lib/token.js); $THREE is an SPL token and Solana is the platform's home chain."
 			}
+		},
+		{
+			"id": "forge-max",
+			"status": "review",
+			"kind": "post",
+			"lane": "developer",
+			"pattern": "number",
+			"notBefore": "2026-09-18T23:00:00Z",
+			"source": {
+				"path": "docs/announcements/forge-max.md",
+				"url": "https://three.ws/forge-max"
+			},
+			"posts": [
+				{
+					"text": "three.ws/forge-max opens the Forge with its top tier already pinned: 200k-poly geometry, 4K PBR textures, and the engine picked by what you asked for.",
+					"textFrom": "docs/announcements/forge-max.post.txt",
+					"media": [
+						{
+							"path": "public/announce/img/forge-max-hero.webp",
+							"alt": "The three.ws Forge Max page: the quality row has High pinned with a $THREE badge above the engine list, and the page subtitle reads 200k-poly geometry, 4K PBR textures, subject-aware engine routing."
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "200k-poly geometry, 4K PBR textures",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/forge-max",
+							"contains": "The highest-quality lane: 200k-poly geometry, 4K PBR textures, subject-aware engine routing. A $THREE holder perk."
+						}
+					]
+				}
+			],
+			"mentions": {}
+		},
+		{
+			"id": "materialize",
+			"status": "review",
+			"kind": "post",
+			"lane": "developer",
+			"pattern": "mechanism",
+			"notBefore": "2026-09-19T23:00:00Z",
+			"source": {
+				"path": "docs/announcements/materialize.md",
+				"url": "https://three.ws/materialize"
+			},
+			"posts": [
+				{
+					"text": "Materialize prices a 3D print from the repaired mesh: it measures the true solid volume and charges that volume in your material, paid in USDC on Solana: three.ws/materialize",
+					"textFrom": "docs/announcements/materialize.post.txt",
+					"media": [
+						{
+							"path": "public/announce/img/materialize-hero.webp",
+							"alt": "The three.ws Materialize page: a drop area for any .glb beside models fresh from the Forge, over three columns explaining that the price is measured from the repaired mesh, that checkout is USDC on Solana, and that agents can order over x402."
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "measures the true solid volume and charges that volume in your material",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/materialize",
+							"contains": "Every quote comes from the mesh itself: the analyzer computes the true solid volume of the repaired model, and the price is that volume in the material you picked. Nothing is estimated from a bounding box."
+						}
+					]
+				},
+				{
+					"says": "paid in USDC on Solana",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/materialize",
+							"contains": "There is no card processor. You pay the exact quoted amount in USDC on Solana, the order is opened against a signed quote, and the price can never move between the quote and the charge."
+						}
+					]
+				}
+			],
+			"mentions": {}
 		}
 	]
 }

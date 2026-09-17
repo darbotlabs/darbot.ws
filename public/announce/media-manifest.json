@@ -1,6 +1,6 @@
 {
 	"generatedBy": "scripts/capture-doc-media.mjs",
-	"generatedAt": "2026-09-17T17:13:00.199Z",
+	"generatedAt": "2026-09-17T19:36:30.512Z",
 	"shots": {
 		"activity-hero": {
 			"id": "activity-hero",
@@ -55,6 +55,23 @@
 			"width": 1800,
 			"height": 1013
 		},
+		"forge-max-hero": {
+			"id": "forge-max-hero",
+			"src": "/announce/img/forge-max-hero.webp",
+			"alt": "The three.ws Forge Max page: the quality row has High pinned with a $THREE badge above the engine list, and the page subtitle reads 200k-poly geometry, 4K PBR textures, subject-aware engine routing.",
+			"caption": "Captured from the live /forge-max route for the forge-max announcement.",
+			"route": "/forge-max",
+			"viewport": "wide",
+			"animated": false,
+			"authenticated": false,
+			"capturedAt": "2026-09-17T19:36:15.086Z",
+			"capturedFrom": "https://three.ws",
+			"commit": "d4838f238",
+			"sha256": "e9634d9608b2974ec5fd827e10fba5db22fb3bdea616020db740ec2f4462520c",
+			"bytes": 72052,
+			"width": 1800,
+			"height": 1013
+		},
 		"forged-hero": {
 			"id": "forged-hero",
 			"src": "/announce/img/forged-hero.webp",
@@ -94,6 +111,23 @@
 			"commit": "4a80c8498",
 			"sha256": "6fd46eb6f9176edd492b30ce822a11b7bc9b92e86bf25d1890457bc166bf24b5",
 			"bytes": 55852,
+			"width": 1800,
+			"height": 1013
+		},
+		"materialize-hero": {
+			"id": "materialize-hero",
+			"src": "/announce/img/materialize-hero.webp",
+			"alt": "The three.ws Materialize page: a drop area for any .glb beside models fresh from the Forge, over three columns explaining that the price is measured from the repaired mesh, that checkout is USDC on Solana, and that agents can order over x402.",
+			"caption": "Captured from the live /materialize route for the materialize announcement.",
+			"route": "/materialize",
+			"viewport": "wide",
+			"animated": false,
+			"authenticated": false,
+			"capturedAt": "2026-09-17T19:36:30.459Z",
+			"capturedFrom": "https://three.ws",
+			"commit": "d4838f238",
+			"sha256": "bdb49bb3f594ffcf9c5977c758ff1236799997ca25eeaf43fe850a654cf95b14",
+			"bytes": 113888,
 			"width": 1800,
 			"height": 1013
 		},

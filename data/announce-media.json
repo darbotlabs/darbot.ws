@@ -134,6 +134,20 @@
 					"ms": 6000
 				}
 			]
+		},
+		{
+			"id": "forge-max-hero",
+			"surface": "/forge-max",
+			"url": "/forge-max",
+			"alt": "The three.ws Forge Max page: the quality row has High pinned with a $THREE badge above the engine list, and the page subtitle reads 200k-poly geometry, 4K PBR textures, subject-aware engine routing.",
+			"caption": "Captured from the live /forge-max route for the forge-max announcement."
+		},
+		{
+			"id": "materialize-hero",
+			"surface": "/materialize",
+			"url": "/materialize",
+			"alt": "The three.ws Materialize page: a drop area for any .glb beside models fresh from the Forge, over three columns explaining that the price is measured from the repaired mesh, that checkout is USDC on Solana, and that agents can order over x402.",
+			"caption": "Captured from the live /materialize route for the materialize announcement."
 		}
 	]
 }

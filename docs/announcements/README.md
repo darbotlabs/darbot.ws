@@ -15,10 +15,21 @@ to be re-scored, then build the selected evidence pack here.
 ## How a pack gets made
 
 ```bash
-npm run announce:rank                 # what to announce next, and why
-npm run announce:media                # capture the frames from the live product
-npm run check:announce                # gate the pack before anyone reads it
+npm run announce:rank -- --probe --write   # what to announce next, and why
+npm run announce:plan                      # when each one goes out, in what shape
+npm run announce:kit -- --count 3 --capture   # brief, frame, draft, pack, queue item
+npm run check:announce                     # gate the pack before anyone reads it
 ```
+
+`announce:plan` and `announce:kit` are the [announcement factory](../announcement-factory.md),
+which does steps 1 to 4 below for a whole batch at a time: it gathers the checkable facts, shoots
+the frame (or typesets a title card for a surface with no route), has the model chain draft the
+post from those facts alone, holds the draft against every gate the queue enforces, and writes the
+pack plus its queue item. A pack written by hand is still a pack: drop the draft at
+`data/announce-plan/drafts/<id>.json` and the factory runs it through the same checks.
+
+The steps below are what each of those stages does, and they are worth reading before trusting the
+output of any of them.
 
 1. **Rank.** [`scripts/announce-rank.mjs`](../../scripts/announce-rank.mjs) re-derives the
    inventory from `data/pages.json`, `packages/`, `workers/` and `services/`, reads the announced
