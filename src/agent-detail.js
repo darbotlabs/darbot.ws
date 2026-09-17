@@ -1470,6 +1470,10 @@ function render(agent) {
 			mountCoinStatus(chipBox, agent.token.mint, {
 				variant: 'chip',
 				network: agent.token.cluster === 'devnet' ? 'devnet' : 'mainnet',
+				href:
+					agent.token.cluster === 'devnet'
+						? `/launches/${encodeURIComponent(agent.token.mint)}?network=devnet`
+						: `/launches/${encodeURIComponent(agent.token.mint)}`,
 				meta: {
 					symbol: agent.token.symbol || '',
 					name: agent.token.name || '',

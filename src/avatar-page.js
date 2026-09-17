@@ -836,6 +836,7 @@ async function mountAgentCoin() {
 	coinStatus = mountCoinStatus(slot, token.mint, {
 		variant: 'chip',
 		network: token.cluster === 'devnet' ? 'devnet' : 'mainnet',
+		href: coinPageHref(token),
 		meta: {
 			symbol: token.symbol || '',
 			name: token.name || '',
@@ -843,6 +844,15 @@ async function mountAgentCoin() {
 			createdAt: token.launched_at ? Date.parse(token.launched_at) || null : null,
 		},
 	});
+}
+
+/**
+ * The coin's own page on three.ws. /launches/<mint> reads its network from the
+ * query, so a devnet rehearsal coin opens on devnet instead of a mainnet miss.
+ */
+function coinPageHref(token) {
+	const path = `/launches/${encodeURIComponent(token.mint)}`;
+	return token.cluster === 'devnet' ? `${path}?network=devnet` : path;
 }
 
 /**

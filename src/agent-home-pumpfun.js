@@ -331,7 +331,10 @@ export function mountPumpFunCard({ panel, identity, skills, memory, protocol }) 
 		if (coinStatusMint !== state.mint) {
 			if (coinStatusHandle) coinStatusHandle.destroy();
 			coinStatusMint = state.mint;
-			coinStatusHandle = mountCoinStatus(coinStatusEl, state.mint, { variant: 'chip' });
+			coinStatusHandle = mountCoinStatus(coinStatusEl, state.mint, {
+				variant: 'chip',
+				href: `/launches/${encodeURIComponent(state.mint)}`,
+			});
 		}
 	};
 

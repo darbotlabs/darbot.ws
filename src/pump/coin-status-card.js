@@ -489,6 +489,19 @@ function buyLink(mint, network = 'mainnet') {
 
 const RENDERERS = { chip: renderChip, row: renderRow, card: renderCard };
 
+/**
+ * Wraps a populated render in a link to the coin's page. Only populated states
+ * are linked: the skeleton has nothing to name yet, and the error state holds
+ * a Retry button that must not sit inside an anchor.
+ */
+function linked(node, coin, href) {
+	const label = coin.symbol ? `$${coin.symbol}` : coin.name || shortMint(coin.mint);
+	return el('a', { class: 'csc-link', href, 'aria-label': `Open the ${label} coin page` }, [
+		node,
+		el('span', { class: 'csc-link-go', 'aria-hidden': 'true', text: '\u2192' }),
+	]);
+}
+
 // ── loading / error states ───────────────────────────────────────────────────
 
 function skeleton(variant) {
@@ -526,6 +539,15 @@ const STYLES = `
 .csc { color: var(--ink-bright, #e8e8e8); font-size: 13px; box-sizing: border-box; }
 .csc-chip, .csc-row { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .csc-row { display: flex; width: 100%; }
+.csc-link { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; padding: 8px 12px; border-radius: 10px;
+	border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: inherit; text-decoration: none;
+	transition: background .15s, border-color .15s, transform .15s; }
+.csc-link:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.2); }
+.csc-link:active { transform: scale(0.98); }
+.csc-link:focus-visible { outline: 2px solid var(--accent, #7c83ff); outline-offset: 2px; }
+.csc-link-go { color: var(--ink-dim, rgba(255,255,255,0.55)); transition: transform .15s, color .15s; }
+.csc-link:hover .csc-link-go { transform: translateX(3px); color: var(--ink-bright, #e8e8e8); }
+@media (prefers-reduced-motion: reduce) { .csc-link, .csc-link-go { transition: none; } .csc-link:active { transform: none; } }
 .csc-sym { font-weight: 600; }
 .csc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .csc-mint, .csc-time, .csc-vol { color: var(--ink-dim, rgba(255,255,255,0.55)); font-size: 12px; }
@@ -622,6 +644,10 @@ function injectStyles() {
  *                       devnet coin is read straight off the cluster's bonding
  *                       curve and rendered in SOL; there is no indexer, no
  *                       Oracle score, and no pump.fun market page out there.
+ * @param {string}      [opts.href]: makes the rendered coin a link (e.g. the
+ *                       coin's own /launches/<mint> page). A linked coin drops
+ *                       its inline Buy link, since anchors cannot nest; the page
+ *                       it opens carries the buy flow.
  * @param {object}      [opts.meta]: registry facts the chain does not
  *                       carry (symbol, name, image, createdAt). Used to label
  *                       the cluster-sourced lane, where economics come from the
@@ -631,7 +657,8 @@ function injectStyles() {
 export function mountCoinStatus(container, mint, opts = {}) {
 	const variant = RENDERERS[opts.variant] ? opts.variant : 'chip';
 	const refreshMs = opts.refreshMs == null ? DEFAULT_REFRESH_MS : Number(opts.refreshMs);
-	const showBuy = !!opts.showBuy;
+	const href = typeof opts.href === 'string' && opts.href ? opts.href : null;
+	const showBuy = !!opts.showBuy && !href;
 	const placeholder = opts.placeholder || null;
 	const network = opts.network === 'devnet' ? 'devnet' : 'mainnet';
 	const meta = opts.meta || null;
@@ -727,7 +754,8 @@ export function mountCoinStatus(container, mint, opts = {}) {
 				if (od?.conviction) lastConviction = od.conviction;
 			}
 
-			paint(render(lastCoin, { showBuy, placeholder, conviction: lastConviction }));
+			const rendered = render(lastCoin, { showBuy, placeholder, conviction: lastConviction });
+			paint(href ? linked(rendered, lastCoin, href) : rendered);
 			if (onData) {
 				// Never let an observer error break the widget's own render/refresh.
 				try { onData(lastCoin); } catch { /* host-side aggregation is best-effort */ }
