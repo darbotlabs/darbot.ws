@@ -38,7 +38,7 @@ Three ways in, because different consumers want different shapes:
 ```bash
 curl -s -X POST https://three.ws/api/3d/look \
   -H 'content-type: application/json' \
-  -d '{"src":"https://three.ws/avatars/cesium-man.glb"}'
+  -d '{"glb_url":"https://three.ws/avatars/cesium-man.glb"}'
 ```
 
 What changes is not the quality of any single generation. What changes is that the agent can now **judge** one, which means it can decide to refine, and every refinement is its own version with its own artifacts. Generate, look, judge, refine, look again.
