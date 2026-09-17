@@ -7,7 +7,7 @@
 		<title data-i18n="launch_detail.meta_title">Coin · three.ws</title>
 		<meta
 			name="description"
-			content="A live, on-chain profile for a coin launched on three.ws — market cap, the Coin Intelligence verdict, holder distribution, the live trade tape, and the agent behind the mint."
+			content="A live, on-chain profile for a coin launched on three.ws: market cap, volume, buys and sells, holders, the live trade tape, and the agent behind the mint."
 		 data-i18n-attr="content:launch_detail.meta_description"/>
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content="three.ws" />
@@ -15,7 +15,7 @@
 		<meta property="og:title" content="Coin · three.ws"  data-i18n-attr="content:launch_detail.meta_og_title"/>
 		<meta
 			property="og:description"
-			content="A live, on-chain profile for a coin launched on three.ws — market cap, intelligence verdict, holders, live trades, and the agent behind it."
+			content="A live, on-chain profile for a coin launched on three.ws: market cap, volume, holders, live trades, and the agent behind it."
 		 data-i18n-attr="content:launch_detail.meta_og_description"/>
 		<meta property="og:image" content="https://three.ws/og-image.png" />
 		<meta property="og:image:width" content="1200" />
@@ -25,7 +25,7 @@
 		<meta name="twitter:title" content="Coin · three.ws"  data-i18n-attr="content:launch_detail.meta_twitter_title"/>
 		<meta
 			name="twitter:description"
-			content="A live, on-chain profile for a coin launched on three.ws — market cap, intelligence verdict, holders, live trades, and the agent behind it."
+			content="A live, on-chain profile for a coin launched on three.ws: market cap, volume, holders, live trades, and the agent behind it."
 		 data-i18n-attr="content:launch_detail.meta_twitter_description"/>
 		<meta name="twitter:image" content="https://three.ws/og-image.png" />
 		<meta name="theme-color" content="#0a0a0a" />
@@ -54,21 +54,20 @@
 			<!-- Hero / identity. Hydrated by src/launch-detail.js. -->
 			<section id="ld-hero" class="ld-hero" aria-label="Coin overview"></section>
 
-			<!-- Market metrics — multi-timeframe price moves + on-chain safety. -->
-			<section id="ld-metrics" class="ld-section ld-metrics" aria-label="Market metrics"></section>
+			<!-- Token stats: per-timeframe trading activity and on-chain facts. -->
+			<section id="ld-metrics" class="ld-section ld-metrics" aria-label="Token stats"></section>
 
 			<!-- Primary intelligence + market column, secondary sidebar. -->
 			<div class="ld-body">
 				<div class="ld-main">
-					<section id="ld-verdict" class="ld-section" aria-label="Coin Intelligence verdict"></section>
-					<section id="ld-smart" class="ld-section" aria-label="Smart money in this coin"></section>
+					<section id="ld-verdict" class="ld-section" aria-label="Launch activity"></section>
+					<section id="ld-smart" class="ld-section" aria-label="Notable wallets"></section>
 					<section id="ld-chart" class="ld-section" aria-label="Price history"></section>
 					<section id="ld-distribution" class="ld-section" aria-label="Holder distribution"></section>
 					<section id="ld-economics" class="ld-section" aria-label="Buyback &amp; burn economics"></section>
 					<section id="ld-copilot" class="ld-section" aria-label="Launch Copilot — autonomous market-maker"></section>
 				</div>
 				<aside class="ld-side">
-					<section id="ld-oracle" class="ld-section" aria-label="Oracle conviction score"></section>
 					<section id="ld-agent" class="ld-section" aria-label="The agent behind this coin"></section>
 					<section id="ld-tape" class="ld-section" aria-label="Live trades"></section>
 					<section id="ld-community" class="ld-section" aria-label="Community"></section>

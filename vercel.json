@@ -3447,6 +3447,10 @@
 			"dest": "/api/pump/safety.js"
 		},
 		{
+			"src": "/api/pump/token-stats",
+			"dest": "/api/pump/token-stats.js"
+		},
+		{
 			"src": "/api/pump/check-three-balance",
 			"dest": "/api/pump/check-three-balance.js"
 		},

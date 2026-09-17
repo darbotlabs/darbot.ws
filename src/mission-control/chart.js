@@ -5,7 +5,7 @@
  * TradingView's open-source `lightweight-charts`. Two real data paths, never
  * fabricated:
  *
- *   • History — GET /api/pump/price-history (Birdeye → GeckoTerminal OHLCV).
+ *   • History: GET /api/pump/price-history (Birdeye, GeckoTerminal, then pump.fun OHLCV).
  *   • Realtime — the per-mint trade firehose (SSE /api/pump/trades-stream?mint).
  *     Each on-chain buy/sell updates the live candle tick-by-tick: the execution
  *     price is `sol_amount / token_amount × sol_price` (falling back to
@@ -244,6 +244,7 @@ export function mountPriceChart({ host, mint }) {
 			);
 			if (r.ok) payload = await r.json();
 			else if (r.status === 502) payload = { data: [] };
+			else if (r.status === 404) payload = { data: [], noMarket: true };
 		} catch {
 			/* network — handled below */
 		}
@@ -264,8 +265,14 @@ export function mountPriceChart({ host, mint }) {
 			.filter((b) => Number.isFinite(b.time) && Number.isFinite(b.close) && b.close > 0)
 			.sort((a, b) => a.time - b.time);
 
-		if (bars.length < 2) {
-			if (!quiet) showMsg(`No ${interval.label} price history yet for this coin.`);
+		// One candle is a real chart: a coin minutes old has exactly that, and the
+		// live stream grows it from there.
+		if (!bars.length) {
+			if (!quiet) {
+				showMsg(payload.noMarket
+					? 'No market yet: this coin has not traded, so there is nothing to chart.'
+					: `No ${interval.label} price history yet for this coin.`);
+			}
 			return;
 		}
 

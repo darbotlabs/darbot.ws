@@ -9,6 +9,13 @@
 
 import { watchEmbed, renderEmbedFallback, DEFAULT_EMBED_TIMEOUT_MS } from './shared/embed-guard.js';
 import {
+	CHART_CHAINS,
+	CHART_EMBEDS,
+	chartEmbedUrls,
+	resolveGeckoPool,
+	validChartAddress,
+} from './shared/chart-embeds.js';
+import {
 	formatUsd,
 	formatPrice,
 	formatPercent,
@@ -116,30 +123,14 @@ function renderHead(coin) {
 
 // The chart panel is a multi-source switcher. CoinGecko powers the default,
 // zero-dependency native line chart (with the time-range selector); the other
-// sources lazy-mount a full third-party terminal in an iframe only when picked:
-//   • TradingView   — advanced candlestick widget, for coins with a ticker.
-//   • DexScreener   — on-chain terminal keyed by the token address (all chains).
-//   • GeckoTerminal — on-chain terminal keyed by the token's most-liquid pool.
+// sources lazy-mount a full third-party chart in an iframe only when picked:
+//   • TradingView   advanced candlestick widget, for coins with a ticker.
+//   • DexScreener, Birdeye, GMGN, GeckoTerminal: each provider's on-chain chart
+//     for the token's contract, built by src/shared/chart-embeds.js so this page
+//     and /launches/<mint> embed identically.
 // Each source is offered only when it can actually render for the coin, so the
 // switcher never lands on a dead chart. The picked source persists across coins.
 const CHART_SOURCE_KEY = 'tws_coin_chart_source';
-
-// CoinGecko asset-platform id → the chain slug DexScreener and the network id
-// GeckoTerminal use for the same chain. Solana leads (home chain); the rest are
-// the majors both terminals index. A platform without a mapping is not offered
-// an on-chain chart.
-const CHAIN_MAP = {
-	solana: { ds: 'solana', gt: 'solana', evm: false },
-	ethereum: { ds: 'ethereum', gt: 'eth', evm: true },
-	base: { ds: 'base', gt: 'base', evm: true },
-	'binance-smart-chain': { ds: 'bsc', gt: 'bsc', evm: true },
-	'polygon-pos': { ds: 'polygon', gt: 'polygon_pos', evm: true },
-	'arbitrum-one': { ds: 'arbitrum', gt: 'arbitrum', evm: true },
-	'optimistic-ethereum': { ds: 'optimism', gt: 'optimism', evm: true },
-	avalanche: { ds: 'avalanche', gt: 'avax', evm: true },
-};
-
-const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
 
 // TradingView resolves an unprefixed BASE+QUOTE pair (e.g. BTCUSD) to its
 // top-liquidity listing, so no exchange mapping table is needed.
@@ -148,18 +139,15 @@ function tvSymbol(coin) {
 	return sym && /^[A-Z0-9]{1,15}$/.test(sym) ? `${sym}USD` : null;
 }
 
-// The coin's on-chain identity for the DEX terminals: a contract address plus
-// the per-provider chain slugs. Solana is preferred when present (home chain);
-// otherwise the first platform whose address is well-formed for a mapped chain.
+// The coin's on-chain identity for the DEX charts: a chain every provider module
+// knows plus a contract address well-formed for it. Solana is preferred when
+// present (home chain); otherwise the first mapped platform.
 function onchainRef(coin) {
 	const entries = Object.entries(coin.platforms || {});
 	const ordered = entries.sort(([a], [b]) => (a === 'solana' ? -1 : b === 'solana' ? 1 : 0));
 	for (const [platform, address] of ordered) {
-		const m = CHAIN_MAP[platform];
-		if (!m || typeof address !== 'string') continue;
-		const addr = address.trim();
-		const valid = m.evm ? EVM_RE.test(addr) : MINT_RE.test(addr);
-		if (valid) return { platform, address: addr, ds: m.ds, gt: m.gt };
+		const addr = typeof address === 'string' ? address.trim() : '';
+		if (validChartAddress(platform, addr)) return { platform, address: addr };
 	}
 	return null;
 }
@@ -169,8 +157,16 @@ function onchainRef(coin) {
 const CHART_SOURCES = [
 	{ id: 'coingecko', label: 'CoinGecko', kind: 'native', available: () => true },
 	{ id: 'tradingview', label: 'TradingView', kind: 'tradingview', available: (c) => tvSymbol(c) != null },
-	{ id: 'dexscreener', label: 'DexScreener', kind: 'dexscreener', available: (c) => onchainRef(c) != null },
-	{ id: 'geckoterminal', label: 'GeckoTerminal', kind: 'geckoterminal', available: (c) => onchainRef(c) != null },
+	...CHART_EMBEDS.map((provider) => ({
+		id: provider.id,
+		label: provider.label,
+		kind: 'embed',
+		provider,
+		available: (c) => {
+			const ref = onchainRef(c);
+			return !!(ref && CHART_CHAINS[ref.platform][provider.slug]);
+		},
+	})),
 ];
 
 function availableSources(coin) {
@@ -193,7 +189,7 @@ const chartState = {
 	source: storedChartSource(),
 	// GeckoTerminal pool resolution is async, resolved once per coin.
 	gtPool: null,
-	gtState: 'idle', // idle | loading | ready | error
+	gtState: 'idle', // idle | loading | ready | unindexed | error
 };
 
 // The source actually rendered for this coin: the stored preference when it's
@@ -292,48 +288,21 @@ function mountTradingView(host, symbol, fallback) {
 	host.replaceChildren(container);
 }
 
-function mountDexScreener(host, ref, fallback) {
-	const t = chartTheme();
-	const p = new URLSearchParams({
-		embed: '1',
-		loadChartSettings: '0',
-		theme: t,
-		chartTheme: t,
-		chartType: 'usd',
-		interval: '15',
-		info: '0',
-	});
-	host.replaceChildren(
-		iframeEl(`https://dexscreener.com/${ref.ds}/${encodeURIComponent(ref.address)}?${p}`, 'DexScreener chart', fallback),
-	);
+function mountEmbed(host, url, title, fallback) {
+	host.replaceChildren(iframeEl(url, title, fallback));
 }
 
-function mountGeckoTerminal(host, ref, pool, fallback) {
-	const p = new URLSearchParams({
-		embed: '1',
-		info: '0',
-		swaps: '0',
-		grayscale: '0',
-		light_chart: chartTheme() === 'light' ? '1' : '0',
-	});
-	host.replaceChildren(
-		iframeEl(`https://www.geckoterminal.com/${ref.gt}/pools/${encodeURIComponent(pool)}?${p}`, 'GeckoTerminal chart', fallback),
-	);
-}
-
-// GeckoTerminal embeds are keyed by pool, not token, so resolve the most-liquid
-// pool once via our cached proxy, then mount. State drives the loading/error UI.
+// GeckoTerminal embeds are keyed by pool, not token, and 404 for a pool it has
+// not indexed, so resolve and confirm the pool once per coin, then mount. State
+// drives the loading, not-indexed and error UI.
 async function loadGtPool(coin, ref) {
 	if (chartState.gtState === 'loading') return;
 	chartState.gtState = 'loading';
 	renderChart(coin);
 	try {
-		const { pool } = await getJson(
-			`/api/coin/pool?address=${encodeURIComponent(ref.address)}&network=${encodeURIComponent(ref.gt)}`,
-		);
-		if (!pool) throw new Error('no pool');
+		const { pool, indexed } = await resolveGeckoPool(ref.platform, ref.address);
 		chartState.gtPool = pool;
-		chartState.gtState = 'ready';
+		chartState.gtState = indexed ? 'ready' : 'unindexed';
 	} catch {
 		chartState.gtPool = null;
 		chartState.gtState = 'error';
@@ -501,24 +470,29 @@ function embedChartBody(coin, source) {
 	}
 	const ref = onchainRef(coin);
 	if (!ref) return '<div class="cv-chart-state">Chart data unavailable</div>';
-	if (source.kind === 'dexscreener') {
-		const credit = `<a href="https://dexscreener.com/${esc(ref.ds)}/${esc(ref.address)}" target="_blank" rel="noopener nofollow noreferrer">Open in DexScreener ↗</a>`;
-		return `<div class="cv-adv-wrap" id="cv-adv" aria-label="DexScreener chart for ${esc(coin.name)}"></div><p class="cv-tv-credit">${credit}</p>`;
+	const { provider } = source;
+	const label = esc(provider.label);
+	const wrap = `<div class="cv-adv-wrap" id="cv-adv" aria-label="${label} chart for ${esc(coin.name)}"></div>`;
+	if (provider.needs !== 'pool') {
+		const urls = chartEmbedUrls(provider.id, { chain: ref.platform, token: ref.address, theme: chartTheme() });
+		return `${wrap}<p class="cv-tv-credit"><a href="${esc(urls.page)}" target="_blank" rel="noopener nofollow noreferrer">Open in ${label} ↗</a></p>`;
 	}
-	// geckoterminal
-	const openLink = `<a href="https://www.geckoterminal.com/${esc(ref.gt)}/tokens/${esc(ref.address)}" target="_blank" rel="noopener nofollow noreferrer">Open in GeckoTerminal ↗</a>`;
 	if (chartState.gtState === 'error') {
-		return `<div class="cv-chart-state">On-chain chart unavailable · ${openLink}</div>`;
+		return `<div class="cv-chart-state">${label} could not be reached for this coin's pool.</div>`;
+	}
+	if (chartState.gtState === 'unindexed') {
+		return `<div class="cv-chart-state">${label} has not indexed a pool for this coin yet. DexScreener and Birdeye chart it now.</div>`;
 	}
 	if (chartState.gtState !== 'ready' || !chartState.gtPool) {
-		return '<div class="cv-chart-state"><span class="cv-spinner" aria-hidden="true"></span>Loading GeckoTerminal…</div>';
+		return `<div class="cv-chart-state"><span class="cv-spinner" aria-hidden="true"></span>Loading ${label}…</div>`;
 	}
-	return `<div class="cv-adv-wrap" id="cv-adv" aria-label="GeckoTerminal chart for ${esc(coin.name)}"></div><p class="cv-tv-credit">${openLink}</p>`;
+	const urls = chartEmbedUrls(provider.id, { chain: ref.platform, token: ref.address, pool: chartState.gtPool, theme: chartTheme() });
+	return `${wrap}<p class="cv-tv-credit"><a href="${esc(urls.page)}" target="_blank" rel="noopener nofollow noreferrer">Open in ${label} ↗</a></p>`;
 }
 
 // Mount the iframe for the active non-native source into #cv-adv. GeckoTerminal
 // first resolves its pool (kicking off the async fetch on the idle→loading
-// transition); the other terminals mount synchronously.
+// transition); the other charts mount synchronously.
 function mountActiveEmbed(coin, source) {
 	ensureThemeRemount(coin);
 	// Re-rendering the whole chart panel rebuilds the host node and remounts the
@@ -536,28 +510,27 @@ function mountActiveEmbed(coin, source) {
 	}
 	const ref = onchainRef(coin);
 	if (!ref) return;
-	if (source.kind === 'dexscreener') {
-		mountDexScreener($('cv-adv'), ref, {
-			name: 'The DexScreener chart',
-			href: `https://dexscreener.com/${ref.ds}/${ref.address}`,
-			label: 'Open in DexScreener',
-			onRetry,
-		});
-		return;
+	const { provider } = source;
+	if (provider.needs === 'pool') {
+		if (chartState.gtState === 'idle') {
+			loadGtPool(coin, ref);
+			return;
+		}
+		if (chartState.gtState !== 'ready' || !chartState.gtPool) return;
 	}
-	// geckoterminal
-	if (chartState.gtState === 'idle') {
-		loadGtPool(coin, ref);
-		return;
-	}
-	if (chartState.gtState === 'ready' && chartState.gtPool) {
-		mountGeckoTerminal($('cv-adv'), ref, chartState.gtPool, {
-			name: 'The GeckoTerminal chart',
-			href: `https://www.geckoterminal.com/${ref.gt}/tokens/${ref.address}`,
-			label: 'Open in GeckoTerminal',
-			onRetry,
-		});
-	}
+	const urls = chartEmbedUrls(provider.id, {
+		chain: ref.platform,
+		token: ref.address,
+		pool: chartState.gtPool,
+		theme: chartTheme(),
+	});
+	if (!urls) return;
+	mountEmbed($('cv-adv'), urls.embed, `${provider.label} chart`, {
+		name: `The ${provider.label} chart`,
+		href: urls.page,
+		label: `Open in ${provider.label}`,
+		onRetry,
+	});
 }
 
 function wireChartPointer() {

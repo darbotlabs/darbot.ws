@@ -20,7 +20,12 @@ vi.mock('../../api/_lib/birdeye.js', () => ({
 vi.mock('../../api/_lib/zauth.js', () => ({ instrument: () => {}, drain: async () => {} }));
 vi.mock('../../api/_lib/sentry.js', () => ({ captureException: () => {} }));
 
-import handler, { snapWindow, POLL_BUCKET_SECONDS } from '../../api/pump/price-history.js';
+import handler, {
+	snapWindow,
+	POLL_BUCKET_SECONDS,
+	aggregateCandles,
+	mapPumpCandles,
+} from '../../api/pump/price-history.js';
 
 const MINT = 'FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump';
 const POOL = '58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo7';
@@ -130,10 +135,11 @@ describe('geckoFetch retry (via the handler)', () => {
 		expect(getJson(res).error).toBe('upstream_error');
 	});
 
-	it('serves the honest no_market 404 for a mint GeckoTerminal has never indexed, without retrying', async () => {
+	it('serves the honest no_market 404 when neither GeckoTerminal nor pump.fun has a market, without retrying', async () => {
 		let poolCalls = 0;
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
 			if (String(url).includes('/pools?')) { poolCalls += 1; return { ok: false, status: 404, json: async () => ({}) }; }
+			if (String(url).includes('swap-api.pump.fun')) return { ok: false, status: 404, json: async () => ({}) };
 			throw new Error('should never reach the ohlcv endpoint');
 		});
 		const res = makeRes();
@@ -141,6 +147,59 @@ describe('geckoFetch retry (via the handler)', () => {
 		expect(res.statusCode).toBe(404);
 		expect(getJson(res).error).toBe('no_market');
 		expect(poolCalls).toBe(1); // a 404 is a real answer, not a transient failure — never retried
+	});
+});
+
+describe('pump.fun candle rung', () => {
+	it('charts a young pump.fun coin GeckoTerminal has not indexed yet', async () => {
+		const now = Math.floor(Date.now() / 1000);
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+			if (String(url).includes('/pools?')) return { ok: false, status: 404, json: async () => ({}) };
+			if (String(url).includes('swap-api.pump.fun')) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => [
+						{ timestamp: (now - 600) * 1000, open: '0.0000027', high: '0.0000029', low: '0.0000026', close: '0.0000028', volume: '65.2' },
+					],
+				};
+			}
+			throw new Error(`unexpected upstream ${url}`);
+		});
+		const res = makeRes();
+		await handler(makeReq(`mint=${MINT.slice(0, 34)}${safeSuffix(90_001)}pump&interval=5m&from=${now - 3600}&to=${now}`), res);
+		expect(res.statusCode).toBe(200);
+		const body = getJson(res);
+		expect(body.source).toBe('pumpfun');
+		expect(body.data).toHaveLength(1);
+		expect(body.data[0].c).toBeCloseTo(0.0000028, 12);
+	});
+
+	it('maps string-typed millisecond rows and drops unusable ones', () => {
+		const rows = mapPumpCandles([
+			{ timestamp: 1_789_614_480_000, open: '2', high: '3', low: '1', close: '2.5', volume: '10' },
+			{ timestamp: 1_789_614_420_000, open: '1', high: '2', low: '1', close: '2', volume: 'x' },
+			{ timestamp: 'bad', open: '1', high: '1', low: '1', close: '1', volume: '1' },
+			{ timestamp: 1_789_614_540_000, open: '1', high: '1', low: '1', close: '0', volume: '1' },
+		]);
+		expect(rows.map((r) => r.t)).toEqual([1_789_614_420, 1_789_614_480]);
+		expect(rows[0].v).toBe(0);
+		expect(mapPumpCandles(null)).toEqual([]);
+	});
+
+	it('folds base candles into epoch-aligned buckets for intervals pump.fun lacks', () => {
+		const out = aggregateCandles(
+			[
+				{ t: 7200, o: 1, h: 2, l: 0.5, c: 1.5, v: 10 },
+				{ t: 10800, o: 1.5, h: 4, l: 1, c: 3, v: 5 },
+				{ t: 14400, o: 3, h: 3, l: 2, c: 2.5, v: 1 },
+			],
+			7200,
+		);
+		expect(out).toEqual([
+			{ t: 7200, o: 1, h: 4, l: 0.5, c: 3, v: 15 },
+			{ t: 14400, o: 3, h: 3, l: 2, c: 2.5, v: 1 },
+		]);
 	});
 });
 

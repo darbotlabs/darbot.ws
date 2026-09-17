@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { renderCard } from '../api/pump/launch-og.js';
 
-// Guards the /launches/<mint> social card against three defects that shipped
-// silently because an SVG that renders is indistinguishable from an SVG that
-// renders the right numbers:
+// Guards the /launches/<mint> social card:
 //   1. the live market cap was read from a `market_cap_in_usd` key pump.fun
 //      does not emit, so MKT CAP never appeared for a coin still on the curve;
-//   2. organic_score / bundle_score are 0..1 fractions in pump_coin_intel but
-//      the gauge treated them as 0..100, drawing a 1 px bar labelled "0%";
+//   2. the card stays neutral: raw launch counts only, never a score, a grade,
+//      or an engine label such as "rugged" on someone's coin;
 //   3. a fatal DB read had to degrade to a branded card, never a 5xx.
 
 const MINT = 'THREEsynthetic1111111111111111111111111111';
@@ -17,7 +15,6 @@ function baseCard(overrides = {}) {
 		name: 'Synthetic Launch',
 		symbol: 'SYN',
 		logoBase64: null,
-		qualityScore: 72,
 		category: 'meme',
 		isThreeWsLaunch: true,
 		intel: null,
@@ -36,7 +33,7 @@ describe('launch-og renderCard', () => {
 		expect(svg).toContain('$SYN');
 		// No enrichment supplied, so the optional blocks stay out of the card.
 		expect(svg).not.toContain('MKT CAP');
-		expect(svg).not.toContain('ORGANIC BUY');
+		expect(svg).not.toContain('UNIQUE BUYERS');
 	});
 
 	it('draws the live market cap a coin on the curve reports', () => {
@@ -54,32 +51,23 @@ describe('launch-og renderCard', () => {
 		expect(svg).toContain('$84K');
 	});
 
-	it('scales the 0..1 organic and bundle fractions onto the percent gauge', () => {
+	it('shows launch activity as raw counts', () => {
 		const svg = renderCard(MINT, baseCard({
-			intel: { organic_score: 0.4279, bundle_score: 0.12, unique_buyers: 29 },
+			intel: { unique_buyers: 29, buy_count: 41, sell_count: 12 },
 		}));
-		// 42.79% of a 230 px bar, and the label reads the percentage, not the fraction.
-		expect(svg).toContain('>43%<');
-		expect(svg).toContain('width="98" height="8"');
-		expect(svg).toContain('>12%<');
 		expect(svg).toContain('UNIQUE BUYERS');
 		expect(svg).toContain('>29<');
-		// A clean launch keeps the amber bundle bar, not the red one.
-		expect(svg).toContain('#f59e0b');
+		expect(svg).toContain('BUYS / SELLS AT LAUNCH');
+		expect(svg).toContain('>41 / 12<');
 	});
 
-	it('flags a coordinated launch in red once bundle passes the 0.3 threshold', () => {
+	it('never puts a score or an engine verdict on the card', () => {
 		const svg = renderCard(MINT, baseCard({
-			intel: { organic_score: 0.05, bundle_score: 0.61 },
+			intel: { quality_score: 12, organic_score: 0.05, bundle_score: 0.61, unique_buyers: 3 },
+			outcome: { rugged: true, outcome: 'rugged', last_market_cap_usd: 4_000 },
 		}));
-		expect(svg).toContain('>61%<');
-		expect(svg).toContain('#ef4444');
-	});
-
-	it('clamps a gauge score that exceeds its range instead of overflowing the bar', () => {
-		const svg = renderCard(MINT, baseCard({ intel: { organic_score: 4, bundle_score: 0 } }));
-		expect(svg).toContain('>100%<');
-		expect(svg).toContain('width="230" height="8"');
+		for (const banned of ['SCORE', 'ORGANIC', 'BUNDLE', 'RUGGED']) expect(svg).not.toContain(banned);
+		expect(svg).toContain('LIVE');
 	});
 
 	it('escapes coin metadata so a hostile name cannot inject SVG markup', () => {
@@ -91,13 +79,11 @@ describe('launch-og renderCard', () => {
 
 	it('still renders a branded card when every enrichment read failed', () => {
 		const svg = renderCard(MINT, {
-			name: '', symbol: '', logoBase64: null, qualityScore: null, category: '',
+			name: '', symbol: '', logoBase64: null, category: '',
 			isThreeWsLaunch: false, intel: null, outcome: null, liveMcap: null,
 		});
 		expect(svg).toContain('Unknown coin');
 		expect(svg).toContain('THREE.WS');
-		// Unknown quality reads as a placeholder, never as a fabricated score.
-		expect(svg).toContain('>-<');
 		expect(svg).not.toContain('undefined');
 		expect(svg).not.toContain('NaN');
 	});

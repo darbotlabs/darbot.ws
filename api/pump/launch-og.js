@@ -15,9 +15,13 @@
  *   top-left   — three.ws wordmark + "pump.fun launch"
  *   hero left  — coin image (120×120 circle, fetched and base64'd if available)
  *   hero right — name (large), symbol, mint short
- *   mid-left   — quality score badge + organic/bundle signals
- *   mid-right  — price / market cap
- *   outcome    — "GRADUATED ✓" or "RUGGED ✕" or "LIVE" pill (bottom-right)
+ *   mid-left  : launch activity: unique buyers, buys and sells (raw counts)
+ *   mid-right : market cap
+ *   outcome   : "GRADUATED ✓" or "LIVE" pill (bottom-right)
+ *
+ * Neutral by design: the card never carries a score, grade, or engine label
+ * such as "rugged". A shared card is a statement about someone's coin, and a
+ * number on it reads as investment advice when high and as FUD when low.
  *   footer     — three.ws branding
  */
 
@@ -58,23 +62,6 @@ function fmtNum(v) {
 	return `$${n.toFixed(4)}`;
 }
 
-// pump_coin_intel stores organic_score and bundle_score as 0..1 fractions (the
-// enrichment writes ratios, e.g. 0.4279), while the card draws them as percent
-// bars. Convert once, here, so a 43% organic launch renders a 43% bar instead of
-// the 0%/1px sliver it drew when the raw fraction was fed straight to the gauge.
-function scoreToPercent(v) {
-	const n = Number(v);
-	if (!Number.isFinite(n) || n <= 0) return 0;
-	return Math.min(100, n * 100);
-}
-
-function qualityColor(score) {
-	if (score == null) return '#6b7280';
-	if (score >= 70) return '#22c55e';
-	if (score >= 40) return '#f59e0b';
-	return '#ef4444';
-}
-
 // Fetch the coin's logo from pump.fun as base64 — if it times out or fails,
 // we just omit the image; the card still renders fine without it.
 async function fetchLogoBase64(imageUri) {
@@ -105,8 +92,8 @@ async function buildCardData(mint) {
 			LIMIT 1
 		`,
 		sql`
-			SELECT name, symbol, image_uri, quality_score, organic_score, bundle_score,
-			       category, description, buy_count, sell_count, unique_buyers, creator
+			SELECT name, symbol, image_uri, category, description,
+			       buy_count, sell_count, unique_buyers, creator
 			FROM pump_coin_intel
 			WHERE mint = ${mint}
 			LIMIT 1
@@ -126,7 +113,6 @@ async function buildCardData(mint) {
 	const name = intel?.name || reg?.name || '';
 	const symbol = intel?.symbol || reg?.symbol || '';
 	const imageUri = intel?.image_uri || null;
-	const qualityScore = intel?.quality_score ?? null;
 	const category = intel?.category || '';
 	const isThreeWsLaunch = !!reg;
 
@@ -144,7 +130,7 @@ async function buildCardData(mint) {
 		wantsLiveMcap ? fetchLiveMarketCap(mint) : Promise.resolve(null),
 	]);
 
-	return { name, symbol, imageUri, logoBase64, qualityScore, category, isThreeWsLaunch, intel, outcome, liveMcap };
+	return { name, symbol, imageUri, logoBase64, category, isThreeWsLaunch, intel, outcome, liveMcap };
 }
 
 // Live USD market cap for a coin still on the curve. Any failure returns null and
@@ -165,35 +151,24 @@ async function fetchLiveMarketCap(mint) {
 }
 
 export function renderCard(mint, d) {
-	const { name, symbol, logoBase64, qualityScore, category, isThreeWsLaunch, intel, outcome, liveMcap } = d;
+	const { name, symbol, logoBase64, category, isThreeWsLaunch, intel, outcome, liveMcap } = d;
 	const displayName = trunc(name || 'Unknown coin', 36);
 	const displaySym = symbol ? `$${symbol.toUpperCase()}` : '';
 	const mc = liveMcap ?? outcome?.ath_market_cap_usd ?? outcome?.last_market_cap_usd ?? null;
 	const mcText = mc ? fmtNum(mc) : '';
 
-	const qColor = qualityColor(qualityScore);
-	const qText = qualityScore != null ? String(Math.round(qualityScore)) : '-';
+	const accent = '#818cf8';
 
 	let outcomePill = '';
 	if (outcome?.graduated) {
 		outcomePill = `<rect x="870" y="510" width="260" height="68" rx="10" fill="#16a34a22"/>
 			<text x="890" y="553" fill="#22c55e" font-size="22" font-weight="600">GRADUATED ✓</text>`;
-	} else if (outcome?.rugged) {
-		outcomePill = `<rect x="870" y="510" width="240" height="68" rx="10" fill="#dc262622"/>
-			<text x="890" y="553" fill="#ef4444" font-size="22" font-weight="600">RUGGED ✕</text>`;
 	} else {
 		outcomePill = `<circle cx="891" cy="545" r="7" fill="#22c55e">
 			<animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite"/>
 		</circle>
 		<text x="908" y="552" fill="#22c55e" font-size="20" font-weight="500">LIVE</text>`;
 	}
-
-	// Organic vs bundle gauge bar (230 px wide, so 2.3 px per percentage point).
-	const organic = scoreToPercent(intel?.organic_score);
-	const organicW = Math.round(organic * 2.3);
-	const bundle = scoreToPercent(intel?.bundle_score);
-	// 0.3 is the coordinated-launch threshold api/_lib/market-realness.js uses.
-	const bundleColor = bundle > 30 ? '#ef4444' : '#f59e0b';
 
 	// Horizontal divider y-position.
 	const imgBlock = logoBase64
@@ -211,16 +186,12 @@ export function renderCard(mint, d) {
 			<stop offset="0%" stop-color="#0a0b0f"/>
 			<stop offset="100%" stop-color="#0f1119"/>
 		</linearGradient>
-		<linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-			<stop offset="0%" stop-color="${qColor}" stop-opacity="0.25"/>
-			<stop offset="100%" stop-color="${qColor}" stop-opacity="0.08"/>
-		</linearGradient>
 	</defs>
 
 	<!-- Background -->
 	<rect width="1200" height="630" fill="url(#bg)"/>
 	<!-- Subtle top border -->
-	<rect x="0" y="0" width="1200" height="3" fill="${qColor}" opacity="0.7"/>
+	<rect x="0" y="0" width="1200" height="3" fill="${accent}" opacity="0.7"/>
 
 	<!-- Header row -->
 	<text x="80" y="92" fill="rgba(229,229,229,0.9)"
@@ -248,25 +219,16 @@ export function renderCard(mint, d) {
 	<!-- Divider -->
 	<line x1="80" y1="316" x2="1120" y2="316" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
 
-	<!-- Quality score block -->
-	<rect x="80" y="342" width="130" height="130" rx="12" fill="url(#scoreGrad)" stroke="${qColor}" stroke-width="1.5" stroke-opacity="0.6"/>
-	<text x="145" y="415" text-anchor="middle" fill="${qColor}"
-	      font-family="Inter,-apple-system,system-ui,sans-serif"
-	      font-size="54" font-weight="700">${x(qText)}</text>
-	<text x="145" y="454" text-anchor="middle" fill="rgba(229,229,229,0.35)"
-	      font-size="14" font-weight="500" letter-spacing="2">SCORE</text>
-
-	<!-- Organic / bundle bar -->
-	${intel?.organic_score != null ? `
-	<text x="240" y="370" fill="rgba(229,229,229,0.4)" font-size="14" letter-spacing="2">ORGANIC BUY</text>
-	<rect x="240" y="380" width="230" height="8" rx="4" fill="rgba(255,255,255,0.08)"/>
-	<rect x="240" y="380" width="${organicW}" height="8" rx="4" fill="#22c55e"/>
-	<text x="480" y="390" fill="#22c55e" font-size="14" font-weight="600" text-anchor="end">${Math.round(organic)}%</text>
-
-	<text x="240" y="420" fill="rgba(229,229,229,0.4)" font-size="14" letter-spacing="2">BUNDLE</text>
-	<rect x="240" y="430" width="230" height="8" rx="4" fill="rgba(255,255,255,0.08)"/>
-	<rect x="240" y="430" width="${Math.round(bundle * 2.3)}" height="8" rx="4" fill="${bundleColor}"/>
-	<text x="480" y="440" fill="${bundleColor}" font-size="14" font-weight="600" text-anchor="end">${Math.round(bundle)}%</text>
+	<!-- Launch activity: raw counts only -->
+	${intel?.unique_buyers ? `
+	<text x="80" y="375" fill="rgba(229,229,229,0.4)" font-size="14" letter-spacing="2">UNIQUE BUYERS</text>
+	<text x="80" y="440" fill="rgba(229,229,229,0.85)"
+	      font-size="44" font-weight="300">${x(String(intel.unique_buyers))}</text>
+	` : ''}
+	${intel?.buy_count != null && intel?.sell_count != null ? `
+	<text x="400" y="375" fill="rgba(229,229,229,0.4)" font-size="14" letter-spacing="2">BUYS / SELLS AT LAUNCH</text>
+	<text x="400" y="440" fill="rgba(229,229,229,0.85)"
+	      font-size="44" font-weight="300">${x(`${intel.buy_count} / ${intel.sell_count}`)}</text>
 	` : ''}
 
 	<!-- Market cap -->
@@ -275,13 +237,6 @@ export function renderCard(mint, d) {
 	<text x="1140" y="445" text-anchor="end" fill="#e5e5e5"
 	      font-family="Inter,-apple-system,system-ui,sans-serif"
 	      font-size="52" font-weight="300" letter-spacing="-1">${x(mcText)}</text>
-	` : ''}
-
-	<!-- Buyers -->
-	${intel?.unique_buyers ? `
-	<text x="560" y="375" fill="rgba(229,229,229,0.4)" font-size="14" letter-spacing="2">UNIQUE BUYERS</text>
-	<text x="560" y="440" fill="rgba(229,229,229,0.85)"
-	      font-size="44" font-weight="300">${x(String(intel.unique_buyers))}</text>
 	` : ''}
 
 	<!-- Outcome pill -->
@@ -319,7 +274,7 @@ export default wrap(async (req, res) => {
 		// because swallowing it silently made a real outage indistinguishable from
 		// a coin we simply have no data on: both render the same blank card.
 		console.warn('[launch-og] card data failed for %s: %s', mint, err?.message || err);
-		data = { name: '', symbol: '', logoBase64: null, qualityScore: null, category: '', isThreeWsLaunch: false, intel: null, outcome: null, liveMcap: null };
+		data = { name: '', symbol: '', logoBase64: null, category: '', isThreeWsLaunch: false, intel: null, outcome: null, liveMcap: null };
 	}
 
 	const svg = renderCard(mint, data);

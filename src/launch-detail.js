@@ -7,20 +7,22 @@
 //
 //   · WHAT is it        — live name / symbol / logo / price / market cap /
 //                         graduation, streamed from /api/pump/coin
-//   · IS IT SAFE        — the Coin Intelligence verdict (quality / bundle /
-//                         organic / snipe / concentration / fresh wallets /
-//                         risk flags), from /api/pump/launch-detail
-//   · WHAT HAPPENED     — the labeled outcome (graduated / rugged / ATH ×)
+//   · THE NUMBERS      : per-timeframe volume, buys, sells, net buy, holders,
+//                         dev share, authorities, curve progress, liquidity,
+//                         from /api/pump/token-stats; launch-window counts from
+//                         /api/pump/launch-detail
 //   · WHERE IS IT GOING — the live price chart (/api/pump/price-history) and
 //                         the live trade tape (/api/pump/trades-stream, SSE)
-//   · WHO HOLDS IT      — holder count + concentration (/api/coin/:mint/cohorts)
-//   · WHO MADE IT       — the agent behind the mint and its verifiable track
-//                         record (TraderScore), deep-linked to /trader & /agents
+//   · WHO HOLDS IT     : holder count + top holders (/api/pump/token-stats)
+//   · WHO MADE IT      : the agent behind the mint and its public track
+//                         record, deep-linked to /trader & /agents
 //   · WHY HOLD          — buyback-and-burn economics for agent-payment coins
 //   · WHAT CAN I DO     — buy, view in 3D, enter the coin's world, watch, share
 //
-// Honesty contract: a signal the engine did not measure renders as "not
-// measured", never as 0. A coin we never observed still renders — the page
+// Neutrality contract: the page never scores, grades, or labels a coin. It shows
+// facts and leaves the judgment to the reader, because a score on a user's
+// launch reads as investment advice or as FUD. A value we could not read
+// renders as "-", never as 0. A coin we never observed still renders, and the page
 // degrades to whatever is real for that mint and tells the user what's missing.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -40,6 +42,9 @@ import { proxiedImageURL } from './ipfs.js';
 import { agentAvatarGlb, hasCustomAvatar, seeInWorldHref } from './shared/agent-3d.js';
 import { resolveDevR2Url } from './shared/dev-r2-proxy.js';
 import { terminalLinks } from './shared/trading-terminals.js';
+import { CHART_EMBEDS, chartEmbedUrls, resolveGeckoPool } from './shared/chart-embeds.js';
+import { watchEmbed, embedFallbackNode, DEFAULT_EMBED_TIMEOUT_MS } from './shared/embed-guard.js';
+import { mountPriceChart } from './mission-control/chart.js';
 import { flashValue, rippleOnce, liveDot, setLiveDot } from './ui-juice.js';
 
 const GRADUATION_CAP_USD = 69_000; // pump.fun bonding-curve graduation threshold
@@ -53,19 +58,23 @@ const state = {
 	coin: null,
 	tape: null, // EventSource handle
 	chartInterval: '15m',
-	chartView: 'native', // 'native' (Birdeye area chart) | 'dexscreener' (interactive embed); hydrated from localStorage in boot()
-	dexFrameTimer: 0, // watchdog for a stalled DexScreener embed
+	chartView: 'native', // a CHART_VIEWS id; hydrated from localStorage in boot()
+	chartSeq: 0, // bumps on every chart render so a stale async load never paints
+	chartTeardown: null, // cancels the active view's watchdog, stream or chart
+	gecko: null, // { pool, indexed } once resolved for this mint
 	priceTimer: 0,
+	statsPromise: null, // shared /api/pump/token-stats read (stats + holders panels)
+	statsWindow: '1h', // selected timeframe tab in the stats panel
 };
 
-// The chart-source choice is a viewing preference, not coin-specific — persist it
-// so a trader who prefers the full DexScreener terminal keeps it across coins.
+// The chart-source choice is a viewing preference, not coin-specific: persist it
+// so a trader who prefers one chart keeps it across coins.
 const CHART_VIEW_KEY = 'ld_chart_view';
 
 function readChartView() {
 	try {
 		const v = localStorage.getItem(CHART_VIEW_KEY);
-		return v === 'dexscreener' || v === 'native' ? v : 'native';
+		return CHART_VIEWS.some((view) => view.id === v) ? v : 'native';
 	} catch {
 		return 'native';
 	}
@@ -254,11 +263,6 @@ function fmtPrice(n) {
 	return `$${n.toExponential(2)}`;
 }
 
-function pctText(v) {
-	// signal helpers express 0..1 fractions; render as whole percents
-	return v == null ? null : `${Math.round(v * 100)}%`;
-}
-
 // ── mint resolution ──────────────────────────────────────────────────────────
 
 const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -335,21 +339,12 @@ function graduationRing(pct, size = 76) {
 }
 
 function outcomeBadge(outcome) {
-	if (!outcome || !outcome.outcome) return null;
-	const map = {
-		graduated: { label: 'Graduated', tone: 'good', tip: 'This coin completed its bonding curve and moved to an AMM pool.' },
-		rugged: { label: 'Rugged', tone: 'bad', tip: 'The Intelligence Engine labeled this coin as rugged.' },
-		survived: { label: 'Survived', tone: 'good', tip: 'Still trading after the observation window.' },
-		died: { label: 'Faded', tone: 'muted', tip: 'Activity collapsed shortly after launch.' },
-		unknown: null,
-	};
-	const meta = map[outcome.outcome];
-	if (!meta) return null;
-	const parts = [el('span', { text: meta.label })];
-	if (Number.isFinite(outcome.ath_multiple) && outcome.ath_multiple > 1) {
-		parts.push(el('b', { text: `${outcome.ath_multiple.toFixed(1)}× ATH` }));
-	}
-	return el('span', { class: `ld-outcome ld-outcome-${meta.tone}`, title: meta.tip }, parts);
+	// Only graduation is a plain on-chain fact. Engine labels such as "rugged" or
+	// "faded" are judgments about someone's coin, so they never render here.
+	if (!outcome?.graduated) return null;
+	return el('span', { class: 'ld-outcome ld-outcome-good', title: 'This coin completed its bonding curve and moved to an AMM pool.' }, [
+		el('span', { text: 'Graduated' }),
+	]);
 }
 
 function socialLinks(socials, intel) {
@@ -476,410 +471,211 @@ function renderHero() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MARKET METRICS — multi-timeframe price moves + live on-chain safety read
+// TOKEN STATS: the neutral fact sheet a trading terminal leads with
 // ════════════════════════════════════════════════════════════════════════════
 //
-// Two live reads, each real and independently degradable:
-//   · price moves — one 5m-candle pull (/api/pump/price-history), windowed in the
-//     client into 5m / 1h / 6h / 24h percentage moves. A window is shown only
-//     when the history actually spans (most of) it, so a young coin renders "—"
-//     for 24h rather than a misleading figure derived from two hours of data.
-//   · trust strip — the same pre-trade firewall verdict the autonomous sniper
-//     enforces (/api/pump/safety): a live SPL mint/freeze authority audit + a
-//     tradable-venue read, scored 0..100. Answers the on-chain trust questions a
-//     GMGN-style terminal leads with — can the dev mint more, freeze your tokens,
-//     is there a real venue — at a glance, every value traceable to chain state.
+// Facts, never a verdict. Nothing on this page scores, grades, or labels a coin:
+// a score on someone's launch reads as investment advice when it is high and as
+// FUD when it is low. Instead every panel shows the raw numbers a trader looks
+// up on GMGN or DEX Screener (volume, buys vs sells, holders, dev share, mint
+// and freeze authority, curve progress, liquidity) and leaves the judgment to
+// the reader. One aggregate read (/api/pump/token-stats) feeds this panel and
+// the holders panel, so the two can never disagree.
 
-const TF_WINDOWS = [
-	{ key: '5m', label: '5m', sec: 300 },
-	{ key: '1h', label: '1h', sec: 3600 },
-	{ key: '6h', label: '6h', sec: 21600 },
-	{ key: '24h', label: '24h', sec: 86400 },
-];
+const TF_KEYS = ['5m', '1h', '6h', '24h'];
 
-// Window a single ascending 5m-candle series into per-timeframe % moves. Returns
-// null when there isn't enough data to compute even the shortest window.
-function priceDeltas(pts) {
-	const sorted = (pts || [])
-		.filter((p) => Number.isFinite(p.c) && Number.isFinite(p.t) && p.c > 0)
-		.sort((a, b) => a.t - b.t);
-	if (sorted.length < 2) return null;
-	const last = sorted[sorted.length - 1];
-	const span = last.t - sorted[0].t;
-	const deltas = TF_WINDOWS.map((w) => {
-		// Require ≥60% of the window in history before quoting it — never fabricate
-		// a long-horizon move from a short series.
-		if (span < w.sec * 0.6) return { ...w, pct: null };
-		const target = last.t - w.sec;
-		let ref = sorted[0];
-		for (const p of sorted) { if (p.t >= target) { ref = p; break; } }
-		return { ...w, pct: ref.c ? ((last.c - ref.c) / ref.c) * 100 : null };
-	});
-	return { last: last.c, deltas };
+function loadStats() {
+	if (!state.statsPromise) {
+		state.statsPromise = fetchJson(`/api/pump/token-stats?mint=${encodeURIComponent(state.mint)}`, { timeout: 20000 });
+		// A failed read must not poison later retries.
+		state.statsPromise.catch(() => { state.statsPromise = null; });
+	}
+	return state.statsPromise;
 }
 
-function renderTimeframeStrip(host) {
-	host.replaceChildren(el('div', { class: 'ld-skel ld-skel-strip' }));
-	const to = Math.floor(Date.now() / 1000);
-	const from = to - 30 * 3600;
-	fetchJson(`/api/pump/price-history?mint=${encodeURIComponent(state.mint)}&interval=5m&from=${from}&to=${to}`)
-		.then((body) => {
-			const res = priceDeltas(body.data);
-			if (!res || res.deltas.every((d) => d.pct == null)) {
-				host.replaceChildren(el('p', { class: 'ld-mtf-empty', text: 'Not enough trade history yet for price moves.' }));
-				return;
-			}
-			host.replaceChildren(
-				el('div', { class: 'ld-mtf' }, res.deltas.map((d) =>
-					el('div', { class: 'ld-mtf-cell' }, [
-						el('span', { class: 'ld-mtf-label', text: d.label }),
-						el('span', {
-							class: `ld-mtf-val ${d.pct == null ? 'ld-muted' : pnlClass(d.pct)}`,
-							text: d.pct == null ? '—' : fmtPct(d.pct, { sign: true }),
-						}),
-					]),
-				)),
-			);
-		})
-		.catch(() => {
-			host.replaceChildren(
-				el('div', { class: 'ld-mtf-empty' }, [
-					el('span', { text: 'Price moves unavailable right now.' }),
-					el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Retry', onclick: () => renderTimeframeStrip(host) }),
-				]),
-			);
-		});
-}
+const usd = (n) => (n == null ? '-' : fmtUsd(n, { sign: false }));
+const share = (v) => (v == null ? '-' : fmtPct(v * 100, { dp: v < 0.001 && v > 0 ? 3 : v < 0.1 ? 2 : 1 }));
 
-const TRUST_TONE = { pass: 'good', warn: 'warn', fail: 'danger', skip: 'muted' };
-const VERDICT_META = {
-	allow: { label: 'Tradable', tone: 'good' },
-	warn: { label: 'Caution', tone: 'warn' },
-	block: { label: 'High risk', tone: 'danger' },
-};
-const VENUE_LABEL = {
-	live_amm_pool: 'AMM pool',
-	live_bonding_curve: 'Bonding curve',
-	no_tradable_venue: 'None',
-	curve_reserves_empty: 'Drained',
-	pool_reserves_empty: 'Drained',
-};
-
-function trustChip(label, value, tone, title) {
-	return el('div', { class: 'ld-trust', title: title || null }, [
-		el('span', { class: 'ld-trust-k', text: label }),
-		el('span', { class: `ld-trust-v ld-${tone}`, text: value }),
+function statCell(label, value, { cls = '', title = null } = {}) {
+	return el('div', { class: 'ld-ts-cell', title }, [
+		el('span', { class: 'ld-ts-k', text: label }),
+		el('span', { class: `ld-ts-v ${cls}`, text: value }),
 	]);
 }
 
-function renderTrustStrip(host) {
-	host.replaceChildren(el('div', { class: 'ld-skel ld-skel-strip' }));
-	fetchJson(`/api/pump/safety?mint=${encodeURIComponent(state.mint)}&network=${state.network}`)
-		.then((s) => {
-			const checks = Array.isArray(s.checks) ? s.checks : [];
-			const byName = (n) => checks.find((c) => c.name === n);
-			const auth = byName('mint_authority');
-			const venue = byName('venue');
-			const sell = byName('round_trip');
-
-			const chips = [];
-			// A null on-chain authority means it was renounced — the dev can no longer
-			// inflate supply (mint) or freeze your account (the cleanest honeypot).
-			if (auth) {
-				const unread = auth.reason === 'authority_read_failed' || auth.reason === 'mint_not_found';
-				const mintActive = auth.detail?.mint_authority != null;
-				const freezeActive = auth.detail?.freeze_authority != null;
-				chips.push(trustChip('Mint authority', unread ? 'Unknown' : mintActive ? 'Active' : 'Revoked',
-					unread ? 'muted' : mintActive ? 'danger' : 'good',
-					mintActive ? 'The creator can still mint new supply and dilute holders.' : 'Mint authority renounced — supply is fixed.'));
-				chips.push(trustChip('Freeze authority', unread ? 'Unknown' : freezeActive ? 'Active' : 'Revoked',
-					unread ? 'muted' : freezeActive ? 'danger' : 'good',
-					freezeActive ? 'The creator can freeze your token account — you may be unable to sell.' : 'Freeze authority renounced — your tokens cannot be frozen.'));
-			}
-			if (venue) {
-				chips.push(trustChip('Liquidity', VENUE_LABEL[venue.reason] || (venue.status === 'pass' ? 'Live' : '—'),
-					TRUST_TONE[venue.status] || 'muted', 'Where this coin can actually be traded.'));
-			}
-			if (sell) {
-				const label = sell.status === 'pass' ? 'Sellable' : sell.status === 'fail' ? 'Honeypot' : 'Untested';
-				chips.push(trustChip('Sell test', label, TRUST_TONE[sell.status] || 'muted',
-					sell.status === 'skip' ? 'A live buy→sell round-trip is simulated at trade time.' : 'Simulated buy→sell round-trip on-chain.'));
-			}
-
-			if (!chips.length) {
-				host.replaceChildren(el('p', { class: 'ld-mtf-empty', text: 'Safety checks are unavailable for this coin.' }));
-				return;
-			}
-
-			const v = VERDICT_META[s.verdict] || { label: 'Unscored', tone: 'muted' };
-			const head = el('div', { class: 'ld-trust-head' }, [
-				el('span', { class: `ld-verdict-pill ld-pill-${v.tone}`, text: v.label }),
-				Number.isFinite(Number(s.score)) ? el('span', { class: 'ld-trust-score', text: `${Math.round(Number(s.score))}/100 safety` }) : null,
-			]);
-			host.replaceChildren(head, el('div', { class: 'ld-trust-grid' }, chips));
-		})
-		.catch(() => {
-			host.replaceChildren(
-				el('div', { class: 'ld-mtf-empty' }, [
-					el('span', { text: 'Safety check unavailable right now.' }),
-					el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Retry', onclick: () => renderTrustStrip(host) }),
+function windowPanel(windows, key) {
+	const w = windows?.[key];
+	if (!w) return el('p', { class: 'ld-mtf-empty', text: 'No trade history for this window.' });
+	const buyShare = w.buys + w.sells > 0 ? (w.buys / (w.buys + w.sells)) * 100 : null;
+	return el('div', { class: 'ld-ts-window' }, [
+		el('div', { class: 'ld-ts-grid' }, [
+			statCell('Volume', usd(w.volume_usd)),
+			statCell('Buys', `${compact(w.buys)} / ${usd(w.buy_usd)}`, { cls: 'lb-pos' }),
+			statCell('Sells', `${compact(w.sells)} / ${usd(w.sell_usd)}`, { cls: 'lb-neg' }),
+			statCell('Net buy', fmtUsd(w.net_buy_usd), { cls: pnlClass(w.net_buy_usd) }),
+			statCell('Traders', compact(w.traders)),
+			statCell('Price', w.price_change_pct == null ? '-' : fmtPct(w.price_change_pct, { sign: true, dp: 2 }), { cls: pnlClass(w.price_change_pct) }),
+		]),
+		buyShare == null
+			? null
+			: el('div', { class: 'ld-ts-split', role: 'img', 'aria-label': `${Math.round(buyShare)}% of trades were buys` }, [
+					el('div', { class: 'ld-ts-split-buy', style: `width:${buyShare}%` }),
 				]),
-			);
-		});
+		w.partial
+			? el('p', { class: 'ld-ts-note', text: 'This coin trades heavily, so this window covers the most recent 1,500 trades.' })
+			: null,
+	]);
+}
+
+function renderWindowTabs(host, windows) {
+	const panel = el('div', { class: 'ld-ts-panel', role: 'tabpanel' });
+	const tabs = TF_KEYS.map((key) => {
+		const w = windows?.[key];
+		const btn = el('button', {
+			class: 'ld-ts-tab',
+			type: 'button',
+			role: 'tab',
+			'aria-selected': 'false',
+			onclick: () => select(key),
+		}, [
+			el('span', { class: 'ld-ts-tab-k', text: key }),
+			el('span', {
+				class: `ld-ts-tab-v ${w?.price_change_pct == null ? 'lb-muted' : pnlClass(w.price_change_pct)}`,
+				text: w?.price_change_pct == null ? '-' : fmtPct(w.price_change_pct, { sign: true }),
+			}),
+		]);
+		btn.dataset.key = key;
+		return btn;
+	});
+	const select = (key) => {
+		state.statsWindow = key;
+		for (const t of tabs) {
+			const on = t.dataset.key === key;
+			t.classList.toggle('active', on);
+			t.setAttribute('aria-selected', String(on));
+		}
+		panel.replaceChildren(windowPanel(windows, key));
+	};
+	host.replaceChildren(el('div', { class: 'ld-ts-tabs', role: 'tablist', 'aria-label': 'Timeframe' }, tabs), panel);
+	select(state.statsWindow || '1h');
+}
+
+function authorityText(addr) {
+	return addr ? 'Enabled' : 'Disabled';
+}
+
+function factsGrid(stats) {
+	const h = stats.holders;
+	const a = stats.authorities;
+	const c = stats.curve;
+	const m = stats.market || {};
+	const dev = stats.dev;
+	return el('div', { class: 'ld-ts-grid ld-ts-facts' }, [
+		statCell('Holders', h ? compact(h.count) : '-'),
+		statCell('Top 10', h ? share(h.top10_pct) : '-', { title: 'Supply held by the ten largest wallets, excluding the bonding curve and AMM pool.' }),
+		statCell('Dev holds', h ? share(h.dev_pct) : '-', { title: 'Supply held by the creator wallet.' }),
+		statCell('Early buyers', h?.early_buyers_pct != null ? `${share(h.early_buyers_pct)} · ${compact(h.early_buyers)}` : '-', {
+			title: 'Supply still held by wallets that bought within 5 seconds of launch, and how many there were.',
+		}),
+		statCell('Mint authority', a ? authorityText(a.mint_authority) : '-', { title: 'Whether any account can still mint new supply.' }),
+		statCell('Freeze authority', a ? authorityText(a.freeze_authority) : '-', { title: 'Whether any account can still freeze token accounts.' }),
+		statCell('Bonding curve', c ? (c.graduated ? 'Graduated' : fmtPct(c.progress_pct, { dp: 2 })) : '-', { title: 'Share of the bonding curve bought out. At 100% the coin moves to an AMM pool.' }),
+		statCell('Liquidity', usd(m.liquidity_usd)),
+		statCell('ATH market cap', usd(m.ath_market_cap_usd)),
+		statCell('Dev trades', dev ? `${dev.bought} buys · ${dev.sold} sells` : '-', { title: 'Creator wallet trades in the fetched history.' }),
+		statCell('DEX Screener', m.dex_paid == null ? '-' : m.dex_paid ? 'Profile paid' : 'Not paid', { title: 'Whether an enhanced token profile was paid for on DEX Screener.' }),
+		statCell('Creator', dev ? shortAddr(dev.wallet, 4, 4) : '-', { title: dev?.wallet || null }),
+	]);
 }
 
 function renderMetrics() {
 	const target = $('ld-metrics');
 	if (!target) return;
 	if (state.network !== 'mainnet') {
-		section(target, 'Market metrics', el('div', { class: 'ld-empty ld-empty-sm' }, [
-			el('p', { text: 'Live price moves and on-chain safety checks are mainnet-only.' }),
+		section(target, 'Token stats', el('div', { class: 'ld-empty ld-empty-sm' }, [
+			el('p', { text: 'Live trading stats are mainnet-only.' }),
 		]));
 		return;
 	}
-	const tfHost = el('div', { class: 'ld-mtf-host' });
-	const trustHost = el('div', { class: 'ld-trust-host' });
-	const body = el('div', { class: 'ld-metrics-body' }, [
-		el('div', { class: 'ld-metrics-block' }, [el('h3', { class: 'ld-metrics-h', text: 'Price moves' }), tfHost]),
-		el('div', { class: 'ld-metrics-block' }, [el('h3', { class: 'ld-metrics-h', text: 'On-chain safety' }), trustHost]),
-	]);
-	section(target, 'Market metrics', body, { tag: 'live' });
-	renderTimeframeStrip(tfHost);
-	renderTrustStrip(trustHost);
+	const body = el('div', { class: 'ld-ts' }, [el('div', { class: 'ld-skel ld-skel-strip' }), el('div', { class: 'ld-skel', style: 'height:120px' })]);
+	section(target, 'Token stats', body, { tag: 'live · on-chain' });
+
+	loadStats()
+		.then((stats) => {
+			const tfHost = el('div', { class: 'ld-ts-windows' });
+			body.replaceChildren(tfHost, factsGrid(stats));
+			if (stats.windows) renderWindowTabs(tfHost, stats.windows);
+			else tfHost.replaceChildren(el('p', { class: 'ld-mtf-empty', text: 'Trade history is unavailable right now.' }));
+		})
+		.catch(() => {
+			body.replaceChildren(
+				el('div', { class: 'ld-mtf-empty' }, [
+					el('span', { text: 'Token stats are unavailable right now.' }),
+					el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Retry', onclick: () => renderMetrics() }),
+				]),
+			);
+		});
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// INTELLIGENCE VERDICT
+// LAUNCH ACTIVITY: what happened in the first ~90 seconds, as raw counts
 // ════════════════════════════════════════════════════════════════════════════
-
-const FLAG_META = {
-	bundle_launch: { label: 'Bundle launch', tone: 'danger', tip: 'Many wallets bought in the same block — likely coordinated.' },
-	dev_dumped: { label: 'Dev dumped', tone: 'danger', tip: 'The creator sold their position.' },
-	dev_dump: { label: 'Dev dumped', tone: 'danger', tip: 'The creator sold their position.' },
-	single_whale: { label: 'Single whale', tone: 'danger', tip: 'One wallet holds an outsized share of supply.' },
-	low_diversity: { label: 'Low diversity', tone: 'danger', tip: 'Few unique buyers — thin, concentrated participation.' },
-	fresh_wallet_swarm: { label: 'Fresh-wallet swarm', tone: 'danger', tip: 'A cluster of brand-new wallets bought together.' },
-	sell_pressure: { label: 'Sell pressure', tone: 'warn', tip: 'Sells are outpacing buys early.' },
-	sniped: { label: 'Sniped', tone: 'warn', tip: 'Snipers grabbed supply in the first moments.' },
-};
-
-function scoreTone(score) {
-	if (score == null) return 'muted';
-	if (score >= 70) return 'good';
-	if (score >= 45) return 'warn';
-	return 'danger';
-}
-
-function gauge(label, value01, { invert = false } = {}) {
-	// value01 in 0..1; invert means lower-is-better (concentration, snipe).
-	const measured = value01 != null;
-	const pct = measured ? Math.max(0, Math.min(100, value01 * 100)) : 0;
-	const good = invert ? 100 - pct : pct;
-	const tone = !measured ? 'muted' : good >= 66 ? 'good' : good >= 40 ? 'warn' : 'danger';
-	return el('div', { class: 'ld-gauge' }, [
-		el('div', { class: 'ld-gauge-head' }, [
-			el('span', { class: 'ld-gauge-label', text: label }),
-			el('span', { class: `ld-gauge-val ld-${tone}`, text: measured ? `${Math.round(pct)}%` : 'not measured' }),
-		]),
-		el('div', { class: 'ld-gauge-track' }, [
-			el('div', { class: `ld-gauge-fill ld-fill-${tone}`, style: `width:${measured ? pct : 0}%` }),
-		]),
-	]);
-}
 
 function renderVerdict() {
 	const target = $('ld-verdict');
 	const intel = state.detail.intel;
 
+	// Nothing observed means nothing to show; the stats panel above already covers
+	// the live market, so an empty explainer here would only be noise.
 	if (!intel) {
-		section(
-			target,
-			'Coin Intelligence',
-			el('div', { class: 'ld-empty' }, [
-				el('p', { class: 'ld-empty-title', text: 'Not yet observed by the Intelligence Engine.' }),
-				el('p', {
-					text:
-						state.network === 'devnet'
-							? 'The engine watches mainnet launches. Devnet coins carry no intelligence signals.'
-							: 'This coin launched before the engine started watching, or its first seconds were not captured. New mainnet launches are scored within ~90 seconds.',
-				}),
-				el('a', { class: 'ld-btn ld-btn-ghost', href: '/radar', text: 'Open the live radar →' }),
-			]),
-			{ tag: 'engine' },
-		);
+		target.hidden = true;
 		return;
 	}
 
-	const q = intel.quality_score;
-	const tone = scoreTone(q);
-	const headline = el('div', { class: 'ld-verdict-head' }, [
-		el('div', { class: `ld-quality ld-quality-${tone}` }, [
-			el('span', { class: 'ld-quality-num', text: q != null ? String(Math.round(q)) : '—' }),
-			el('span', { class: 'ld-quality-max', text: '/100' }),
-		]),
-		el('div', { class: 'ld-verdict-copy' }, [
-			el('span', { class: 'ld-verdict-label', text: 'Quality score' }),
-			el('p', {
-				class: 'ld-narrative',
-				text:
-					intel.narrative ||
-					(q >= 70
-						? 'Signals read organic: diverse buyers, healthy timing, no dominant whale.'
-						: q >= 45
-							? 'Mixed signals — some concentration or coordination worth a closer look.'
-							: 'High-risk signals: coordination, concentration, or early sell pressure.'),
-			}),
-		]),
-	]);
+	const kv = (label, value, title) =>
+		value == null ? null : statCell(label, value, { title });
+	const pct01 = (v) => (v == null ? null : fmtPct(v * 100, { dp: 0 }));
 
-	const flags = (intel.risk_flags || []).length
-		? el(
-				'div',
-				{ class: 'ld-flags' },
-				intel.risk_flags.map((f) => {
-					const m = FLAG_META[f] || { label: f.replace(/_/g, ' '), tone: 'warn', tip: '' };
-					return el('span', { class: `ld-flag ld-flag-${m.tone}`, title: m.tip, text: m.label });
-				}),
-			)
-		: el('div', { class: 'ld-flags' }, [
-				el('span', { class: 'ld-flag ld-flag-good', text: 'No risk flags raised' }),
-			]);
-
-	const gauges = el('div', { class: 'ld-gauges' }, [
-		gauge('Organic', intel.organic_score),
-		gauge('Bundle coordination', intel.bundle_score, { invert: true }),
-		gauge('Sniped early', intel.snipe_ratio, { invert: true }),
-		gauge('Top-10 concentration', intel.concentration_top10, { invert: true }),
-		gauge('Fresh wallets', intel.fresh_wallet_ratio, { invert: true }),
-		gauge('Funder clustering', intel.bubblemap_connectivity, { invert: true }),
-	]);
-
-	// First-seconds aggregates — the raw observed activity behind the scores.
-	const kv = (label, value) =>
-		value == null
-			? null
-			: el('div', { class: 'ld-kv' }, [el('span', { text: label }), el('b', { text: value })]);
-	const aggregates = el('div', { class: 'ld-aggregates' }, [
+	const cells = [
 		kv('Buys', intel.buy_count != null ? compact(intel.buy_count) : null),
 		kv('Sells', intel.sell_count != null ? compact(intel.sell_count) : null),
 		kv('Unique buyers', intel.unique_buyers != null ? compact(intel.unique_buyers) : null),
+		kv('Unique sellers', intel.unique_sellers != null ? compact(intel.unique_sellers) : null),
 		kv('Buy volume', intel.buy_volume_sol != null ? fmtSol(intel.buy_volume_sol, { sign: false }) : null),
+		kv('Sell volume', intel.sell_volume_sol != null ? fmtSol(intel.sell_volume_sol, { sign: false }) : null),
 		kv('Dev buy', intel.dev_buy_sol != null ? fmtSol(intel.dev_buy_sol, { sign: false }) : null),
 		kv('Largest buy', intel.largest_buy_sol != null ? fmtSol(intel.largest_buy_sol, { sign: false }) : null),
-		kv('Observed for', intel.observation_seconds != null ? `${intel.observation_seconds}s` : null),
-	]);
+		kv('Dev sold', intel.dev_sold == null ? null : intel.dev_sold ? 'Yes' : 'No'),
+		kv('Opening-second volume', pct01(intel.snipe_ratio), 'Share of buy volume that landed in the first seconds after launch.'),
+		kv('Top 10 at launch', pct01(intel.concentration_top10), 'Share of bought supply held by the ten largest early buyers.'),
+		kv('New wallets', pct01(intel.fresh_wallet_ratio), 'Share of early buyers whose wallets had no prior history.'),
+	].filter(Boolean);
 
-	const body = el('div', { class: 'ld-verdict' }, [headline, flags, gauges, aggregates]);
-	section(target, 'Coin Intelligence', body, { tag: 'first ~90s, on-chain' });
+	if (!cells.length) {
+		target.hidden = true;
+		return;
+	}
+	const span = intel.observation_seconds != null ? `first ${intel.observation_seconds}s` : 'at launch';
+	section(target, 'Launch activity', el('div', { class: 'ld-ts-grid ld-ts-facts' }, cells), { tag: span });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ORACLE CONVICTION — fused conviction score from the Oracle system
+// NOTABLE WALLETS: wallets with a public track record that bought this coin
 // ════════════════════════════════════════════════════════════════════════════
-
-const ORACLE_TIER_META = {
-	prime:   { label: 'PRIME',   color: '#c084fc', bg: 'rgba(192,132,252,.14)' },
-	strong:  { label: 'STRONG',  color: '#34d399', bg: 'rgba(52,211,153,.12)' },
-	lean:    { label: 'LEAN',    color: '#fbbf24', bg: 'rgba(251,191,36,.12)' },
-	watch:   { label: 'WATCH',   color: '#94a3b8', bg: 'rgba(148,163,184,.1)' },
-	avoid:   { label: 'AVOID',   color: '#f87171', bg: 'rgba(248,113,113,.12)' },
-};
-const ORACLE_PILLAR_COLORS = {
-	pedigree: '#5fe3ff', structure: '#34d399', narrative: '#a07bff', momentum: '#fbbf24',
-};
-
-async function renderOracleConviction() {
-	const target = $('ld-oracle');
-	if (!target || state.network !== 'mainnet') return;
-	target.replaceChildren(el('div', { class: 'ld-skel', style: 'height:140px' }));
-
-	let data;
-	try {
-		const r = await fetch(`/api/oracle/coin?mint=${encodeURIComponent(state.mint)}`);
-		if (!r.ok) { target.replaceChildren(); return; }
-		data = await r.json();
-	} catch { target.replaceChildren(); return; }
-
-	const cv = data.conviction;
-	if (!cv) { target.replaceChildren(); return; }
-
-	const tier = cv.tier || 'watch';
-	const meta = ORACLE_TIER_META[tier] || ORACLE_TIER_META.watch;
-	const score = Math.round(Number(cv.score ?? 0));
-	const pillars = cv.pillars || {};
-
-	const tierBadge = el('span', {
-		class: 'ld-oracle-tier',
-		style: `background:${meta.bg};color:${meta.color};border-color:${meta.color}40`,
-		text: meta.label,
-	});
-
-	const scoreDial = el('div', { class: 'ld-oracle-dial' }, [
-		el('span', { class: 'ld-oracle-score', text: String(score) }),
-		el('span', { class: 'ld-oracle-score-max', text: '/100' }),
-	]);
-
-	const pillarRow = el('div', { class: 'ld-oracle-pillars' },
-		['pedigree', 'structure', 'narrative', 'momentum'].map((key) => {
-			const val = Math.round(Number(pillars[key] ?? 0));
-			const bar = el('div', { class: 'ld-oracle-pillar-bar' }, [
-				el('div', {
-					class: 'ld-oracle-pillar-fill',
-					style: `width:${val}%;background:${ORACLE_PILLAR_COLORS[key]}`,
-				}),
-			]);
-			return el('div', { class: 'ld-oracle-pillar' }, [
-				el('span', { class: 'ld-oracle-pillar-label', text: key }),
-				bar,
-				el('span', { class: 'ld-oracle-pillar-val', text: String(val) }),
-			]);
-		}),
-	);
-
-	const actions = el('div', { class: 'ld-oracle-actions' }, [
-		el('a', {
-			class: 'ld-btn ld-btn-ghost ld-btn-sm ld-btn-block',
-			href: `/oracle/coin/${encodeURIComponent(state.mint)}`,
-			target: '_blank',
-			rel: 'noopener',
-			text: 'Full conviction breakdown ↗',
-		}),
-	]);
-
-	const body = el('div', { class: 'ld-oracle-body' }, [
-		el('div', { class: 'ld-oracle-head' }, [scoreDial, tierBadge]),
-		pillarRow,
-		actions,
-	]);
-	section(target, 'Oracle Conviction', body, { tag: 'fused · 4 reads' });
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// SMART MONEY  — who is in this coin, and what is their track record
 //
-// The single most actionable question a trader has isn't "what is the chart" —
-// it's "who else is in, and do they win." The Smart Money Radar answers it: it
-// crosses every wallet's footprint in this coin against which coins those same
-// wallets historically graduated, scoring the *pedigree of the money* buying in.
-// Data: /api/pump/smart-money?mint= (found:false until the rollup scores the coin).
-// ════════════════════════════════════════════════════════════════════════════
+// Shows who bought and their public record, with no score for the coin itself.
+// Hidden when no such wallet has touched the coin: an empty "nobody notable"
+// panel on someone's launch reads as a knock, not information.
 
 const WALLET_LABEL = {
-	smart_money: { label: 'Smart money', tone: 'good', tip: 'A wallet with a proven record of buying coins that went on to graduate.' },
-	sniper: { label: 'Sniper', tone: 'warn', tip: 'Habitually grabs supply in the first moments of a launch.' },
-	dumper: { label: 'Dumper', tone: 'danger', tip: 'Tends to sell into early buyers — exits fast.' },
-	rugger: { label: 'Rugger', tone: 'danger', tip: 'Has been tied to coins that rugged.' },
-	fresh: { label: 'Fresh', tone: 'muted', tip: 'A brand-new wallet with no track record yet.' },
-	neutral: { label: 'Neutral', tone: 'muted', tip: 'Trades both ways with no decisive edge.' },
-	unproven: { label: 'Unproven', tone: 'muted', tip: 'Not enough history to judge.' },
+	smart_money: { label: 'Graduated picks', tip: 'This wallet has a record of buying coins that went on to graduate.' },
+	sniper: { label: 'Early buyer', tip: 'This wallet often buys in the first moments of a launch.' },
+	fresh: { label: 'New wallet', tip: 'This wallet has little on-chain history.' },
 };
 
 function walletRow(w) {
-	const meta = WALLET_LABEL[w.label] || { label: (w.label || 'wallet').replace(/_/g, ' '), tone: 'muted', tip: '' };
+	const meta = WALLET_LABEL[w.label] || null;
 	const winPct = w.win_rate != null ? Math.round(w.win_rate * 100) : null;
-	const record =
-		w.wins != null && w.duds != null && w.wins + w.duds > 0 ? `${w.wins}–${w.duds}` : null;
-
 	return el(
 		'a',
 		{
@@ -887,17 +683,16 @@ function walletRow(w) {
 			href: `https://solscan.io/account/${w.wallet}`,
 			target: '_blank',
 			rel: 'noopener noreferrer',
-			'aria-label': `${meta.label} ${shortAddr(w.wallet)} — bought ${fmtSol(w.buy_sol, { sign: false })}`,
+			'aria-label': `Wallet ${shortAddr(w.wallet)}, bought ${fmtSol(w.buy_sol, { sign: false })}`,
 		},
 		[
-			el('span', { class: `ld-sm-dot ld-fill-${meta.tone}`, 'aria-hidden': 'true' }),
+			el('span', { class: 'ld-sm-dot ld-fill-muted', 'aria-hidden': 'true' }),
 			el('div', { class: 'ld-sm-who' }, [
 				el('span', { class: 'ld-sm-addr', text: shortAddr(w.wallet, 4, 4) }),
-				el('span', { class: `ld-sm-label ld-${meta.tone}`, title: meta.tip, text: meta.label }),
+				meta ? el('span', { class: 'ld-sm-label ld-muted', title: meta.tip, text: meta.label }) : null,
 			]),
 			el('div', { class: 'ld-sm-rec' }, [
-				winPct != null ? el('span', { class: 'ld-sm-win', text: `${winPct}% win` }) : null,
-				record ? el('span', { class: 'ld-sm-wd', text: record }) : null,
+				winPct != null ? el('span', { class: 'ld-sm-win', text: `${winPct}% graduated` }) : null,
 			]),
 			el('span', { class: 'ld-sm-buy', text: fmtSol(w.buy_sol, { sign: false }) }),
 		],
@@ -906,74 +701,25 @@ function walletRow(w) {
 
 async function renderSmartMoney() {
 	const target = $('ld-smart');
-	if (state.network !== 'mainnet') {
-		target.hidden = true;
-		return;
-	}
-
-	// The rollup hasn't scored this coin yet (too new, or pre-dates the engine).
-	// Modern API answers 200 + found:false; a fetch failure (or a pre-convention
-	// deploy's 404) lands in the same honest "not scored yet" panel.
-	function renderNotScored() {
-		section(
-			target,
-			'Smart money',
-			el('div', { class: 'ld-empty ld-empty-sm' }, [
-				el('p', { class: 'ld-empty-title', text: 'No smart-money read yet.' }),
-				el('p', {
-					text: 'The radar scores a coin once proven wallets touch it. New launches are picked up within minutes. Check back, or watch the live radar.',
-				}),
-				el('a', { class: 'ld-btn ld-btn-ghost', href: '/radar', text: 'Open the Smart Money radar →' }),
-			]),
-			{ tag: 'wallet pedigree' },
-		);
-	}
+	target.hidden = true;
+	if (state.network !== 'mainnet') return;
 
 	let data = null;
 	try {
 		data = await fetchJson(`/api/pump/smart-money?mint=${encodeURIComponent(state.mint)}`);
 	} catch {
-		renderNotScored();
 		return;
 	}
-	if (!data || data.found === false || !data.coin) {
-		renderNotScored();
-		return;
-	}
-
-	const coin = data.coin || {};
-	const notable = (data.notable || [])
+	const notable = (data?.notable || [])
 		.filter((w) => w && w.wallet)
 		.sort((a, b) => Number(b.buy_sol || 0) - Number(a.buy_sol || 0));
-	const score = Number(coin.smart_money_score);
-	const tone = scoreTone(Number.isFinite(score) ? score : null);
-	const provenSol = Number(coin.proven_buy_sol) || 0;
-	const smartCount =
-		Number(coin.smart_wallet_count) || notable.filter((w) => w.label === 'smart_money').length;
+	if (!notable.length) return;
 
-	// The hook line — concrete, FOMO-honest, never synthesized.
-	const lede =
-		smartCount > 0
-			? `${smartCount} proven ${smartCount === 1 ? 'wallet has' : 'wallets have'} put ${fmtSol(provenSol, { sign: false })} into this coin.`
-			: provenSol > 0
-				? `${fmtSol(provenSol, { sign: false })} of the money here traces to wallets with a track record.`
-				: 'No wallets with a proven track record have bought this coin yet.';
-
-	const headline = el('div', { class: 'ld-sm-head' }, [
-		el('div', { class: `ld-quality ld-quality-${tone}` }, [
-			el('span', { class: 'ld-quality-num', text: Number.isFinite(score) ? String(Math.round(score)) : '—' }),
-			el('span', { class: 'ld-quality-max', text: 'pedigree' }),
-		]),
-		el('div', { class: 'ld-verdict-copy' }, [
-			el('span', { class: 'ld-verdict-label', text: 'Smart-money score' }),
-			el('p', { class: 'ld-narrative', text: lede }),
-		]),
-	]);
-
-	const children = [headline];
-
-	if (notable.length) {
-		children.push(
+	target.hidden = false;
+	section(
+		target,
+		'Notable wallets',
+		el('div', { class: 'ld-sm' }, [
 			el('div', { class: 'ld-sm-list' }, [
 				el('div', { class: 'ld-sm-list-head' }, [
 					el('span', { text: 'Wallet' }),
@@ -982,23 +728,10 @@ async function renderSmartMoney() {
 				]),
 				...notable.slice(0, 8).map(walletRow),
 			]),
-		);
-	} else {
-		children.push(
-			el('p', {
-				class: 'ld-agent-note',
-				text: 'The radar is watching, but no notable wallets have surfaced in this coin yet.',
-			}),
-		);
-	}
-
-	children.push(
-		el('a', { class: 'ld-actions-foot', href: '/radar', text: 'See everything the smart money is buying →' }),
+		]),
+		{ tag: 'public track records' },
 	);
-
-	section(target, 'Smart money', el('div', { class: 'ld-sm' }, children), { tag: 'wallet pedigree' });
 }
-
 // ════════════════════════════════════════════════════════════════════════════
 // PRICE CHART
 // ════════════════════════════════════════════════════════════════════════════
@@ -1093,66 +826,68 @@ function chartIntervalBar() {
 	);
 }
 
-// View switch — the fast native area chart vs. the full interactive DexScreener
-// terminal (price + depth + trades). Both read the same on-chain mint; the embed
-// is loaded only when chosen so the default view stays lightweight.
+// Chart source switch. Every chart a viewer might trust, free and keyless:
+//   · three.ws     the fast native area chart over /api/pump/price-history
+//   · TradingView  TradingView's charting engine (lightweight-charts) drawing
+//                  real candles from the same OHLCV, ticked live by the trade
+//                  stream. Shared with Mission Control and /trades.
+//   · DexScreener, Birdeye, GMGN, GeckoTerminal: each provider's own chart,
+//                  embedded. URL shapes live in src/shared/chart-embeds.js.
+// Only the chosen view loads, so the default stays light.
 const CHART_VIEWS = [
-	['Native', 'native'],
-	['DexScreener', 'dexscreener'],
+	{ id: 'native', label: 'three.ws', kind: 'native' },
+	{ id: 'tradingview', label: 'TradingView', kind: 'tradingview' },
+	...CHART_EMBEDS.map((p) => ({ id: p.id, label: p.label, kind: 'embed', provider: p })),
 ];
 
+const OHLCV_SOURCE_LABEL = { birdeye: 'Birdeye OHLCV', gecko: 'GeckoTerminal OHLCV', pumpfun: 'pump.fun OHLCV' };
+
+function setChartView(id) {
+	if (state.chartView === id) return;
+	state.chartView = id;
+	writeChartView(id);
+	renderChart();
+}
+
 function chartViewBar() {
-	return el(
-		'div',
-		{ class: 'ld-chart-views', role: 'tablist', 'aria-label': 'Chart source' },
-		CHART_VIEWS.map(([label, value]) =>
-			el('button', {
-				class: `ld-int-btn${state.chartView === value ? ' active' : ''}`,
-				type: 'button',
-				role: 'tab',
-				'aria-selected': String(state.chartView === value),
-				text: label,
-				onclick: () => {
-					if (state.chartView === value) return;
-					state.chartView = value;
-					writeChartView(value);
-					renderChart();
-				},
-			}),
-		),
+	const buttons = CHART_VIEWS.map((view) =>
+		el('button', {
+			class: `ld-int-btn${state.chartView === view.id ? ' active' : ''}`,
+			type: 'button',
+			role: 'tab',
+			'data-view': view.id,
+			'aria-selected': String(state.chartView === view.id),
+			tabindex: state.chartView === view.id ? '0' : '-1',
+			text: view.label,
+			onclick: () => setChartView(view.id),
+		}),
 	);
+	// Roving tabindex: arrow keys move between sources, Home/End jump to the ends.
+	const onkeydown = (e) => {
+		const i = buttons.indexOf(document.activeElement);
+		if (i < 0) return;
+		const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: buttons.length - 1 }[e.key];
+		if (next == null) return;
+		e.preventDefault();
+		const id = CHART_VIEWS[(next + buttons.length) % buttons.length].id;
+		setChartView(id);
+		$('ld-chart').querySelector(`[data-view="${id}"]`)?.focus();
+	};
+	return el('div', { class: 'ld-chart-views', role: 'tablist', 'aria-label': 'Chart source', onkeydown }, buttons);
 }
 
-// DexScreener serves a TradingView-grade embeddable terminal keyed by the Solana
-// mint — it resolves the most-liquid pair itself, so no pair lookup is needed.
-function dexEmbedUrl() {
-	const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-	const params = new URLSearchParams({
-		embed: '1',
-		loadChartSettings: '0',
-		theme,
-		chartTheme: theme,
-		chartType: 'usd',
-		interval: '15',
-		info: '0',
-	});
-	return `https://dexscreener.com/solana/${encodeURIComponent(state.mint)}?${params}`;
+function currentTheme() {
+	return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 }
 
-function dexLink() {
-	return el('a', {
-		class: 'ld-chart-open',
-		href: `https://dexscreener.com/solana/${encodeURIComponent(state.mint)}`,
-		target: '_blank',
-		rel: 'noopener',
-		text: 'Open in DexScreener ↗',
-	});
+function openLink(href, label) {
+	return el('a', { class: 'ld-chart-open', href, target: '_blank', rel: 'noopener', text: `Open in ${label} ↗` });
 }
 
-// DexScreener is a chart, not a place to fill an order. Every coin page also
-// offers the trading terminals people actually execute on, straight to this
-// mint. Sourced from src/shared/trading-terminals.js so the links (and the GMGN
-// referral baked into its deep link) stay identical across the product.
+// A chart is not a place to fill an order. Every coin page also offers the
+// trading terminals people actually execute on, straight to this mint. Sourced
+// from src/shared/trading-terminals.js so the links (and the GMGN referral baked
+// into its deep link) stay identical across the product.
 function terminalLinksEl() {
 	return el(
 		'div',
@@ -1170,60 +905,135 @@ function terminalLinksEl() {
 	);
 }
 
-function renderDexChart(target) {
-	clearTimeout(state.dexFrameTimer);
-	const controls = el('div', { class: 'ld-chart-controls' }, [chartViewBar(), terminalLinksEl(), dexLink()]);
-	const wrap = el('div', { class: 'ld-dex-wrap' });
-	// The recoverable state: a sentence, a retry, and a way to see the chart
-	// anyway. Reached from two places, so it lives in one.
-	const showFallback = () => {
-		if (wrap.classList.contains('ld-dex-ready')) return;
-		clearTimeout(state.dexFrameTimer);
+function embedFrame(wrap, { src, title, name, page, label }) {
+	const fail = () => {
+		cancel();
 		wrap.replaceChildren(
-			el('div', { class: 'ld-empty ld-empty-sm' }, [
-				el('p', { text: "DexScreener's chart didn't load. It may be blocked or still indexing this coin." }),
-				el('div', { class: 'ld-dex-fallback-actions' }, [
-					el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Retry', onclick: () => renderChart() }),
-					dexLink(),
-				]),
-			]),
+			embedFallbackNode({
+				name,
+				href: page,
+				label: `Open in ${label}`,
+				onRetry: () => renderChart(),
+				className: 'ld-empty ld-empty-sm ld-embed-fallback',
+				buttonClassName: 'ld-btn ld-btn-ghost',
+			}),
 		);
 	};
 	const iframe = el('iframe', {
 		class: 'ld-dex-frame',
-		src: dexEmbedUrl(),
-		title: 'DexScreener live chart',
+		src,
+		title,
 		loading: 'lazy',
+		allow: 'clipboard-write; fullscreen',
+		referrerpolicy: 'strict-origin-when-cross-origin',
 		onload: () => {
-			clearTimeout(state.dexFrameTimer);
+			cancel();
 			wrap.classList.add('ld-dex-ready');
 		},
-		// An outright refusal (blocked host, DNS failure, a sandbox that rejects
-		// the frame) is knowable immediately. Without this the skeleton kept
-		// shimmering for the full watchdog window on a failure already decided.
-		onerror: showFallback,
+		// An outright refusal (blocked host, DNS failure) is knowable immediately.
+		onerror: fail,
 	});
+	// The watchdog clock starts once the frame is on screen, so a chart below the
+	// fold is never reported dead before it began loading.
+	const cancel = watchEmbed(wrap, { timeoutMs: DEFAULT_EMBED_TIMEOUT_MS, onTimeout: fail });
 	wrap.replaceChildren(el('div', { class: 'ld-skel ld-skel-chart' }), iframe);
-	section(target, 'Price', el('div', { class: 'ld-chart' }, [controls, wrap]), { tag: 'DexScreener · live' });
+	return cancel;
+}
 
-	// Watchdog: if the embed never loads (blocked, offline, sandbox), don't leave a
-	// dead skeleton — surface a recoverable error with a retry and a direct link.
-	state.dexFrameTimer = setTimeout(showFallback, 9000);
+async function renderEmbedChart(target, view, seq) {
+	const { provider } = view;
+	const wrap = el('div', { class: 'ld-dex-wrap' }, [el('div', { class: 'ld-skel ld-skel-chart' })]);
+	const openSlot = el('span', { class: 'ld-chart-open-slot' });
+	const controls = el('div', { class: 'ld-chart-controls' }, [chartViewBar(), terminalLinksEl(), openSlot]);
+	section(target, 'Price', el('div', { class: 'ld-chart' }, [controls, wrap]), { tag: `${provider.label} · live` });
+
+	let pool = null;
+	if (provider.needs === 'pool') {
+		try {
+			state.gecko ||= await resolveGeckoPool('solana', state.mint, { signal: AbortSignal.timeout(10_000) });
+		} catch {
+			if (seq !== state.chartSeq) return;
+			wrap.replaceChildren(
+				el('div', { class: 'ld-empty ld-empty-sm ld-embed-fallback' }, [
+					el('p', { text: `Could not reach ${provider.label} to find this coin's pool.` }),
+					el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Try again', onclick: () => renderChart() }),
+				]),
+			);
+			return;
+		}
+		if (seq !== state.chartSeq) return;
+		if (!state.gecko.indexed) {
+			// GeckoTerminal lists a pump.fun coin once it has traded enough. Until
+			// then its embed is a 404 page, so say so and point at charts that
+			// already cover the coin.
+			wrap.replaceChildren(
+				el('div', { class: 'ld-empty ld-empty-sm ld-embed-fallback' }, [
+					el('p', { class: 'ld-empty-title', text: `${provider.label} has not indexed this coin yet.` }),
+					el('p', { text: 'It lists new pump.fun coins once they build trading history. Birdeye, GMGN and DexScreener chart it from the first trade.' }),
+					el('div', { class: 'ld-dex-fallback-actions' }, [
+						el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Show Birdeye', onclick: () => setChartView('birdeye') }),
+						el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Check again', onclick: () => { state.gecko = null; renderChart(); } }),
+					]),
+				]),
+			);
+			return;
+		}
+		pool = state.gecko.pool;
+	}
+
+	const urls = chartEmbedUrls(provider.id, { chain: 'solana', token: state.mint, pool, theme: currentTheme() });
+	openSlot.replaceChildren(openLink(urls.page, provider.label));
+	state.chartTeardown = embedFrame(wrap, {
+		src: urls.embed,
+		title: `${provider.label} live chart`,
+		name: `The ${provider.label} chart`,
+		page: urls.page,
+		label: provider.label,
+	});
+}
+
+function renderTradingViewChart(target) {
+	const host = el('div', { class: 'ld-tv' });
+	const controls = el('div', { class: 'ld-chart-controls' }, [chartViewBar(), terminalLinksEl()]);
+	section(target, 'Price', el('div', { class: 'ld-chart' }, [controls, host]), { tag: 'TradingView · live candles' });
+	const chart = mountPriceChart({ host, mint: state.mint });
+	state.chartTeardown = () => chart.destroy();
+}
+
+// The iframe providers bake the theme in at load, so a live theme switch reloads
+// whichever embed is showing. Registered once per page.
+let chartThemeObserver = null;
+function watchChartTheme() {
+	if (chartThemeObserver) return;
+	chartThemeObserver = new MutationObserver(() => {
+		const view = CHART_VIEWS.find((v) => v.id === state.chartView);
+		if (view?.kind === 'embed') renderChart();
+	});
+	chartThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 }
 
 async function renderChart() {
 	const target = $('ld-chart');
+	const seq = ++state.chartSeq;
+	state.chartTeardown?.();
+	state.chartTeardown = null;
 	if (state.network !== 'mainnet') {
 		section(target, 'Price', el('div', { class: 'ld-empty' }, [el('p', { text: 'No price history for devnet coins.' })]));
 		return;
 	}
-	if (state.chartView === 'dexscreener') {
-		renderDexChart(target);
+	watchChartTheme();
+	const view = CHART_VIEWS.find((v) => v.id === state.chartView) || CHART_VIEWS[0];
+	if (view.kind === 'tradingview') {
+		renderTradingViewChart(target);
+		return;
+	}
+	if (view.kind === 'embed') {
+		await renderEmbedChart(target, view, seq);
 		return;
 	}
 	const controls = el('div', { class: 'ld-chart-controls' }, [chartViewBar(), chartIntervalBar()]);
 	const canvas = el('div', { class: 'ld-chart-canvas' }, [el('div', { class: 'ld-skel ld-skel-chart' })]);
-	section(target, 'Price', el('div', { class: 'ld-chart' }, [controls, canvas]), { tag: 'Birdeye OHLCV' });
+	section(target, 'Price', el('div', { class: 'ld-chart' }, [controls, canvas]), { tag: 'On-chain OHLCV' });
 
 	const interval = state.chartInterval;
 	const to = Math.floor(Date.now() / 1000);
@@ -1232,9 +1042,19 @@ async function renderChart() {
 		const body = await fetchJson(
 			`/api/pump/price-history?mint=${encodeURIComponent(state.mint)}&interval=${interval}&from=${from}&to=${to}`,
 		);
+		if (seq !== state.chartSeq) return;
+		const tag = target.querySelector('.ld-sec-tag');
+		if (tag && OHLCV_SOURCE_LABEL[body.source]) tag.textContent = OHLCV_SOURCE_LABEL[body.source];
 		const pts = (body.data || []).filter((p) => Number.isFinite(p.c));
 		if (pts.length < 2) {
-			canvas.replaceChildren(el('div', { class: 'ld-empty ld-empty-sm' }, [el('p', { text: 'Not enough trade history at this interval yet.' })]));
+			canvas.replaceChildren(
+				el('div', { class: 'ld-empty ld-empty-sm' }, [
+					el('p', { text: 'Not enough trade history at this interval for a line yet.' }),
+					el('div', { class: 'ld-dex-fallback-actions' }, [
+						el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Show live candles', onclick: () => setChartView('tradingview') }),
+					]),
+				]),
+			);
 			return;
 		}
 		const first = pts[0].c;
@@ -1257,6 +1077,7 @@ async function renderChart() {
 		}
 		canvas.replaceChildren(el('div', { class: 'ld-chart-readout' }, readout), areaChart(pts));
 	} catch (err) {
+		if (seq !== state.chartSeq) return;
 		// A coin with no liquidity pool has no chart to draw — that is an answer,
 		// not a failure, so it gets its own copy and no Retry button.
 		if (err?.status === 404 && err?.code === 'no_market') {
@@ -1282,80 +1103,73 @@ async function renderChart() {
 
 async function renderDistribution() {
 	const target = $('ld-distribution');
-	const intel = state.detail.intel;
-
-	let overview = null;
-	try {
-		overview = await fetchJson(`/api/coin/${encodeURIComponent(state.mint)}/cohorts`);
-	} catch {
-		/* not an indexed agent token — fall back to intel concentration below */
+	if (state.network !== 'mainnet') {
+		target.hidden = true;
+		return;
 	}
+	target.replaceChildren(el('div', { class: 'ld-skel', style: 'height:180px' }));
 
-	const rows = [];
-	let holderCount = overview?.holderCount ?? null;
-	let top1 = overview?.concentration?.top1Share ?? null;
-	let top10 = overview?.concentration?.top10Share ?? (intel?.concentration_top10 ?? null);
-	const label = overview?.concentration?.label || null;
-
-	if (holderCount == null && top10 == null) {
+	let stats = null;
+	try {
+		stats = await loadStats();
+	} catch {
+		/* rendered as the unavailable state below */
+	}
+	const h = stats?.holders;
+	if (!h) {
 		section(
 			target,
 			'Holders',
 			el('div', { class: 'ld-empty ld-empty-sm' }, [
-				el('p', { text: 'Holder distribution is not indexed for this coin yet.' }),
+				el('p', { text: stats ? 'Holder data is not indexed for this coin yet.' : 'Holder data is unavailable right now.' }),
+				stats ? null : el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Retry', onclick: () => renderDistribution() }),
 			]),
 		);
 		return;
 	}
 
-	const metric = (k, v, tone = '') =>
+	const metric = (k, v) =>
 		el('div', { class: 'ld-metric' }, [
 			el('span', { class: 'ld-metric-label', text: k }),
-			el('span', { class: `ld-metric-val ${tone}`, text: v }),
+			el('span', { class: 'ld-metric-val', text: v }),
 		]);
-
-	const concTone = top10 == null ? '' : top10 > 0.5 ? 'ld-danger' : top10 > 0.3 ? 'ld-warn' : 'ld-good';
 	const metrics = el('div', { class: 'ld-metrics' }, [
-		holderCount != null ? metric('Holders', compact(holderCount)) : null,
-		top1 != null ? metric('Top holder', pctText(top1)) : null,
-		top10 != null ? metric('Top 10', pctText(top10), concTone) : null,
-		label ? metric('Spread', label) : null,
+		metric('Holders', compact(h.count)),
+		metric('Top holder', share(h.top1_pct)),
+		metric('Top 10', share(h.top10_pct)),
+		metric('Dev', share(h.dev_pct)),
+		h.pool_pct ? metric('AMM pool', share(h.pool_pct)) : metric('Bonding curve', share(h.curve_pct)),
 	]);
 
-	// Concentration bar — top10 vs the rest.
-	let bar = null;
-	if (top10 != null) {
-		const t10 = Math.max(0, Math.min(100, top10 * 100));
-		bar = el('div', { class: 'ld-conc' }, [
-			el('div', { class: 'ld-conc-track', title: `Top 10 wallets hold ${Math.round(t10)}%` }, [
-				el('div', { class: `ld-conc-top ${concTone}`, style: `width:${t10}%` }),
+	const rows = (h.top || []).map((row, i) =>
+		el('a', {
+			class: 'ld-holder',
+			href: `https://solscan.io/account/${row.wallet}`,
+			target: '_blank',
+			rel: 'noopener noreferrer',
+			'aria-label': `Holder ${i + 1}, ${shortAddr(row.wallet)}, ${share(row.pct)} of supply`,
+		}, [
+			el('span', { class: 'ld-holder-rank', text: String(i + 1) }),
+			el('span', { class: 'ld-holder-addr', text: shortAddr(row.wallet, 4, 4) }),
+			row.is_dev ? el('span', { class: 'ld-holder-tag', text: 'Dev' }) : null,
+			el('span', { class: 'ld-holder-bar', 'aria-hidden': 'true' }, [
+				el('span', { style: `width:${Math.min(100, (row.pct || 0) * 100)}%` }),
 			]),
-			el('div', { class: 'ld-conc-legend' }, [
-				el('span', { text: `Top 10 · ${Math.round(t10)}%` }),
-				el('span', { text: `Everyone else · ${Math.round(100 - t10)}%` }),
-			]),
-		]);
-	}
+			el('span', { class: 'ld-holder-pct', text: share(row.pct) }),
+		]),
+	);
 
-	const cohorts = (overview?.cohorts || []).filter((c) => c.count != null && c.count > 0);
-	const cohortChips = cohorts.length
-		? el(
-				'div',
-				{ class: 'ld-cohorts' },
-				cohorts.map((c) =>
-					el('span', { class: 'ld-cohort', title: c.description || '' }, [
-						el('b', { text: compact(c.count) }),
-						el('span', { text: c.name }),
-					]),
-				),
-			)
-		: null;
-
-	section(target, 'Holders', el('div', { class: 'ld-dist' }, [metrics, bar, cohortChips]), {
-		tag: overview?.source === 'live' ? 'live · Helius' : overview ? 'snapshot' : 'engine',
-	});
+	section(
+		target,
+		'Holders',
+		el('div', { class: 'ld-dist' }, [
+			metrics,
+			rows.length ? el('div', { class: 'ld-holders' }, rows) : null,
+			el('p', { class: 'ld-ts-note', text: 'Shares are of total supply. The bonding curve and AMM pool are liquidity, not holders, so they are left out of the ranking.' }),
+		]),
+		{ tag: 'live · Helius' },
+	);
 }
-
 // ════════════════════════════════════════════════════════════════════════════
 // BUYBACK / BURN ECONOMICS
 // ════════════════════════════════════════════════════════════════════════════
@@ -1622,12 +1436,7 @@ function renderAgent() {
 	}
 
 	if (trader) {
-		const tone = scoreTone(trader.score);
 		const scoreEl = el('div', { class: 'ld-trader' }, [
-			el('div', { class: `ld-trader-score ld-quality-${tone}` }, [
-				el('span', { class: 'ld-trader-num', text: trader.score != null ? String(Math.round(trader.score)) : '—' }),
-				el('span', { class: 'ld-trader-max', text: 'TraderScore' }),
-			]),
 			el('div', { class: 'ld-trader-stats' }, [
 				trader.verified ? el('span', { class: 'ld-verified', html: verifiedBadge(true) }) : null,
 				el('div', { class: 'ld-trader-row' }, [
@@ -1845,8 +1654,6 @@ async function renderCommunity() {
 		const d = await res.json();
 		if (!d.ok || !d.overall || d.overall.count < 3) { sentWrap.replaceChildren(); return; }
 		const o = d.overall;
-		const scoreColor = o.score >= 60 ? 'var(--ld-good)' : o.score <= 40 ? 'var(--ld-bad)' : 'var(--ld-muted)';
-		const sentLabel = o.score >= 60 ? 'bullish' : o.score <= 40 ? 'bearish' : 'mixed';
 
 		const bars = [
 			['Positive', Math.round(o.posPct), 'var(--ld-good)'],
@@ -1870,8 +1677,7 @@ async function renderCommunity() {
 
 		sentWrap.replaceChildren(
 			el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:8px' }, [
-				el('span', { style: `font:600 12px var(--font-mono,monospace);color:${scoreColor}` }, [document.createTextNode(sentLabel)]),
-				el('span', { style: 'font:10px var(--font-mono,monospace);color:var(--ld-muted)' }, [document.createTextNode(`${o.count} comments`)]),
+				el('span', { style: 'font:600 12px var(--font-mono,monospace);color:var(--ld-muted)' }, [document.createTextNode(`${o.count} recent comments`)]),
 			]),
 			el('div', { class: 'ld-oracle-pillars' }, bars),
 			...examples,
@@ -2091,7 +1897,7 @@ function renderSkeleton() {
 		]),
 		el('div', { class: 'ld-hero-stats' }, Array.from({ length: 4 }, () => el('div', { class: 'ld-skel', style: 'height:46px' }))),
 	);
-	for (const id of ['ld-verdict', 'ld-chart', 'ld-agent', 'ld-oracle']) {
+	for (const id of ['ld-metrics', 'ld-chart', 'ld-agent']) {
 		$(id).replaceChildren(el('div', { class: 'ld-skel', style: 'height:120px' }));
 	}
 }
@@ -2174,7 +1980,7 @@ async function boot() {
 	const regName = detail.registry?.name || detail.intel?.name || '';
 	const regSym = detail.registry?.symbol || detail.intel?.symbol || '';
 	const pageTitle = [regSym ? `$${regSym}` : '', regName, 'three.ws'].filter(Boolean).join(' · ');
-	const pageDesc = `${regSym ? `$${regSym} ` : ''}on three.ws — live price, intelligence score, smart money, and trade history.`;
+	const pageDesc = `${regSym ? `$${regSym} ` : ''}on three.ws: live price, volume, holders, and trade history.`;
 	const ogImg = `https://three.ws/api/pump/launch-og?mint=${state.mint}`;
 	document.title = pageTitle;
 	setMeta('og:title', pageTitle);
@@ -2191,7 +1997,6 @@ async function boot() {
 	renderHero();
 	renderMetrics();
 	renderVerdict();
-	renderOracleConviction();
 	renderSmartMoney();
 	renderChart();
 	renderDistribution();
