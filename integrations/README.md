@@ -6,7 +6,7 @@ generated without leaving the DCC.
 
 | Plugin | Folder | Host |
 |---|---|---|
-| Blender add-on | [`blender/three_ws/`](blender/three_ws/) | Blender 4.0+ |
+| Blender extension | [`blender/three_ws/`](blender/three_ws/) | Blender 4.2+ |
 | ComfyUI nodes | [`comfyui/three_ws_nodes/`](comfyui/three_ws_nodes/) | ComfyUI |
 
 Driving Blender from an **agent** rather than by hand is a different job, and it

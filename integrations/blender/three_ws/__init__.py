@@ -1,21 +1,27 @@
-"""three.ws — Blender add-on.
+"""three.ws Forge: Blender extension.
 
 Generate a 3D model from a text prompt or a reference image with three.ws Forge,
 without leaving Blender. The model is reconstructed on three.ws (FLUX→TRELLIS by
-default, or Meshy/Tripo geometry path with your own key), then imported into the
-current scene.
+default, or the Meshy/Tripo geometry path with your own key), then imported into
+the current scene.
 
-Install:  zip this folder → Edit ▸ Preferences ▸ Add-ons ▸ Install… → enable
-"three.ws". Open the sidebar in the 3D Viewport (press N) → "three.ws" tab.
+Install from Edit > Preferences > Get Extensions (search "three.ws"), or build
+the package with ``blender --command extension build`` and use Install from
+Disk. Open the sidebar in the 3D Viewport (press N), then the "three.ws" tab.
+
+Every network call is gated on ``bpy.app.online_access``: when Blender's
+"Allow Online Access" preference is off (or Blender runs with --offline-mode)
+the add-on refuses to connect and tells the user how to enable it.
 
 Networking runs on a worker thread; the GLB import happens on Blender's main
-thread inside a modal timer (bpy is not thread-safe). Nothing is faked — the
+thread inside a modal timer (bpy is not thread-safe). Nothing is faked: the
 panel shows the real job status and elapsed time, and surfaces real errors.
 """
 
 import os
 import queue
 import tempfile
+import textwrap
 import threading
 
 import bpy
@@ -33,22 +39,41 @@ from .three_ws_client import (
     content_type_for_path,
 )
 
-bl_info = {
-    "name": "three.ws",
-    "author": "three.ws",
-    "version": (1, 0, 0),
-    "blender": (4, 0, 0),
-    "location": "View3D ▸ Sidebar ▸ three.ws",
-    "description": "Generate 3D models from text or images with three.ws Forge.",
-    "category": "Import-Export",
-    "doc_url": "https://three.ws/forge",
-}
+# -- online access ------------------------------------------------------------
+
+def _offline_reason():
+    """Return a user-facing reason when Blender forbids network access, else None.
+
+    Blender's add-on guidelines require honoring ``bpy.app.online_access``. When
+    ``online_access_override`` is set, the state was forced from the command
+    line, so the preference toggle cannot change it and the message says so.
+    """
+    if bpy.app.online_access:
+        return None
+    if bpy.app.online_access_override:
+        return (
+            "Online access is disabled for this Blender session (started with "
+            "--offline-mode). Restart Blender without it to use three.ws."
+        )
+    return (
+        "Online access is disabled. Enable Preferences > System > Network > "
+        "Allow Online Access to use three.ws."
+    )
+
+
+def _refuse_if_offline(operator):
+    """Report the offline reason on ``operator``; True means the call must stop."""
+    reason = _offline_reason()
+    if reason:
+        operator.report({"ERROR"}, f"three.ws: {reason}")
+        return True
+    return False
 
 
 # -- preferences --------------------------------------------------------------
 
 class ThreeWSPreferences(AddonPreferences):
-    bl_idname = __name__
+    bl_idname = __package__
 
     api_url: StringProperty(
         name="API URL",
@@ -75,7 +100,7 @@ class ThreeWSPreferences(AddonPreferences):
 
 
 def _prefs(context):
-    return context.preferences.addons[__name__].preferences
+    return context.preferences.addons[__package__].preferences
 
 
 # -- scene properties ---------------------------------------------------------
@@ -147,11 +172,15 @@ class THREEWS_OT_generate(Operator):
 
     @classmethod
     def poll(cls, context):
+        reason = _offline_reason()
+        if reason:
+            cls.poll_message_set(reason)
+            return False
         return not context.scene.three_ws.running
 
     def _worker(self, client, props, image_bytes, image_ct, dest_path):
         def on_progress(status, elapsed):
-            self._events.put(("progress", f"{status} — {int(elapsed)}s"))
+            self._events.put(("progress", f"{status}, {int(elapsed)}s"))
 
         try:
             backend = None if props["backend"] == "auto" else props["backend"]
@@ -171,10 +200,12 @@ class THREEWS_OT_generate(Operator):
             self._events.put(("done", dest_path))
         except ThreeWSError as exc:
             self._events.put(("error", exc.message))
-        except Exception as exc:  # network/file errors → real message, never silent
+        except Exception as exc:  # network/file errors surface as a real message, never silent
             self._events.put(("error", str(exc)))
 
     def execute(self, context):
+        if _refuse_if_offline(self):
+            return {"CANCELLED"}
         props = context.scene.three_ws
         prefs = _prefs(context)
 
@@ -262,7 +293,7 @@ class THREEWS_OT_generate(Operator):
             self.report({"ERROR"}, "three.ws: generation finished without a model.")
             return {"CANCELLED"}
 
-        # GLB import must run on the main thread — that's why it's here, not in
+        # GLB import must run on the main thread, which is why it is here and not in
         # the worker. Select + frame the freshly imported objects.
         before = set(context.scene.objects)
         try:
@@ -308,7 +339,17 @@ class THREEWS_OT_check_catalog(Operator):
     bl_idname = "threews.check_catalog"
     bl_label = "Test connection"
 
+    @classmethod
+    def poll(cls, context):
+        reason = _offline_reason()
+        if reason:
+            cls.poll_message_set(reason)
+            return False
+        return True
+
     def execute(self, context):
+        if _refuse_if_offline(self):
+            return {"CANCELLED"}
         prefs = _prefs(context)
         client = ThreeWSClient(prefs.api_url, provider_key=prefs.provider_key or None)
         try:
@@ -334,6 +375,18 @@ class THREEWS_PT_panel(Panel):
         layout = self.layout
         props = context.scene.three_ws
 
+        reason = _offline_reason()
+        if reason:
+            box = layout.box()
+            box.alert = True
+            col = box.column(align=True)
+            col.label(text="Online access is off", icon="ERROR")
+            for line in _wrap(reason, 34):
+                col.label(text=line)
+            if not bpy.app.online_access_override:
+                op = box.operator("screen.userpref_show", text="Open Preferences", icon="PREFERENCES")
+                op.section = "SYSTEM"
+
         layout.prop(props, "mode", expand=True)
         if props.mode == "text":
             layout.prop(props, "prompt")
@@ -358,6 +411,11 @@ class THREEWS_PT_panel(Panel):
 
         layout.separator()
         layout.operator(THREEWS_OT_check_catalog.bl_idname, icon="URL")
+
+
+def _wrap(text, width):
+    """Split a message into panel-sized label lines."""
+    return textwrap.wrap(text, width) or [text]
 
 
 # -- registration -------------------------------------------------------------
