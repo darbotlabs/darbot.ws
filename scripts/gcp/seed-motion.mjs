@@ -58,6 +58,7 @@ import {
 	closeLoopSeam,
 	flattenRootDrift,
 	gateMotionClip as gateRestBasis,
+	lockRootToContacts,
 	needsRebase,
 	rebaseToCanonicalRest,
 	toLibraryClip,
@@ -297,14 +298,20 @@ async function runPrompt(prompt) {
 	// guarantees no frame ever does.
 	const flattened = flattenRootDrift(fetched);
 
+	// Then give the body back the travel its own feet imply. A flattened walk is a
+	// treadmill whose planted foot is dragged under a stationary body; the authored
+	// library's walks carry their root motion, and so must ours. A clip with too
+	// little foot contact to trust (floor work, a jump) keeps the flattened root.
+	const locked = lockRootToContacts(flattened.clip);
+
 	// A loop prompt needs a clip that actually loops, and the sampler never
 	// returns one: it samples a window, so the last frame has no reason to meet
 	// the first. Close the seam before the gate sees it, or 41% of the prompt
 	// library is rejected for a defect we know how to repair. The repair
 	// self-verifies and returns the original clip untouched if closing the seam
 	// would cost more than it buys.
-	const seam = prompt.loop === true ? closeLoopSeam(flattened.clip) : null;
-	const raw = seam ? seam.clip : flattened.clip;
+	const seam = prompt.loop === true ? closeLoopSeam(locked.clip) : null;
+	const raw = seam ? seam.clip : locked.clip;
 
 	const verdict = gateWithBasis(raw, prompt);
 
@@ -342,6 +349,11 @@ async function runPrompt(prompt) {
 			speed_m_s: Number(flattened.speed.toFixed(4)),
 			removed_m: Number(flattened.removed.toFixed(4)),
 			residual_m: Number(flattened.residual.toFixed(4)),
+		},
+		root_lock: {
+			applied: locked.applied,
+			contact_share: Number(locked.contactShare.toFixed(3)),
+			speed_m_s: Number(locked.speed.toFixed(4)),
 		},
 		status: verdict.pass ? 'accepted' : 'rejected',
 		reasons: verdict.reasons,

@@ -1096,6 +1096,166 @@ export function flattenRootDrift(clip, opts = {}) {
 	};
 }
 
+// ── Root travel from foot contact ───────────────────────────────────────────
+//
+// Flattening the drift is right for a clip that stands still and wrong for one
+// that walks. The authored library does NOT ship in-place locomotion: measured
+// on 2026-09-18, its walks carry their root motion (a catwalk travels 1.23 m, a
+// careful walk 1.32 m, and their planted feet slide 0.09 m and 0.13 m). A
+// generated walk with its root pinned is a treadmill: the legs stride and the
+// planted foot is dragged backward under a body that goes nowhere, which the
+// foot-slide rule rightly rejects. Every locomotion prompt in the first live
+// batch failed exactly that way (slide 5 to 21 times its stride).
+//
+// The lane's own root channel cannot be kept instead, because it carries no
+// prompt signal (see ROOT_DRIFT). So the travel is derived from the one place
+// the motion does carry it: the feet. While a foot is planted it should stay
+// put in the world, so the body must travel by exactly the opposite of that
+// foot's hips-relative motion. Between plants (a run's flight phase, a foot
+// switch) the velocity is interpolated across the gap. The result is smoothed
+// over ROOT_LOCK.SMOOTH_SECONDS, which is what keeps the gate honest: the root
+// follows the clip's average stride, not every sample of the foot, so a foot
+// that genuinely skates relative to a steady gait still reads as a skate.
+//
+// This is standard mocap cleanup (root extraction from foot contacts), and it is
+// harmless for a clip that stands still: an idle's planted feet barely move
+// relative to its hips, so its derived travel is the same few centimetres of
+// sway that flattening would have kept.
+
+export const ROOT_LOCK = Object.freeze({
+	// Share of frame pairs that must have a planted foot on both ends before the
+	// feet are trusted to carry the root. Below it the clip is floor work, a jump
+	// or an aerial, and the flattened root is kept.
+	MIN_CONTACT_SHARE: 0.3,
+	// Centred smoothing window for the derived velocity. A third of a second is
+	// about one step at a walk: long enough to average across a foot switch,
+	// short enough to follow a real change of pace.
+	SMOOTH_SECONDS: 0.33,
+});
+
+function lowerGroundedFoot(world, floorY) {
+	const left = world.LeftToeBase ?? world.LeftFoot;
+	const right = world.RightToeBase ?? world.RightFoot;
+	const hips = world.Hips;
+	if (!left || !right || !hips) return null;
+	const entry = left[1] <= right[1] ? { side: 'Left', pos: left } : { side: 'Right', pos: right };
+	const grounded =
+		entry.pos[1] - floorY <= MOTION_GATE.PLANT_BAND && hips[1] - floorY >= MOTION_GATE.UPRIGHT_HIP_HEIGHT;
+	return grounded ? { side: entry.side, rel: [entry.pos[0] - hips[0], entry.pos[2] - hips[2]] } : null;
+}
+
+/**
+ * Replace a clip's horizontal root travel with the travel its planted feet imply.
+ *
+ * Returns a NEW clip; the input is not modified. A clip with no root position
+ * track, too few frames, or too little foot contact to trust is returned
+ * unchanged with `applied: false`, so this is always safe to call.
+ *
+ * @param {any} clip
+ * @param {{ minContactShare?: number, smoothSeconds?: number }} [opts]
+ * @returns {{ clip: any, applied: boolean, contactShare: number, travel: number, speed: number }}
+ */
+export function lockRootToContacts(clip, opts = {}) {
+	const minShare = opts.minContactShare ?? ROOT_LOCK.MIN_CONTACT_SHARE;
+	const smoothSeconds = opts.smoothSeconds ?? ROOT_LOCK.SMOOTH_SECONDS;
+	const unchanged = (contactShare = 0) => ({ clip, applied: false, contactShare, travel: 0, speed: 0 });
+
+	const tracks = clip?.tracks ?? [];
+	const index = tracks.findIndex((t) => String(t?.name || '') === 'Hips.position');
+	if (index === -1) return unchanged();
+	const track = tracks[index];
+	const times = Array.from(track.times ?? []);
+	const values = Array.from(track.values ?? []);
+	const n = times.length;
+	if (n < 3 || values.length !== n * 3) return unchanged();
+
+	const worlds = new Array(n);
+	let floorY = Infinity;
+	for (let i = 0; i < n; i += 1) {
+		worlds[i] = forwardKinematicsFrame(clip, i);
+		for (const bone of ['LeftToeBase', 'LeftFoot', 'RightToeBase', 'RightFoot']) {
+			const y = worlds[i][bone]?.[1];
+			if (Number.isFinite(y)) floorY = Math.min(floorY, y);
+		}
+	}
+	if (!Number.isFinite(floorY)) return unchanged();
+	// A toe and its foot are both candidates for the floor above; the lower of
+	// the pair is what lowerGroundedFoot judges, so the band is measured from it.
+	const contacts = worlds.map((w) => lowerGroundedFoot(w, floorY));
+
+	// Per-step body velocity (metres per frame) wherever the same foot is planted
+	// on both ends of the step; null where it is not.
+	const velocity = new Array(n).fill(null);
+	let defined = 0;
+	for (let i = 1; i < n; i += 1) {
+		const a = contacts[i - 1];
+		const b = contacts[i];
+		if (!a || !b || a.side !== b.side) continue;
+		velocity[i] = [-(b.rel[0] - a.rel[0]), -(b.rel[1] - a.rel[1])];
+		defined += 1;
+	}
+	const contactShare = defined / (n - 1);
+	if (contactShare < minShare) return unchanged(contactShare);
+
+	// Fill the gaps by linear interpolation between the defined neighbours, and
+	// hold the nearest defined value at either end.
+	const filled = velocity.slice();
+	let last = -1;
+	for (let i = 1; i < n; i += 1) {
+		if (!velocity[i]) continue;
+		if (last === -1) {
+			for (let k = 1; k < i; k += 1) filled[k] = velocity[i];
+		} else if (i - last > 1) {
+			for (let k = last + 1; k < i; k += 1) {
+				const t = (k - last) / (i - last);
+				filled[k] = [
+					velocity[last][0] + (velocity[i][0] - velocity[last][0]) * t,
+					velocity[last][1] + (velocity[i][1] - velocity[last][1]) * t,
+				];
+			}
+		}
+		last = i;
+	}
+	for (let k = last + 1; k < n; k += 1) filled[k] = velocity[last];
+	filled[0] = [0, 0];
+
+	const duration = times[n - 1] - times[0];
+	const fps = duration > 0 ? (n - 1) / duration : 30;
+	const half = Math.max(1, Math.round((smoothSeconds * fps) / 2));
+	const smoothed = new Array(n);
+	smoothed[0] = [0, 0];
+	for (let i = 1; i < n; i += 1) {
+		let sx = 0;
+		let sz = 0;
+		let count = 0;
+		for (let k = Math.max(1, i - half); k <= Math.min(n - 1, i + half); k += 1) {
+			sx += filled[k][0];
+			sz += filled[k][1];
+			count += 1;
+		}
+		smoothed[i] = [sx / count, sz / count];
+	}
+
+	const out = values.slice();
+	let x = values[0];
+	let z = values[2];
+	let travel = 0;
+	for (let i = 1; i < n; i += 1) {
+		x += smoothed[i][0];
+		z += smoothed[i][1];
+		travel += Math.hypot(smoothed[i][0], smoothed[i][1]);
+		out[i * 3] = x;
+		out[i * 3 + 2] = z;
+	}
+	out[0] = values[0];
+	out[2] = values[2];
+
+	const result = { ...clip, tracks: tracks.slice() };
+	result.tracks[index] = { ...track, times, values: out };
+	const net = Math.hypot(x - values[0], z - values[2]);
+	return { clip: result, applied: true, contactShare, travel, speed: duration > 0 ? net / duration : 0 };
+}
+
 export const LOOP_SEAM = Object.freeze({
 	// Never cut away more than this fraction of the clip hunting for a cycle: a
 	// clip trimmed to a third of its length is a different clip.
