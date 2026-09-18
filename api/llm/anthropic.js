@@ -413,8 +413,41 @@ async function addMonthlyTokens(agentId, delta) {
 
 const messageContentSchema = z.union([z.string(), z.array(z.any())]);
 
+// Output ceiling this proxy grants. Anthropic SDK clients ask for far more by
+// default (the Claude Code CLI sends 32000 on every turn), and rejecting that
+// with a 400 turned a whole class of standard clients away over one field they
+// do not choose. Larger asks are clamped to this instead, which is what the
+// caller would have been held to anyway.
+export const MAX_OUTPUT_TOKENS = 16_000;
+
+const SYSTEM_MAX_CHARS = 64_000;
+
+// The Messages API accepts `system` as a string or as an array of text blocks,
+// and the official SDKs send the array (with per-block cache_control) whenever
+// they cache. Both shapes are accepted and bounded by the same total length.
+const systemSchema = z.union([
+	z.string().max(SYSTEM_MAX_CHARS),
+	z
+		.array(z.object({ type: z.literal('text'), text: z.string() }).passthrough())
+		.max(32)
+		.refine((blocks) => blocks.reduce((n, b) => n + b.text.length, 0) <= SYSTEM_MAX_CHARS, {
+			message: `system must be at most ${SYSTEM_MAX_CHARS} characters`,
+		}),
+]);
+
+/**
+ * Collapse a block-array `system` to the plain string every lane below reads.
+ * The OpenAI-shape lanes need a string, and the Anthropic lanes get one cache
+ * breakpoint back from sanitizeAnthropicBody on a long prompt, so nothing a
+ * caller's block markers bought is lost.
+ */
+export function flattenSystem(system) {
+	if (!Array.isArray(system)) return system;
+	return system.map((b) => b.text).filter(Boolean).join('\n\n');
+}
+
 const bodySchema = z.object({
-	system: z.string().max(64_000).optional(),
+	system: systemSchema.optional(),
 	messages: z
 		.array(
 			z.object({
@@ -426,7 +459,12 @@ const bodySchema = z.object({
 		.max(200),
 	tools: z.array(z.any()).max(64).optional(),
 	model: z.string().max(100).optional(),
-	max_tokens: z.number().int().positive().max(16_000).optional(),
+	max_tokens: z
+		.number()
+		.int()
+		.positive()
+		.transform((n) => Math.min(n, MAX_OUTPUT_TOKENS))
+		.optional(),
 	temperature: z.number().min(0).max(2).optional(),
 	thinking: z.any().optional(),
 	stream: z.boolean().optional(),
@@ -458,7 +496,10 @@ async function resolveEmbedPolicy(id) {
 
 export default wrap(async (req, res) => {
 	const url = new URL(req.url, 'http://x');
-	const agentId = url.searchParams.get('agent');
+	// `?agent=` on the canonical path, or the `:agent` path segment an Anthropic
+	// SDK client reaches through api/llm/anthropic/agents/[agent]/v1/messages.js
+	// (the router binds that segment to req.query.agent).
+	const agentId = url.searchParams.get('agent') || (typeof req.query?.agent === 'string' ? req.query.agent : null);
 
 	let policy = null;
 	if (agentId) policy = await resolveEmbedPolicy(agentId);
@@ -537,6 +578,7 @@ export default wrap(async (req, res) => {
 
 	const rawBody = await readJson(req);
 	const body = parse(bodySchema, rawBody);
+	if (body.system !== undefined) body.system = flattenSystem(body.system);
 	const requestedModel = resolveRequestedModel(body.model, policy.brain?.model);
 
 	// Ordered fallback chain for 429 / 5xx from OpenRouter free tier:
@@ -1000,7 +1042,20 @@ export default wrap(async (req, res) => {
 // lane out of the fallback chain.
 const STREAM_USAGE_PROVIDERS = new Set(['openrouter', 'groq', 'nvidia', 'sambanova', 'grok']);
 
-function anthropicBodyToOpenAI(body, { provider } = {}) {
+// A tool_result's content is a string or an array of content blocks. Agentic
+// SDK clients send the array form ([{ type: 'text', text }]) on every tool
+// call; handing that to an OpenAI-shape model as serialized JSON makes it read
+// its own tool output through a layer of escaping. Text blocks are joined as
+// text; anything else (an image block) keeps the JSON form.
+export function toolResultText(content) {
+	if (typeof content === 'string') return content;
+	if (Array.isArray(content) && content.every((b) => b?.type === 'text' && typeof b.text === 'string')) {
+		return content.map((b) => b.text).join('\n');
+	}
+	return JSON.stringify(content ?? '');
+}
+
+export function anthropicBodyToOpenAI(body, { provider } = {}) {
 	const messages = [];
 	if (body.system) messages.push({ role: 'system', content: body.system });
 
@@ -1020,10 +1075,7 @@ function anthropicBodyToOpenAI(body, { provider } = {}) {
 					messages.push({
 						role: 'tool',
 						tool_call_id: block.tool_use_id,
-						content:
-							typeof block.content === 'string'
-								? block.content
-								: JSON.stringify(block.content ?? ''),
+						content: toolResultText(block.content),
 					});
 				}
 			}
