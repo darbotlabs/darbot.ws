@@ -22,7 +22,7 @@
 
 import { createSafetyPanel } from '../shared/safety-panel.js';
 import { proxiedImageURL } from '../ipfs.js';
-import { mountPriceChart } from './chart.js';
+import { mountSwitchableChart } from '../shared/chart-switcher.js';
 import { mountTradesTape } from './trades-tape.js';
 import { buy, sell, quote } from './trade.js';
 import {
@@ -186,7 +186,7 @@ export function createFocusPane({ store, bus, enrich, mount }) {
 		teardownChart();
 		const host = $('[data-host="chart"]');
 		if (!host) return;
-		chart = mountPriceChart({ host, mint });
+		chart = mountSwitchableChart({ host, mint, network: store.getNetwork() });
 	}
 
 	function mountTape(mint) {

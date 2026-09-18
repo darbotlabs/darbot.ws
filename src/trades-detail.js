@@ -23,7 +23,7 @@
  * honest "unavailable" note — never a blank void, never a fake value.
  */
 
-import { mountPriceChart } from './mission-control/chart.js';
+import { mountSwitchableChart } from './shared/chart-switcher.js';
 import { mountBondingCurve } from './widgets/bonding-curve.js';
 import { mountBubblemap } from './trades-bubblemap.js';
 import { mountTradeTape } from './trades-tape.js';
@@ -157,7 +157,7 @@ export function mountDetail(host, opts = {}) {
 	}
 
 	// ── live widgets mount immediately (they self-fetch) ──────────────────────────
-	try { teardowns.push(mountPriceChart({ host: $('[data-host="chart"]'), mint })); } catch (e) { chartFail($('[data-host="chart"]')); }
+	try { teardowns.push(mountSwitchableChart({ host: $('[data-host="chart"]'), mint, network })); } catch (e) { chartFail($('[data-host="chart"]')); }
 	try { teardowns.push(mountBondingCurve($('[data-host="curve"]'), { mint, network, showPoweredBy: false })); } catch { /* curve optional */ }
 	try { teardowns.push(mountTradeTape($('[data-host="tape"]'), { mint })); } catch { /* tape optional */ }
 

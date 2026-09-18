@@ -1,14 +1,25 @@
 {
-	"generated_at": "2026-09-18T08:52:43.327Z",
+	"generated_at": "2026-09-18T08:56:35.788Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3705,
+	"total": 3707,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "Choose your chart everywhere a coin is charted, now including DEXTools",
+			"summary": "Every place three.ws draws a coin's price chart now lets you switch to the chart you trust. The Trade Terminal at /trades and Mission Control used to show only the platform's own live candles; both now have a source bar with DexScreener, Birdeye, GMGN, DEXTools and GeckoTerminal one click away, the same choice already offered on coin pages and launch pages. DEXTools is new on all four. Your pick is remembered and follows you from coin to coin, the bar works from the keyboard with the arrow keys, and each chart comes with a link that opens the same market on the provider's own site. If a provider cannot draw a coin yet, or its chart is blocked by your browser or network, you get a plain explanation with a retry and a working alternative instead of an empty box.",
+			"link": "/trades",
+			"tags": [
+				"feature",
+				"improvement"
+			]
+		},
 		{
 			"date": "2026-09-18",
 			"type": "update",
@@ -51,6 +62,16 @@
 			"tags": [
 				"feature",
 				"improvement"
+			]
+		},
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "The Trade Terminal finally looks the way it was designed",
+			"summary": "The Trade Terminal at /trades was written against a set of colors and fonts that the page itself never defined, so browsers quietly fell back to their defaults: Times New Roman text, oversized controls and missing panel colors. The page now defines its own palette, in both dark and light themes, and renders as the dense, monospaced trading terminal it was meant to be.",
+			"link": "/trades",
+			"tags": [
+				"fix"
 			]
 		},
 		{
@@ -1594,28 +1615,6 @@
 			"title": "Paying for something no longer depends on our wallet having gas in it",
 			"summary": "Every Solana payment on three.ws was quietly gasless: we paid the tiny network fee on your behalf so you could pay with USDC or $THREE without owning any SOL. That is a convenience, but it had been wired as a requirement, so when the wallet we pay those fees from ran empty, every paid page stopped accepting money altogether. The club door and its dance tips returned an error for four days, and sixteen other paid endpoints (asset downloads, skill calls, print orders, cosmetic purchases and the rest) were in the same state, all of them sitting on a perfectly good account that was ready to receive. Receiving money never actually needed our wallet to have anything in it. When we cannot cover the fee, the payment now simply asks you to cover it yourself, which is a fraction of a cent and what most wallets do everywhere else, and the checkout tells you before you approve rather than letting your wallet be the first to mention it. Gasless comes back on its own the moment our wallet is topped up. Two related things got clearer: paying in $THREE stays available in that mode instead of disappearing, and if your own wallet is short on SOL the message now says so and tells you to add a little, instead of claiming we were the ones with the problem.",
 			"link": "/club",
-			"tags": [
-				"fix",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Robinhood Portfolios can now show you what a basket would have done, and what the rebalancing did to it",
-			"summary": "Every generated portfolio now comes with a backtest, and it runs the basket twice: once rebalanced on the schedule it published, and once left alone. The gap between those two lines is the whole reason to pick one schedule over another, and it goes both ways, since rebalancing quietly harvests the swings in a basket whose holdings move against each other and quietly gives up gains in one where a single holding keeps winning. Coverage is stated rather than glossed over: a holding with no price history is named and left out, the window shown is only the stretch where every remaining holding has real observations, and nothing is filled in to close a gap. Getting that history at all took some doing, because this chain keeps no price archive and produces about 864,000 blocks a day, so reading a month of prices back off the chain is not something a page can do while you wait. Tokenized stocks are covered from their price feeds going back weeks, and a nightly snapshot now records the whole market so coverage keeps growing for everything else, memecoins included. Sharing a portfolio also got fixed: a link now carries the portfolio itself rather than the sentence that produced it, so what you send is exactly what the other person opens, where before the wording was re-run and could quietly come back as a different basket. There is a new endpoint for checking that a portfolio document really is the one a portfolio was published under, and a client library for developers who want the market, the generator, the backtest and that check from their own code. Along the way two data bugs were fixed that were quietly under-reporting the market: the tokenized-stock board had been describing only a couple of tokens per batch instead of all thirty, and the price-history reads had been silently returning less history the more of it you asked for.",
-			"link": "/markets/robinhood/portfolios",
-			"tags": [
-				"feature",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Text to 3D no longer stops when our image storage does",
-			"summary": "Turning a written prompt into a model takes one step you never see: we paint a reference picture of what you asked for, save it somewhere our sculpting engines can read, and hand them the link. If that save failed, the whole thing was over before a graphics card was ever asked for anything, and the error you got back was our storage provider's own wording about signatures and access keys, which told you nothing you could act on. Making a model from a photo you upload was unaffected, because it brings its own picture, so half the feature could look perfectly healthy while the other half was completely down. Our own engines never needed that saved copy: they accept the picture itself, sent along with the request. So when storage will not take the write, the reference view now travels inside the job and your model still gets built. The engines that genuinely need a link, the outside ones you can pick by name, now say so in plain language and point you at the ones still running, instead of failing with a message about our secret keys. Generations that take this route lose the extra angles we normally paint to fill in a subject's back, so they are built from the single front view.",
-			"link": "/forge",
 			"tags": [
 				"fix",
 				"improvement"

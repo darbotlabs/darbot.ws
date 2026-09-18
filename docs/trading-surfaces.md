@@ -70,7 +70,7 @@ The proof stream. The left rail is a public feed of closed positions where a pla
 
 Click any trade (or paste any mint) and the center pane becomes a full analytics workstation for that coin:
 
-- Candlestick chart with live SSE updates, plus the bonding-curve widget
+- Candlestick chart with live SSE updates and a chart-source bar (DexScreener, Birdeye, GMGN, DEXTools, GeckoTerminal; see [coin pages](./coin-pages.md)), plus the bonding-curve widget
 - Intel signal gauges (snipe ratio, top-10 concentration) and holder/cohort distribution
 - The **funder bubblemap** — who funded the buying wallets, clustered
 - Smart-money pedigree and a wallet-footprint table with Solscan links and DEV tags

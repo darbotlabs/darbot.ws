@@ -52,15 +52,24 @@ Grotesk display face).
     contract address, for coins with a Solana mint or a supported EVM contract
     (GMGN indexes Solana, Ethereum, Base and BSC only, so it is offered only
     there).
-  - **GeckoTerminal**: the on-chain chart keyed by the token's most-liquid
-    pool, resolved server-side via `GET /api/coin/pool` (below).
+  - **DEXTools** and **GeckoTerminal**: on-chain charts keyed by the token's
+    most-liquid pool rather than the token, resolved server-side via
+    `GET /api/coin/pool` (below). Each resolves the pool its own way
+    (`resolveChartPool()` in the shared module): GeckoTerminal is also asked
+    whether it has indexed that pool, because its embed is a 404 page until it
+    has, while DEXTools charts any pair it is handed. DEXTools is embedded
+    through its published `/widget-chart/` route only; its normal `/app/` pages
+    refuse framing and are used just for the "Open in DEXTools" link.
 
   The picked source is remembered across coins and visits (localStorage
   `tws_coin_chart_source`), and the embeds follow the site's light/dark theme.
   Every embed URL shape lives once in
-  [`src/shared/chart-embeds.js`](../src/shared/chart-embeds.js), so this page and
-  the launch coin page `/launches/<mint>` build identical embeds and a provider
-  changing its format is a one-file fix. Providers that refuse cross-origin
+  [`src/shared/chart-embeds.js`](../src/shared/chart-embeds.js), so this page,
+  the launch coin page `/launches/<mint>`, the `/trades` deep-dive and Mission
+  Control (the last two through the compact switcher in
+  [`src/shared/chart-switcher.js`](../src/shared/chart-switcher.js)) build
+  identical embeds and a provider changing its format is a one-file fix. Adding
+  a provider there adds its tab on all four surfaces. Providers that refuse cross-origin
   framing or need a key are left out rather than offered as a tab that can only
   fail.
 
@@ -544,7 +553,7 @@ All data is real and fetched at runtime — nothing is hardcoded or sampled:
 | `/api/coin/detail`      | CoinGecko `/coins/{id}` or `/coins/solana/contract/{mint}` (with community + developer blocks) | 60 s |
 | `/api/coin/tickers`     | CoinGecko `/coins/{id}/tickers` (exchange listings, ±2% depth) | 120 s     |
 | `/api/coin/ohlc`        | CoinGecko `/coins/{id}/market_chart`                       | 120 s        |
-| `/api/coin/pool`        | GeckoTerminal top-pool lookup by token address (feeds the GeckoTerminal chart embed) | 60 s + 300 s CDN |
+| `/api/coin/pool`        | Top-pool lookup by token address (feeds the pool-keyed chart embeds: DEXTools, GeckoTerminal) | 60 s + 300 s CDN |
 | `/api/coin/markets`     | CoinGecko `/coins/markets` (optional `category=`), `/search` | 60 s / 300 s |
 | `/api/coin/categories`  | CoinGecko `/coins/categories`                              | 300 s        |
 | `/api/coin/category`    | CoinGecko `/coins/categories` (one category + rank + neighbours) | 600 s   |
@@ -624,7 +633,7 @@ text before they reach the client.
 | News archive                | [`pages/news-archive.html`](../pages/news-archive.html) + [`src/news-archive.js`](../src/news-archive.js)                                |
 | News engine + sources       | [`api/_lib/news.js`](../api/_lib/news.js) + [`api/_lib/news-sources.js`](../api/_lib/news-sources.js), endpoints in [`api/news/`](../api/news) |
 | Shared news renderers       | [`src/shared/news-render.js`](../src/shared/news-render.js); table primitives in [`src/shared/market-table.js`](../src/shared/market-table.js) |
-| Shared chart embeds         | [`src/shared/chart-embeds.js`](../src/shared/chart-embeds.js): the third-party embed URLs `/coin/:id` and `/launches/<mint>` both build from |
+| Shared chart embeds         | [`src/shared/chart-embeds.js`](../src/shared/chart-embeds.js): the third-party embed URLs every chart surface builds from; [`src/shared/chart-switcher.js`](../src/shared/chart-switcher.js): the compact source switcher `/trades` and Mission Control mount |
 | Shared design system        | [`src/coin-pages.css`](../src/coin-pages.css) (Inter, Space Grotesk, JetBrains Mono self-hosted in `public/fonts/`)                      |
 | Shared formatters           | [`src/shared/coin-format.js`](../src/shared/coin-format.js) — unit-tested in [`tests/coin-format.test.js`](../tests/coin-format.test.js) |
 | API proxies                 | [`api/coin/`](../api/coin): one file per `/api/coin/*` endpoint in the table above (`detail.js`, `ohlc.js`, `pool.js`, `markets.js`, `tickers.js`, `categories.js`, `category.js`, `exchanges.js`, `exchange.js`, `derivatives.js`, `rates.js`, `trending.js`, `global.js`, `fear-greed.js`, `gas.js`, `news.js`, `liquidations.js`) |

@@ -1,11 +1,22 @@
 {
-	"generated_at": "2026-09-18T08:52:43.272Z",
+	"generated_at": "2026-09-18T08:56:35.750Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
 	"entries": [
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "Choose your chart everywhere a coin is charted, now including DEXTools",
+			"summary": "Every place three.ws draws a coin's price chart now lets you switch to the chart you trust. The Trade Terminal at /trades and Mission Control used to show only the platform's own live candles; both now have a source bar with DexScreener, Birdeye, GMGN, DEXTools and GeckoTerminal one click away, the same choice already offered on coin pages and launch pages. DEXTools is new on all four. Your pick is remembered and follows you from coin to coin, the bar works from the keyboard with the arrow keys, and each chart comes with a link that opens the same market on the provider's own site. If a provider cannot draw a coin yet, or its chart is blocked by your browser or network, you get a plain explanation with a retry and a working alternative instead of an empty box.",
+			"link": "/trades",
+			"tags": [
+				"feature",
+				"improvement"
+			]
+		},
 		{
 			"date": "2026-09-18",
 			"type": "update",
@@ -48,6 +59,16 @@
 			"tags": [
 				"feature",
 				"improvement"
+			]
+		},
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "The Trade Terminal finally looks the way it was designed",
+			"summary": "The Trade Terminal at /trades was written against a set of colors and fonts that the page itself never defined, so browsers quietly fell back to their defaults: Times New Roman text, oversized controls and missing panel colors. The page now defines its own palette, in both dark and light themes, and renders as the dense, monospaced trading terminal it was meant to be.",
+			"link": "/trades",
+			"tags": [
+				"fix"
 			]
 		},
 		{
