@@ -77,60 +77,6 @@ async function officialRepoState() {
 	);
 }
 
-async function nirholasCandidates() {
-	const repos = [];
-	for (let page = 1; page <= 4; page += 1) {
-		const batch = await fetchJson(
-			`https://api.github.com/users/nirholas/repos?per_page=100&page=${page}&type=public`,
-			{ github: true },
-		);
-		repos.push(...batch);
-		if (batch.length < 100) break;
-	}
-	const relevant = /pump|memecoin|solana launch|creator reward/i;
-	return repos
-		.filter((repo) => repo.name === 'three.ws' || relevant.test(`${repo.name} ${repo.description ?? ''} ${(repo.topics ?? []).join(' ')}`))
-		.map((repo) => ({
-			name: repo.name,
-			url: repo.html_url,
-			updatedAt: repo.updated_at,
-			archived: repo.archived,
-		}))
-		.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function nirholasCodeConsumers() {
-	if (!githubToken) return [];
-	const queries = [
-		'user:nirholas "@pump-fun/"',
-		'user:nirholas "@nirholas/pump-sdk"',
-		'user:nirholas "pump.fun"',
-	];
-	const found = new Map();
-	for (const query of queries) {
-		try {
-			const result = await fetchJson(
-				`https://api.github.com/search/code?per_page=100&q=${encodeURIComponent(query)}`,
-				{ github: true },
-			);
-			for (const item of result.items ?? []) {
-				const repo = item.repository;
-				if (repo?.owner?.login === 'nirholas' && !repo.private) {
-					found.set(repo.name, {
-						name: repo.name,
-						url: repo.html_url,
-						updatedAt: repo.updated_at,
-						archived: repo.archived,
-					});
-				}
-			}
-		} catch (error) {
-			process.stderr.write(`pump:watch: GitHub code search skipped (${error.message})\n`);
-		}
-	}
-	return [...found.values()];
-}
-
 function readDeclaredVersions() {
 	const manifests = [
 		'package.json',
@@ -183,22 +129,12 @@ function markdown(report) {
 	for (const [name, value] of Object.entries(report.repositories)) {
 		lines.push(`| [pump-fun/${name}](${value.url}) | ${value.pushedAt} | ${value.archived ? 'archived' : 'active'} |`);
 	}
-	lines.push('', `## nirholas public Pump.fun surface (${report.nirholasCandidates.length} candidates)`, '');
-	lines.push(report.nirholasCandidates.map((repo) => `[${repo.name}](${repo.url})`).join(', ') || 'None found.');
 	lines.push('', '## Drift', '');
 	lines.push(...(report.changes.length ? report.changes.map((change) => `- ${change}`) : ['No upstream drift detected.']));
 	return `${lines.join('\n')}\n`;
 }
 
-const [packages, repositories, candidates, codeConsumers] = await Promise.all([
-	npmState(),
-	officialRepoState(),
-	nirholasCandidates(),
-	nirholasCodeConsumers(),
-]);
-const candidateMap = new Map(candidates.map((repo) => [repo.name, repo]));
-for (const repo of codeConsumers) candidateMap.set(repo.name, repo);
-const allCandidates = [...candidateMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+const [packages, repositories] = await Promise.all([npmState(), officialRepoState()]);
 const current = { packages, repositories };
 let baseline = { packages: {}, repositories: {} };
 try {
@@ -211,7 +147,6 @@ const report = {
 	packages,
 	repositories,
 	localConsumers: readDeclaredVersions(),
-	nirholasCandidates: allCandidates,
 	changes: diffState(baseline, current),
 };
 
