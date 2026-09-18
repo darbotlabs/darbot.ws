@@ -141,7 +141,7 @@
 					</div>
 
 					<div class="btns">
-						<button id="speak" data-i18n-html="demos_audio2face.speak"><span id="speak-label">Speak</span></button>
+						<button id="speak"><span id="speak-label" data-i18n="demos_audio2face.speak">Speak</span></button>
 						<button id="stop" class="secondary" disabled data-i18n="demos_audio2face.stop">Stop</button>
 					</div>
 
@@ -336,10 +336,22 @@
 			function setStatus(text, live) {
 				statusEl.innerHTML = live ? `<span class="live-dot"></span>${text}` : text;
 			}
+			// The label is translated copy until a run starts. While busy the script
+			// owns it (so a late catalog pass cannot overwrite the spinner), and when
+			// the run ends it gets back the localized label it had, not English.
+			let idleLabel = null;
 			function busy(on, label) {
 				speakBtn.disabled = on;
 				stopBtn.disabled = !on;
-				speakLabel.innerHTML = on ? `<span class="btn-spin"></span>${label || 'Working…'}` : 'Speak';
+				if (on) {
+					if (idleLabel === null) idleLabel = speakLabel.textContent;
+					speakLabel.setAttribute('data-i18n-owned', '1');
+					speakLabel.innerHTML = `<span class="btn-spin"></span>${label || 'Working…'}`;
+				} else if (idleLabel !== null) {
+					speakLabel.textContent = idleLabel;
+					speakLabel.removeAttribute('data-i18n-owned');
+					idleLabel = null;
+				}
 			}
 
 			function teardownAudio() {
