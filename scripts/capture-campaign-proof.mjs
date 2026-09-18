@@ -27,7 +27,8 @@
  * instead of silently photographed.
  *
  * Commit gate: the growth repo only promotes $THREE. A frame whose visible text
- * names another coin or token is flagged `gated` in the manifest, and the
+ * names another coin or token (beyond the approved payment rails in
+ * APPROVED_TOKEN_TERMS) is flagged `gated` in the manifest, and the
  * console prints the exact terms; those files stay out of commits until the
  * owner approves them.
  *
@@ -367,6 +368,12 @@ async function canvasIsBlank(png, box, scale) {
 	return stats.channels.slice(0, 3).every((c) => c.stdev < 3);
 }
 
+// Payment rails the owner approved showing in proof media (2026-09-18): a
+// three.ws page that prices a call in USDC or SOL is showing how the product
+// charges, not promoting a coin. Any other token name still holds the file.
+const APPROVED_TOKEN_TERMS = new Set(['USDC', 'SOL']);
+const isGated = (terms) => terms.some((t) => !APPROVED_TOKEN_TERMS.has(t));
+
 function tokenMentions(seen) {
 	const hits = new Set();
 	for (const m of `${seen.text} ${seen.alts}`.matchAll(OTHER_TOKEN)) hits.add(m[0]);
@@ -442,7 +449,7 @@ async function captureCampaign(browser, row, recipe) {
 			writeFileSync(path.join(dir, 'desktop@2x.png'), hero);
 			const heroMeta = await sharp(hero).metadata();
 			files.push(fileEntry(id, 'desktop@2x.png', {
-				kind: 'desktop', width: heroMeta.width, height: heroMeta.height, gated: terms.length > 0,
+				kind: 'desktop', width: heroMeta.width, height: heroMeta.height, gated: isGated(terms),
 				shows: `Desktop hero at 1600x900 (2x): ${recipe.shows}`,
 			}));
 
@@ -454,7 +461,7 @@ async function captureCampaign(browser, row, recipe) {
 			}
 			writeFileSync(path.join(dir, 'x-1600x900.jpg'), xJpeg);
 			files.push(fileEntry(id, 'x-1600x900.jpg', {
-				kind: 'x', width: 1600, height: 900, gated: terms.length > 0,
+				kind: 'x', width: 1600, height: 900, gated: isGated(terms),
 				shows: `X post still, 16:9 JPEG under 5 MB: ${recipe.shows}`,
 			}));
 
@@ -481,7 +488,7 @@ async function captureCampaign(browser, row, recipe) {
 				files.push(fileEntry(id, 'motion-15s.mp4', {
 					kind: 'video', width: DESKTOP.width, height: DESKTOP.height,
 					durationSeconds: Math.round((await durationOf(mp4)) * 10) / 10,
-					gated: gatedTerms.size > 0,
+					gated: isGated([...gatedTerms]),
 					shows: `15 second H.264 recording of the live surface: ${recipe.shows}`,
 				}));
 			} else defects.push('the desktop recording produced no video file');
@@ -502,7 +509,7 @@ async function captureCampaign(browser, row, recipe) {
 			writeFileSync(path.join(dir, 'mobile@3x.png'), out);
 			const meta = await sharp(out).metadata();
 			files.push(fileEntry(id, 'mobile@3x.png', {
-				kind: 'mobile', width: meta.width, height: meta.height, gated: terms.length > 0,
+				kind: 'mobile', width: meta.width, height: meta.height, gated: isGated(terms),
 				shows: `Mobile at 390x844 (3x): ${recipe.shows}`,
 			}));
 		} finally {
@@ -592,7 +599,8 @@ async function main() {
 				const bytes = result.files.reduce((n, f) => n + f.bytes, 0);
 				console.log(`ok   ${row.campaign_id} ${result.files.length} files ${mb(bytes)} in ${((Date.now() - started) / 1000).toFixed(0)}s`);
 				for (const d of result.defects) console.log(`     defect: ${d}`);
-				if (result.gatedTerms.length) console.log(`     GATED (other token named: ${result.gatedTerms.join(', ')})`);
+				if (isGated(result.gatedTerms)) console.log(`     GATED (other token named: ${result.gatedTerms.join(', ')})`);
+				else if (result.gatedTerms.length) console.log(`     names approved payment tokens: ${result.gatedTerms.join(', ')}`);
 			} catch (err) {
 				failures++;
 				const prior = byId.get(row.campaign_id);

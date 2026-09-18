@@ -36,9 +36,11 @@ duration, source URL, and capture time. The tables below are generated from it.
 ## Commit gate
 
 three.ws only promotes $THREE. When a captured frame shows the name of another coin or token,
-the script marks the file `gated` in the manifest and prints the terms it saw. Those files stay
-on disk but are not committed until the owner approves that specific content. They are listed
-below as held, without links.
+the script prints the terms it saw. The owner approved (2026-09-18) proof media that shows the
+payment rails a three.ws page prices in, USDC and SOL (the `APPROVED_TOKEN_TERMS` set in the
+script). Any other token name marks the file `gated` in the manifest: it stays on disk, is not
+committed until the owner approves that specific content, and is listed below as held, without
+a link.
 
 ## Assets
 
