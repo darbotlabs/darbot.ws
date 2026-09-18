@@ -6,9 +6,9 @@
 //   hat-baseball.glb, hat-beanie.glb, hat-cowboy.glb,
 //   glasses-round.glb, glasses-shades.glb,
 //   earrings-hoops.glb, earrings-studs.glb
-// One more is the /play wardrobe's event souvenir (multiplayer/src/
-// cosmetics-catalog.js, tier 'event'), which is granted, never sold:
-//   laurel-meetup.glb
+// The rest are the /play wardrobe's event souvenirs (multiplayer/src/
+// cosmetics-catalog.js, tier 'event'), which are granted, never sold:
+//   laurel-meetup.glb, star-shades-meetup-2.glb
 //
 // Each is a real glTF 2.0 binary with positions, normals, UVs, indices, and a
 // PBR material, small enough to commit to the repo, large enough to be visibly
@@ -230,6 +230,58 @@ function sphere({ r = 1, segments = 16, rings = 10 } = {}) {
 // element is authored as a loop and emitted as a single primitive.
 
 // Hamilton product, `a` applied AFTER `b` (q = a ⊗ b), both [x,y,z,w].
+// Flat five-point star in the XY plane, extruded `depth` along Z, first point
+// straight up. Faces are flat-shaded (each cap and each side quad has its own
+// vertices) so the facets read as cut metal rather than a soft blob.
+function starPrism({ outerR = 1, innerR = 0.4, points = 5, depth = 0.01 } = {}) {
+	const positions = [];
+	const normals = [];
+	const uvs = [];
+	const indices = [];
+	const outline = [];
+	for (let k = 0; k < points * 2; k++) {
+		const a = Math.PI / 2 + (k * Math.PI) / points;
+		const r = k % 2 ? innerR : outerR;
+		outline.push([r * Math.cos(a), r * Math.sin(a)]);
+	}
+	const n = outline.length;
+	const half = depth / 2;
+
+	// Caps: a fan from the centre, wound so each faces outward.
+	for (const nz of [1, -1]) {
+		const base = positions.length / 3;
+		positions.push(0, 0, half * nz);
+		normals.push(0, 0, nz);
+		uvs.push(0.5, 0.5);
+		for (const [x, y] of outline) {
+			positions.push(x, y, half * nz);
+			normals.push(0, 0, nz);
+			uvs.push(0.5 + x / (2 * outerR), 0.5 + y / (2 * outerR));
+		}
+		for (let i = 0; i < n; i++) {
+			const a = base + 1 + i;
+			const b = base + 1 + ((i + 1) % n);
+			if (nz > 0) indices.push(base, a, b);
+			else indices.push(base, b, a);
+		}
+	}
+
+	// Sides: one quad per outline edge, normal pointing away from the star.
+	for (let i = 0; i < n; i++) {
+		const [px, py] = outline[i];
+		const [qx, qy] = outline[(i + 1) % n];
+		const len = Math.hypot(qx - px, qy - py) || 1;
+		const nx = (qy - py) / len;
+		const ny = -(qx - px) / len;
+		const base = positions.length / 3;
+		positions.push(px, py, half, qx, qy, half, qx, qy, -half, px, py, -half);
+		for (let k = 0; k < 4; k++) normals.push(nx, ny, 0);
+		uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+		indices.push(base, base + 3, base + 2, base, base + 2, base + 1);
+	}
+	return { positions, normals, uvs, indices };
+}
+
 function quatMul(a, b) {
 	const [ax, ay, az, aw] = a;
 	const [bx, by, bz, bw] = b;
@@ -532,6 +584,14 @@ const ACCESSORIES = {
 		rootName: 'LaurelMeetup',
 		parts: laurelParts(),
 	},
+
+	// The second meetup's souvenir: gold star-shaped shades with smoked lenses.
+	// Eyewear rather than headwear on purpose, so anyone holding both souvenirs
+	// can wear them together. Same grant rules as the laurel.
+	'star-shades-meetup-2.glb': {
+		rootName: 'StarShadesMeetup2',
+		parts: starShadesParts(),
+	},
 };
 
 // Build the laurel's three primitives: the circlet band, the merged leaf ring,
@@ -591,6 +651,35 @@ function laurelParts() {
 		{ name: 'circlet', geom: band, color: GOLD, metallic: 0.85, roughness: 0.28 },
 		{ name: 'leaves', geom: mergeGeoms(leaves), color: GOLD, metallic: 0.8, roughness: 0.34 },
 		{ name: 'berries', geom: mergeGeoms(berries), color: [0.95, 0.95, 0.97], metallic: 0.2, roughness: 0.14 },
+	];
+}
+
+// Build the star shades' three primitives: the merged gold frames, the merged
+// smoked lenses set just proud of them, and the bridge. Positions follow the
+// round glasses so the pair lands on the same eye line.
+function starShadesParts() {
+	const LENS_X = 0.038;
+	const EYE_Y = 0.005;
+	const FRAME_Z = 0.085;
+	const GOLD = [0.9, 0.74, 0.26];
+
+	const frame = starPrism({ outerR: 0.038, innerR: 0.019, depth: 0.006 });
+	const lens = starPrism({ outerR: 0.031, innerR: 0.0145, depth: 0.003 });
+	const frames = [-LENS_X, LENS_X].map((x) => transformGeom(frame, { translate: [x, EYE_Y, FRAME_Z] }));
+	const lenses = [-LENS_X, LENS_X].map((x) => transformGeom(lens, { translate: [x, EYE_Y, FRAME_Z + 0.003] }));
+
+	return [
+		{ name: 'frames', geom: mergeGeoms(frames), color: GOLD, metallic: 0.9, roughness: 0.25 },
+		{ name: 'lenses', geom: mergeGeoms(lenses), color: [0.06, 0.05, 0.09], metallic: 0.3, roughness: 0.08 },
+		{
+			name: 'bridge',
+			geom: cylinder({ r: 0.004, y0: 0, y1: 0.016, segments: 8 }),
+			color: GOLD,
+			metallic: 0.9,
+			roughness: 0.25,
+			translate: [-0.008, EYE_Y + 0.012, FRAME_Z],
+			rotation: [0, 0, -0.707, 0.707], // lie horizontally along X
+		},
 	];
 }
 

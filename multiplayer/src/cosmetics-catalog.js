@@ -60,6 +60,7 @@ export const COSMETICS = [
 	{ id: 'eye-none', name: 'None', slot: 'eyewear', rarity: 'common', tier: 'free', price: 0, visual: null },
 	{ id: 'glasses-round', name: 'Round frames', slot: 'eyewear', rarity: 'common', tier: 'free', price: 0, visual: { prop: '/accessories/glasses-round.glb', anchor: 'face' }, thumb: '/accessories/thumbs/glasses-round.png' },
 	{ id: 'glasses-shades', name: 'Shades', slot: 'eyewear', rarity: 'rare', tier: 'premium', price: 350, visual: { prop: '/accessories/glasses-shades.glb', anchor: 'face' }, thumb: '/accessories/thumbs/glasses-shades.png' },
+	{ id: 'star-shades-meetup-2', name: 'Meetup Star Shades', slot: 'eyewear', rarity: 'legendary', tier: 'event', price: 0, visual: { prop: '/accessories/star-shades-meetup-2.glb', anchor: 'face' }, thumb: '/accessories/thumbs/star-shades-meetup-2.png' },
 
 	// ── Earrings (prop, anchored at ear level) ────────────────────────────────
 	{ id: 'earring-none', name: 'None', slot: 'earrings', rarity: 'common', tier: 'free', price: 0, visual: null },

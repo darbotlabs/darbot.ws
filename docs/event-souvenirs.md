@@ -14,10 +14,19 @@ about you. This one says exactly one thing, permanently, to every player who
 walks past you.
 
 The first one is the **Meetup Laurel**: a gold laurel circlet, open at the
-front, with three pearl berries in the gap. It was granted at the
-[`$THREE` First Holders Meetup](play-live-events.md). That window has closed, so
-the laurel is now exactly what this page promises: owned only by the players who
-were in the world that day, and never granted again.
+front, with three pearl berries in the gap. It was configured for the
+[`$THREE` First Holders Meetup](play-live-events.md) on 2026-08-09, but the
+multiplayer service was not redeployed with the grant code before that window,
+so the grant never ran and nobody holds one. The window has closed, and the
+laurel stays retired rather than being handed out later under a different
+event's name.
+
+The second is the **Meetup Star Shades**: gold star-shaped frames with smoked
+lenses, worn in the eyewear slot so they sit alongside any headwear. They are
+the souvenir for the `$THREE` Community Meetup #2 on 2026-09-25, 16:00 to 17:00
+UTC. The lesson from the first event is now a pre-flight step (see
+[Verifying it](#verifying-it)): the multiplayer service must be running a build
+that contains the grant before the window opens.
 
 ---
 
@@ -203,6 +212,18 @@ npx vitest run tests/event-souvenir.test.js       # window gating, idempotency, 
 node scripts/play-souvenir-conformance.mjs        # the contract, against a real game server
 node scripts/play-souvenir-ui-check.mjs           # the card and the wardrobe, in a real browser
 node scripts/play-souvenir-e2e.mjs                # the whole feature through the real /play world
+```
+
+**Before a real window, check production too.** The first event's grant never
+ran because the multiplayer service was still on a build from before the grant
+code landed. Compare the live revision's creation time with the last commit under
+`multiplayer/src`, and redeploy (`cd multiplayer && ./deploy-cloudrun.sh`) if
+the repo is ahead:
+
+```bash
+gcloud run services describe three-ws-multiplayer --region us-central1 \
+  --format='value(status.latestReadyRevisionName,metadata.annotations."serving.knative.dev/lastModifier")'
+git log -1 --format='%h %ci' -- multiplayer/src
 ```
 
 **The conformance run** boots Colyseus on a private port against an event config

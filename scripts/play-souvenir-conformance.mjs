@@ -23,7 +23,8 @@
 // behind. It needs no Vite, no GPU and no display, which is what lets it run on
 // a machine too loaded to hold a WebGL page open.
 //
-//   node scripts/play-souvenir-conformance.mjs
+//   node scripts/play-souvenir-conformance.mjs                         # the laurel
+//   node scripts/play-souvenir-conformance.mjs star-shades-meetup-2    # any event souvenir
 //
 // Exit code is 0 only when every check passes.
 
@@ -32,6 +33,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getCosmetic } from '../multiplayer/src/cosmetics-catalog.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MP_PORT = Number(process.env.MP_PORT || 2572);
@@ -39,7 +41,14 @@ const CONFIG_PORT = Number(process.env.CONFIG_PORT || 4601);
 const ENDPOINT = `ws://127.0.0.1:${MP_PORT}`;
 const MINT = 'FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump';
 const OTHER_MINT = 'THREEsynthetic1111111111111111111111111111';
-const SOUVENIR_ID = 'laurel-meetup';
+const SOUVENIR_ID = process.argv[2] || 'laurel-meetup';
+// The wardrobe slot the souvenir equips into, read from the catalog so a
+// headwear laurel and eyewear shades are held to the same contract.
+const SLOT = getCosmetic(SOUVENIR_ID)?.slot;
+if (getCosmetic(SOUVENIR_ID)?.tier !== 'event') {
+	console.error(`${SOUVENIR_ID} is not an event-tier cosmetic in multiplayer/src/cosmetics-catalog.js`);
+	process.exit(1);
+}
 const TTL_MS = 4000;
 
 const t0 = Date.now();
@@ -137,6 +146,10 @@ async function join({ coin = MINT, guestToken = '', name = 'QA' } = {}) {
 	// this run has no opinion about. colyseus.js warns once per unhandled type,
 	// which drowns the checks; absorb the lot with a wildcard handler.
 	room.onMessage('*', () => {});
+	// Handlers are attached, so say so the way the real client does
+	// (src/game/community-net.js). The server holds the join snapshot (profile,
+	// guest token) until this arrives, falling back only after JOIN_SETTLE_MS.
+	room.send('ready');
 
 	// Let the join handshake finish: the profile echo and any grant both land in
 	// the first moments after the room resolves.
@@ -179,11 +192,11 @@ async function main() {
 		check('live window: owned exactly once', alice.owned().filter((i) => i === SOUVENIR_ID).length === 1,
 			`owned=${JSON.stringify(alice.owned())}`);
 		check('live window: not auto-equipped over the player\'s own fit',
-			alice.equipped().headwear !== SOUVENIR_ID,
-			`headwear=${alice.equipped().headwear}`);
+			alice.equipped()[SLOT] !== SOUVENIR_ID,
+			`${SLOT}=${alice.equipped()[SLOT]}`);
 
 		await alice.equip(SOUVENIR_ID);
-		check('live window: it equips', alice.equipped().headwear === SOUVENIR_ID,
+		check('live window: it equips', alice.equipped()[SLOT] === SOUVENIR_ID,
 			JSON.stringify(alice.equipped()));
 		check('live window: published on the shared schema',
 			String(alice.wireFor(alice.room.sessionId) || '').split(',').includes(SOUVENIR_ID),
@@ -226,7 +239,7 @@ async function main() {
 			aliceAgain.owned().filter((i) => i === SOUVENIR_ID).length === 1,
 			`owned=${JSON.stringify(aliceAgain.owned())}`);
 		check('rejoin: still worn, so the equip persisted across the reconnect',
-			aliceAgain.equipped().headwear === SOUVENIR_ID,
+			aliceAgain.equipped()[SLOT] === SOUVENIR_ID,
 			JSON.stringify(aliceAgain.equipped()));
 
 		// ── 5. closed window ───────────────────────────────────────────────────
@@ -241,9 +254,9 @@ async function main() {
 		check('closed window: they cannot equip what they were never granted',
 			await (async () => {
 				await dave.equip(SOUVENIR_ID);
-				return dave.equipped().headwear !== SOUVENIR_ID;
+				return dave.equipped()[SLOT] !== SOUVENIR_ID;
 			})(),
-			`headwear=${dave.equipped().headwear}`);
+			`${SLOT}=${dave.equipped()[SLOT]}`);
 		await dave.leave();
 
 		await aliceAgain.leave();
@@ -251,12 +264,12 @@ async function main() {
 		check('closed window: an earlier attendee still owns it',
 			aliceAfter.owned().includes(SOUVENIR_ID), `owned=${JSON.stringify(aliceAfter.owned())}`);
 		check('closed window: and is still wearing it',
-			aliceAfter.equipped().headwear === SOUVENIR_ID, JSON.stringify(aliceAfter.equipped()));
+			aliceAfter.equipped()[SLOT] === SOUVENIR_ID, JSON.stringify(aliceAfter.equipped()));
 		// Unequip and re-equip after the event to prove ownership is not time-scoped.
 		await aliceAfter.equip('head-none');
 		await aliceAfter.equip(SOUVENIR_ID);
 		check('closed window: they can still take it off and put it back on',
-			aliceAfter.equipped().headwear === SOUVENIR_ID, JSON.stringify(aliceAfter.equipped()));
+			aliceAfter.equipped()[SLOT] === SOUVENIR_ID, JSON.stringify(aliceAfter.equipped()));
 		await aliceAfter.leave();
 	} finally {
 		configServer.close();
