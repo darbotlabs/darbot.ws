@@ -1096,6 +1096,105 @@ export function flattenRootDrift(clip, opts = {}) {
 	};
 }
 
+// ── Foot flicks ─────────────────────────────────────────────────────────────
+//
+// The lane's foot rotation is under-determined. The worker recovers each bone's
+// rotation from joint POSITIONS (a Kabsch fit in mdm_sampler.py), and a foot has
+// a single child to fit against, so on some frames the fit lands on the other
+// solution and the foot swings its toe through a different direction for one or
+// two frames before snapping back. Measured on a live "speech" take on
+// 2026-09-18: the ankle held within 0.4 cm for 40 frames while the toe jumped
+// 8.6 cm and back on 12 of them. On screen that is a foot flicking, and in the
+// gate it reads as a planted toe skating 3 m across the floor, which is why a
+// clip of a person standing still talking was rejected for sliding.
+//
+// It is repaired in world space, where it is visible, and never in rotation
+// space, where the twist flips described under "Judge positions" would be
+// mistaken for it. A frame is a flick when the toe, measured relative to its
+// own ankle, sits further than FOOT_FLICK.MIN_CM from the straight line between
+// the good frames either side, and the excursion lasts at most MAX_FRAMES. The
+// foot and toe rotations on those frames are replaced by a slerp between the
+// neighbours. A real foot movement (a kick, a toe tap, a heel lift) is slower
+// than MAX_FRAMES at 30 fps and is left alone.
+
+export const FOOT_FLICK = Object.freeze({
+	MIN_CM: 3,
+	MAX_FRAMES: 3,
+});
+
+/**
+ * Repair single-frame foot flicks. Returns a NEW clip and the number of frames
+ * repaired per side; a clip without foot tracks is returned unchanged.
+ *
+ * @param {any} clip
+ * @returns {{ clip: any, repaired: number }}
+ */
+export function despikeFootFlicks(clip, opts = {}) {
+	const threshold = (opts.minCm ?? FOOT_FLICK.MIN_CM) / 100;
+	const maxFrames = opts.maxFrames ?? FOOT_FLICK.MAX_FRAMES;
+	const frames = frameCount(clip);
+	if (frames < 3) return { clip, repaired: 0 };
+
+	const worlds = [];
+	for (let i = 0; i < frames; i += 1) worlds.push(forwardKinematicsFrame(clip, i));
+
+	const tracks = (clip?.tracks ?? []).slice();
+	let repaired = 0;
+	for (const side of ['Left', 'Right']) {
+		const footIndex = tracks.findIndex((t) => t?.name === `${side}Foot.quaternion`);
+		if (footIndex === -1) continue;
+		const toeIndex = tracks.findIndex((t) => t?.name === `${side}ToeBase.quaternion`);
+		const toeRel = worlds.map((w) => {
+			const foot = w[`${side}Foot`];
+			const toe = w[`${side}ToeBase`];
+			return foot && toe ? [toe[0] - foot[0], toe[1] - foot[1], toe[2] - foot[2]] : null;
+		});
+		if (toeRel.some((v) => !v)) continue;
+
+		const flagged = new Array(frames).fill(false);
+		const deviation = (i, a, b) => {
+			const t = (i - a) / (b - a);
+			const expected = toeRel[a].map((v, k) => v + (toeRel[b][k] - v) * t);
+			return Math.hypot(...toeRel[i].map((v, k) => v - expected[k]));
+		};
+		// Try the shortest excursion first so a one-frame flick is never repaired
+		// as part of a longer span that swallows good frames.
+		for (let span = 1; span <= maxFrames; span += 1) {
+			for (let a = 0; a + span + 1 < frames; a += 1) {
+				const b = a + span + 1;
+				if (flagged[a] || flagged[b]) continue;
+				// The anchors must agree with each other, or this is real movement.
+				const anchorGap = Math.hypot(...toeRel[a].map((v, k) => v - toeRel[b][k]));
+				if (anchorGap > threshold) continue;
+				let all = true;
+				for (let i = a + 1; i < b; i += 1) {
+					if (flagged[i] || deviation(i, a, b) <= threshold) {
+						all = false;
+						break;
+					}
+				}
+				if (!all) continue;
+				for (let i = a + 1; i < b; i += 1) flagged[i] = true;
+				for (const index of [footIndex, toeIndex]) {
+					if (index === -1) continue;
+					const track = tracks[index];
+					const values = Array.from(track.values ?? []);
+					const qa = values.slice(a * 4, a * 4 + 4);
+					const qb = values.slice(b * 4, b * 4 + 4);
+					if (qa.length < 4 || qb.length < 4) continue;
+					for (let i = a + 1; i < b; i += 1) {
+						const q = slerp(qa, qb, (i - a) / (b - a));
+						for (let k = 0; k < 4; k += 1) values[i * 4 + k] = q[k];
+					}
+					tracks[index] = { ...track, values };
+				}
+				repaired += span;
+			}
+		}
+	}
+	return repaired ? { clip: { ...clip, tracks }, repaired } : { clip, repaired: 0 };
+}
+
 // ── Root travel from foot contact ───────────────────────────────────────────
 //
 // Flattening the drift is right for a clip that stands still and wrong for one
@@ -1131,6 +1230,12 @@ export const ROOT_LOCK = Object.freeze({
 	// about one step at a walk: long enough to average across a foot switch,
 	// short enough to follow a real change of pace.
 	SMOOTH_SECONDS: 0.33,
+	// Net travel speed, in m/s, below which the derived root is discarded and the
+	// flattened one kept. A clip that stands still (a speech, a laugh) still has
+	// a centimetre of foot jitter per frame, and integrating that into a root path
+	// would hand it a fake "stride" that lets real skating hide behind the
+	// ratio test. A slow walk is about 0.5 m/s; 0.2 keeps a shuffle in place.
+	MIN_SPEED: 0.2,
 });
 
 function lowerGroundedFoot(world, floorY) {
@@ -1152,13 +1257,15 @@ function lowerGroundedFoot(world, floorY) {
  * unchanged with `applied: false`, so this is always safe to call.
  *
  * @param {any} clip
- * @param {{ minContactShare?: number, smoothSeconds?: number }} [opts]
+ * @param {{ minContactShare?: number, smoothSeconds?: number, minSpeed?: number }} [opts]
  * @returns {{ clip: any, applied: boolean, contactShare: number, travel: number, speed: number }}
  */
 export function lockRootToContacts(clip, opts = {}) {
 	const minShare = opts.minContactShare ?? ROOT_LOCK.MIN_CONTACT_SHARE;
 	const smoothSeconds = opts.smoothSeconds ?? ROOT_LOCK.SMOOTH_SECONDS;
 	const unchanged = (contactShare = 0) => ({ clip, applied: false, contactShare, travel: 0, speed: 0 });
+	// Why this runs after the foot-flick repair: a flick is a planted toe jumping
+	// 8 cm and back, which read as a burst of body travel would push the root.
 
 	const tracks = clip?.tracks ?? [];
 	const index = tracks.findIndex((t) => String(t?.name || '') === 'Hips.position');
@@ -1250,10 +1357,12 @@ export function lockRootToContacts(clip, opts = {}) {
 	out[0] = values[0];
 	out[2] = values[2];
 
+	const net = Math.hypot(x - values[0], z - values[2]);
+	const speed = duration > 0 ? net / duration : 0;
+	if (speed < (opts.minSpeed ?? ROOT_LOCK.MIN_SPEED)) return { ...unchanged(contactShare), speed };
 	const result = { ...clip, tracks: tracks.slice() };
 	result.tracks[index] = { ...track, times, values: out };
-	const net = Math.hypot(x - values[0], z - values[2]);
-	return { clip: result, applied: true, contactShare, travel, speed: duration > 0 ? net / duration : 0 };
+	return { clip: result, applied: true, contactShare, travel, speed };
 }
 
 export const LOOP_SEAM = Object.freeze({
