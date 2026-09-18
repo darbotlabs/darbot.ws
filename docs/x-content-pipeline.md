@@ -25,8 +25,9 @@ pipeline, enforced before anything is sent:
 | Silent autoplay | `prepare-video` burns captions into the clip, because most of the feed watches muted. |
 | Hype copy | [api/_lib/x-content/quality.js](../api/_lib/x-content/quality.js) rejects launch openers ("Introducing", "We're excited"), hype vocabulary, hashtags, emoji, stacked exclamation marks, all-caps shouting, and en or em dashes. |
 | Repeats | A head that reads too much like another queued item, or like anything @trythreews already posted (the scraped archive in `data/archives/` plus everything this pipeline published), is rejected. |
-| Clockwork timing | Each item lands at a stable, jittered minute inside a window after its `notBefore`, with a minimum gap, a daily cap, and quiet hours. |
-| A schedule anyone can read off the repository | The jitter is an HMAC under `X_CONTENT_SCHEDULE_SEED` (production only), which also deals out the day's anchor times. The day is public; the minute and the order are not. Unset, it falls back to the old public hash, and `plan` says so. |
+| Clockwork timing | Three slots a day at the hours this account's own posts performed best, each opening at a jittered minute, with a minimum gap, a daily cap, and quiet hours. |
+| A schedule anyone can read off the repository | The slot jitter is an HMAC under `X_CONTENT_SCHEDULE_SEED` (production only), and which post fills a slot is decided at the moment it opens. Unset, the jitter falls back to a public hash, and `plan` says its minutes are placeholders. |
+| A broken post stalling the feed | A post that cannot go out (a link is down, a feature probe fails, X rejects the content) is held with the reason and a backoff, and the slot goes to the next-best post in the same run. |
 | Same format on repeat | Lane (audience) and pattern (post shape) rotate. A due item waits if it would repeat the previous lane or pattern too many times, unless it has been waiting a full day. |
 | Retry double-posts | Every created media id, post id, and Article id is written to the ledger the moment X returns it. A crash mid-thread resumes at the next unposted reply. |
 
@@ -63,10 +64,11 @@ X Articles require the posting account to be on X Premium.
 	"id": "rig-doctor-clip",
 	"status": "review",
 	"kind": "post",
+	"tier": 2,
+	"priority": 10,
 	"lane": "developer",
 	"pattern": "clip",
 	"notBefore": "2026-09-20T15:00:00Z",
-	"windowMinutes": 90,
 	"posts": [
 		{
 			"text": "Drop a .glb on Rig Doctor and it names which of 15 rig conventions the skeleton follows, with nothing uploaded: three.ws/rig-doctor",
@@ -85,18 +87,46 @@ X Articles require the posting account to be on X Premium.
 		{ "says": "with nothing uploaded", "evidence": [{ "type": "page", "url": "https://three.ws/rig-doctor", "contains": "Nothing is uploaded" }] },
 		{ "says": "Every clip in the library is authored against one canonical skeleton", "evidence": [{ "type": "page", "url": "https://three.ws/rig-doctor", "contains": "Every clip in the three.ws library is authored against one canonical skeleton" }] }
 	],
-	"mentions": {}
+	"mentions": {},
+	"probes": [
+		{ "type": "browser", "name": "the Mixamo sample diagnoses end to end", "steps": [{ "goto": "https://three.ws/rig-doctor" }, { "click": "Mixamo rig" }, { "expect": "52 of 52 canonical joints mapped" }] },
+		{ "type": "api", "name": "the sample rig the demo loads is live", "url": "https://three.ws/avatars/michelle.glb" }
+	]
 }
 ```
 
 - `status`: `draft` (may be unfinished), `review` (must pass `check`), `approved` (eligible to publish), `paused`, `posted`. Move an item to `approved` with `npm run x:content -- approve <slug>` (or `--status review` for a whole batch), which refuses anything a passing review record does not already cover.
-- `lane` and `pattern` are free-form labels; rotation compares them against what was published last.
+- `tier`: 1 (flagship: partner news, $THREE utility, major launches), 2 (features with proof), or 3 (proof of work: short demos, stats, build notes). Each tier owns one slot a day.
+- `priority` is an optional owner boost from -50 to 50 on top of the computed score. `expiresAt` marks time-sensitive news: it rises as its window closes and is dropped once it passes. `notBefore` is an embargo: the post is not ready before it.
+- `lane` and `pattern` are free-form labels; the score penalizes repeating the last ones.
+- `probes` prove the feature works, not just that its page loads (types in the editorial bar below). Every post needs at least one.
 - `claims` is the fact ledger. Every number, ordinal, and absolute word (first, only, every, never, fastest) in the copy must sit inside some claim's `says`, every `says` must quote the copy, and every claim carries at least one piece of `evidence` (types below).
 - `mentions` maps each @handle in the copy to the reason the tag is true. A tag with no reason is blocked.
 - `textFrom` is optional. When set, `check` fails if the inline text differs from that announcement-pack file, so the copy that was reviewed is the copy that ships.
 - An `article` item carries `"article": { "title", "body", "cover": { "path" } }`, and its optional `posts` quote the published Article.
 
-Cadence lives at the top of the file: `windowMinutes`, `minimumMinutesApart`, `dailyCap`, and `quietHoursUtc` (a `["HH:MM", "HH:MM"]` pair, which may wrap midnight). `quality` sets the similarity limits and the maximum same-lane and same-pattern runs.
+Cadence lives at the top of the file: `slots` (each `{ tier, at }` in UTC), `windowMinutes` (how far a slot's opening may be jittered), `minimumMinutesApart`, `dailyCap`, and `quietHoursUtc` (a `["HH:MM", "HH:MM"]` pair, which may wrap midnight). `quality` sets the similarity limits and the maximum same-lane and same-pattern runs.
+
+## How the next post is chosen
+
+**When:** three slots a day, one per tier, at the hours this account's own posts performed best in the engagement report: T3 at 08:00 UTC (2.75x the account median), T1 at 16:00 UTC (2.71x), T2 at 22:00 UTC (2.75x). Each opens at a minute only the production seed can reproduce, and stays open until the next slot starts, so a missed run still posts, but no slot is ever spent twice. Quiet hours are 02:00 to 07:00 UTC.
+
+**What:** the slot's own tier first, highest priority first. An empty tier falls to the next tier down, so the best available post always gets the best time. A higher tier only fills a lower slot when it has more than one post ready, so the last flagship post is kept for prime time. When nothing is ready, nothing posts: three a day is a ceiling, not a quota.
+
+**Priority** is a sum of named parts, and `npm run x:content:plan` prints them for every post:
+
+| Part | What it measures |
+|---|---|
+| `engagement` | Predicted lift from how @trythreews posts with the same signals actually performed (format, length, topic), using the same classifiers as the engagement report. Small samples are shrunk toward no effect, and overlapping signals are not stacked. |
+| `timely` | Up to +20 as an `expiresAt` window closes. |
+| `boost` | The owner's `priority`. |
+| `waiting` | +1 per day ready, capped at +10, so nothing starves. |
+| `review` | The AI editor's average score above or below 4. |
+| `variety` | -25 when the post would repeat the last lane or pattern too many times in a row. |
+
+**When a post fails:** it is held, not dropped. Link or probe failures and X rejecting the content (a 4xx such as a duplicate) hold the post for 2 hours, then 6, then 24, and the slot goes to the next post in the same run. Editing the post releases the hold at once. X being down, rate limiting, or rejecting our credentials is not the post's fault, so the run stops and the next run retries the same post. A thread cut off mid-way always resumes before anything else.
+
+**Stock:** every run counts approved, ready posts per tier (one per day). When any tier has fewer than 3 days left, it raises one alert a day through the platform's ops alerts: always recorded in `ops_alerts`, and pushed to Telegram when `TELEGRAM_ALERTS_CHAT_ID` is set on the service. Running low never makes the queue post something unreviewed; it only posts less.
 
 ## Workflow
 
@@ -149,6 +179,14 @@ Evidence types:
 | `github-issue` | `repo#number` has the given `state` and `label` |
 | `github-issues` | `repo` has at least `min` issues with the given `state` and `label` |
 
+Feature probes, in `probes`, run as part of every review, and the `api` ones run again seconds before a post goes out:
+
+| `type` | Passes when | Runs |
+|---|---|---|
+| `api` | A URL answers 2xx (or `expect.status`), and optionally contains `expect.contains` or has a JSON value at `expect.json.path` (`equals`, `exists`, `min`) | review and pre-flight |
+| `browser` | Driving the live page in a real browser (`goto`, `click`, `expect` steps) reaches the expected result | review |
+| `command` | A repo test that exercises the exact behavior the post claims exits 0 (`argv`) | review |
+
 The live product is the source of truth. When a screenshot disagrees with the live page, the screenshot is stale: recapture it and use the live number. The editor is instructed the same way, and its verdict cannot pass an item it raised a blocking issue on or scored below 4 anywhere. Where a human disagrees with a `revise` verdict that has no blocking issue, `"editorOverride": { "reason": "..." }` on the item records the decision; nothing overrides a failed fact check or blocking lint.
 
 The editor tries Claude on Vertex AI first, then Claude through OpenRouter, then OpenAI, then Kimi K3 on NVIDIA NIM, falling through on any provider or billing error; each record names the model that reviewed it. The CLI reads missing credentials from the Cloud Run service and uses the signed-in `gh` session for GitHub checks.
@@ -178,4 +216,4 @@ Queue edits reach production with the next deploy, because the cron reads the qu
 
 ## Tests
 
-[tests/x-content.test.js](../tests/x-content.test.js) covers the voice and editorial lint, the claims ledger, media quality, review records binding approval to exact content, the editor verdict rules, the media rules, the Markdown to Article offsets, the scheduler's jitter, spacing, cap, rotation, and resume rules, and the publisher's thread chaining, crash resume, and Article draft, publish, and quote sequence.
+[tests/x-content.test.js](../tests/x-content.test.js) covers the tiered slots, fill-down, priority scoring, holds and the fall-through that publishes the next post when one fails, stock counting, the voice and editorial lint, the claims ledger, media quality, review records binding approval to exact content, the editor verdict rules, the media rules, the Markdown to Article offsets, the scheduler's spacing, cap, embargo, and resume rules, and the publisher's thread chaining, crash resume, and Article draft, publish, and quote sequence.
