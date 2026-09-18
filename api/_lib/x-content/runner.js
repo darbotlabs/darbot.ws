@@ -160,7 +160,7 @@ export async function runTick({ root, store, now = Date.now(), dryRun = true, re
 
 		try {
 			const meta = decision.slot ? { slot: decision.slot.key, tier: decision.tier, slotTier: decision.slot.tier } : {};
-			const row = await publishItem({ item, client, root, state, store, account: queue.account, meta });
+			const row = await publishItem({ item, client, root, state, store, account: queue.account, meta, now });
 			if (state.holds?.[item.id]) {
 				delete state.holds[item.id];
 				await store.save(state);

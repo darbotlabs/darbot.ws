@@ -126,7 +126,7 @@ export async function publishItem({ item, client, root, state, store, account = 
 		kind: item.kind,
 		lane: item.lane,
 		pattern: item.pattern,
-		publishedAt: new Date(Math.max(now, Date.now() - 60 * 60_000 * 24 * 365)).toISOString(),
+		publishedAt: new Date(now).toISOString(),
 		text: item.kind === 'article' ? item.article.title : item.posts[0].text,
 		postIds: progress.postIds,
 		url: `https://x.com/${account}/status/${leadId}`,

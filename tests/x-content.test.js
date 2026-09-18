@@ -325,7 +325,7 @@ describe('queue', () => {
 
 	it('requires media on the head post unless text-only is explicit', () => {
 		const dir = sandbox();
-		const base = { id: 'demo', status: 'review', kind: 'post', lane: 'l', pattern: 'p', notBefore: '2026-09-17T14:00:00Z' };
+		const base = { id: 'demo', status: 'review', kind: 'post', tier: 2, lane: 'l', pattern: 'p', notBefore: '2026-09-17T14:00:00Z' };
 		expect(validateItem({ ...base, posts: [{ text: HEAD }] }, dir).join('\n')).toMatch(/no media/);
 		expect(validateItem({ ...base, textOnly: true, posts: [{ text: HEAD }] }, dir)).toEqual([]);
 	});
@@ -334,7 +334,7 @@ describe('queue', () => {
 		const dir = sandbox();
 		writeFileSync(join(dir, 'data/x-content/articles/demo.md'), '## Why\n\nBecause.\n\n![Hero](../../../public/x-media/t/b.png)\n\nThe end.');
 		const item = {
-			id: 'demo', status: 'review', kind: 'article', lane: 'article', pattern: 'longform', notBefore: '2026-09-17T14:00:00Z',
+			id: 'demo', status: 'review', kind: 'article', tier: 1, lane: 'article', pattern: 'longform', notBefore: '2026-09-17T14:00:00Z',
 			article: { title: 'How rigs get named', body: 'data/x-content/articles/demo.md', cover: { path: 'public/x-media/t/a.png' } },
 			posts: [{ text: 'The long version of how Rig Doctor reads a skeleton.' }],
 		};
@@ -505,7 +505,7 @@ describe('review', () => {
 
 	it('blocks an approved item in the queue validator until it is reviewed', () => {
 		const dir = sandbox();
-		const item = { id: 'demo', status: 'approved', kind: 'post', lane: 'l', pattern: 'p', notBefore: '2026-09-17T14:00:00Z', posts: [{ text: HEAD, media: [{ path: 'public/x-media/t/a.png', alt: 'The Rig Doctor page' }] }] };
+		const item = { id: 'demo', status: 'approved', kind: 'post', tier: 2, lane: 'l', pattern: 'p', notBefore: '2026-09-17T14:00:00Z', posts: [{ text: HEAD, media: [{ path: 'public/x-media/t/a.png', alt: 'The Rig Doctor page' }] }] };
 		expect(validateItem(item, dir).join('\n')).toMatch(/review: no editorial review/);
 		expect(validateItem({ ...item, status: 'review' }, dir)).toEqual([]);
 	});
