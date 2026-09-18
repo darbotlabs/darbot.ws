@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { copyProblems, weightedLength } from '../api/_lib/x-content/quality.js';
 import { attachmentProblems, mediaProblems, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
 import { markdownToContentState, attachArticleMedia } from '../api/_lib/x-content/articles.js';
-import { anchorAssignments, dueAt, inQuietHours, jitterMinutes, pickDue } from '../api/_lib/x-content/schedule.js';
+import { currentSlot, inQuietHours, jitterMinutes, pickDue, slotOpenings, tierOrder } from '../api/_lib/x-content/schedule.js';
+import { engagementSignals, loadLifts, rankItems, scoreItem } from '../api/_lib/x-content/priority.js';
+import { activeHolds, inventory, isPostSpecific, placeHold, runTick } from '../api/_lib/x-content/runner.js';
+import { memoryStore } from '../api/_lib/x-content/state.js';
 import { validateItem, validateQueue, loadQueue } from '../api/_lib/x-content/queue.js';
 import { previewClient, publishItem } from '../api/_lib/x-content/publisher.js';
 
@@ -122,48 +125,194 @@ describe('articles', () => {
 });
 
 describe('schedule', () => {
-	const item = (id, over = {}) => ({ id, status: 'approved', kind: 'post', lane: 'community', pattern: 'mechanism', notBefore: '2026-09-17T14:00:00Z', ...over });
-	const cadence = { windowMinutes: 60, minimumMinutesApart: 240, dailyCap: 3 };
-
-	it('jitters deterministically inside the window', () => {
-		expect(jitterMinutes('genesis', 60)).toBe(jitterMinutes('genesis', 60));
-		const at = dueAt(item('genesis'), cadence);
-		expect(at).toBeGreaterThanOrEqual(Date.parse('2026-09-17T14:00:00Z'));
-		expect(at).toBeLessThan(Date.parse('2026-09-17T15:00:00Z'));
-	});
+	const cadence = { windowMinutes: 45, minimumMinutesApart: 240, dailyCap: 3, slots: [{ tier: 3, at: '08:00' }, { tier: 1, at: '16:00' }, { tier: 2, at: '22:00' }] };
+	const item = (id, over = {}) => ({ id, status: 'approved', kind: 'post', tier: 2, lane: id, pattern: id, notBefore: '2026-09-17T00:00:00Z', posts: [{ text: HEAD }], ...over });
+	// 16:50 UTC: the 16:00 T1 slot has opened whatever the jitter (under 45 min).
+	const primeTime = Date.parse('2026-09-17T16:50:00Z');
 
 	it('handles quiet hours that wrap midnight', () => {
 		expect(inQuietHours(Date.parse('2026-09-17T23:30:00Z'), ['22:00', '06:00'])).toBe(true);
 		expect(inQuietHours(Date.parse('2026-09-17T12:00:00Z'), ['22:00', '06:00'])).toBe(false);
 	});
 
-	it('waits for the jittered moment, then spacing, then the daily cap', () => {
-		const now = Date.parse('2026-09-17T16:00:00Z');
-		expect(pickDue({ items: [item('a')], state: {}, now: Date.parse('2026-09-17T13:00:00Z'), cadence }).item).toBeNull();
-		expect(pickDue({ items: [item('a')], state: {}, now, cadence }).item.id).toBe('a');
-		const recent = { published: [{ id: 'z', lane: 'x', pattern: 'y', publishedAt: new Date(now - HOUR).toISOString() }] };
-		expect(pickDue({ items: [item('a')], state: recent, now, cadence }).reason).toMatch(/spacing/);
-		const capped = { published: [5, 11, 17].map((h, i) => ({ id: `p${i}`, lane: 'x', pattern: 'y', publishedAt: new Date(now - h * HOUR).toISOString() })) };
-		expect(pickDue({ items: [item('a')], state: capped, now, cadence }).reason).toMatch(/daily cap/);
+	it('opens three tiered slots a day at jittered minutes only the seed reproduces', () => {
+		const openings = slotOpenings(primeTime, cadence).filter((slot) => slot.key.startsWith('2026-09-17'));
+		expect(openings.map((slot) => slot.tier)).toEqual([3, 1, 2]);
+		for (const [slot, hour] of openings.map((slot, index) => [slot, [8, 16, 22][index]])) {
+			const minutes = (slot.opensAt - Date.parse(`2026-09-17T${String(hour).padStart(2, '0')}:00:00Z`)) / 60_000;
+			expect(minutes).toBeGreaterThanOrEqual(0);
+			expect(minutes).toBeLessThan(45);
+		}
+		const seeded = slotOpenings(primeTime, cadence, 'production-seed');
+		expect(slotOpenings(primeTime, cadence, 'production-seed')).toEqual(seeded);
+		const bySeed = new Set(['s1', 's2', 's3', 's4', 's5'].map((seed) => slotOpenings(primeTime, cadence, seed)[4].opensAt));
+		expect(bySeed.size).toBeGreaterThan(1);
+		expect(jitterMinutes('genesis', 60)).toBe(jitterMinutes('genesis', 60, null));
 	});
 
-	it('rotates lanes and patterns but never starves a one-lane queue', () => {
-		const now = Date.parse('2026-09-17T16:00:00Z');
-		const state = { published: [{ id: 'p', lane: 'community', pattern: 'mechanism', publishedAt: new Date(now - 5 * HOUR).toISOString() }] };
-		const quality = { maximumSameLaneInARow: 2, maximumSamePatternInARow: 1 };
-		const picked = pickDue({ items: [item('same'), item('fresh', { pattern: 'number', notBefore: '2026-09-17T14:30:00Z' })], state, now, cadence, quality });
-		expect(picked.item.id).toBe('fresh');
-		expect(pickDue({ items: [item('same')], state, now, cadence, quality }).item).toBeNull();
-		expect(pickDue({ items: [item('same')], state, now: now + 26 * HOUR, cadence, quality }).item.id).toBe('same');
+	it('keeps the overnight slot open until the next morning slot', () => {
+		expect(currentSlot(Date.parse('2026-09-18T03:00:00Z'), cadence).slot.key).toBe('2026-09-17#2');
+		expect(currentSlot(primeTime, cadence).slot.key).toBe('2026-09-17#1');
 	});
 
-	it('resumes a half-published item ahead of pacing', () => {
-		const now = Date.parse('2026-09-17T16:00:00Z');
-		const state = {
-			published: [{ id: 'p', lane: 'x', pattern: 'y', publishedAt: new Date(now - 10 * 60_000).toISOString() }],
-			inflight: { a: { media: {}, postIds: ['1'] } },
+	it('fills a slot from its own tier first, then lower tiers, then a higher tier with surplus', () => {
+		expect(tierOrder(1, new Map())).toEqual([1, 2, 3]);
+		expect(tierOrder(3, new Map([[1, 1], [2, 1]]))).toEqual([3]);
+		expect(tierOrder(3, new Map([[1, 2], [2, 2]]))).toEqual([3, 2, 1]);
+		const items = [item('feature', { tier: 2, priority: 40 }), item('flagship', { tier: 1 })];
+		const prime = pickDue({ items, state: {}, now: primeTime, cadence });
+		expect([prime.item.id, prime.slot.tier, prime.filledDown]).toEqual(['flagship', 1, false]);
+		const noFlagship = pickDue({ items: [items[0]], state: {}, now: primeTime, cadence });
+		expect([noFlagship.item.id, noFlagship.filledDown]).toEqual(['feature', true]);
+		// The last flagship post is kept for prime time, not spent off-peak.
+		const morning = Date.parse('2026-09-17T08:50:00Z');
+		expect(pickDue({ items: [item('flagship', { tier: 1 })], state: {}, now: morning, cadence }).item).toBeNull();
+	});
+
+	it('spends each slot once, and respects embargo, spacing, and the daily cap', () => {
+		const used = { published: [{ id: 'z', slot: '2026-09-17#1', publishedAt: '2026-09-17T16:40:00Z' }] };
+		expect(pickDue({ items: [item('a', { tier: 1 })], state: used, now: primeTime + 5 * HOUR, cadence }).reason).toMatch(/2026-09-17#1.*used|spacing/);
+		expect(pickDue({ items: [item('a', { tier: 1, notBefore: '2026-09-18T00:00:00Z' })], state: {}, now: primeTime, cadence }).reason).toMatch(/embargoed/);
+		const recent = { published: [{ id: 'z', slot: 'other', publishedAt: new Date(primeTime - HOUR).toISOString() }] };
+		expect(pickDue({ items: [item('a', { tier: 1 })], state: recent, now: primeTime, cadence }).reason).toMatch(/spacing/);
+		const capped = { published: [5, 11, 17].map((h, i) => ({ id: `p${i}`, slot: `s${i}`, publishedAt: new Date(primeTime - h * HOUR).toISOString() })) };
+		expect(pickDue({ items: [item('a', { tier: 1 })], state: capped, now: primeTime, cadence }).reason).toMatch(/daily cap/);
+	});
+
+	it('ranks within a tier and falls to the next post when one is held', () => {
+		const items = [item('low', { tier: 1, priority: -10 }), item('high', { tier: 1, priority: 30 }), item('mid', { tier: 1 })];
+		const first = pickDue({ items, state: {}, now: primeTime, cadence });
+		expect(first.ranking.map((row) => row.id)).toEqual(['high', 'mid', 'low']);
+		expect(pickDue({ items, state: {}, now: primeTime, cadence, exclude: new Set(['high']) }).item.id).toBe('mid');
+		expect(pickDue({ items, state: {}, now: primeTime, cadence, exclude: new Set(['high', 'mid', 'low']) }).reason).toMatch(/held this tick/);
+	});
+
+	it('resumes a half-published item ahead of pacing and priority', () => {
+		const state = { published: [{ id: 'p', publishedAt: new Date(primeTime - 10 * 60_000).toISOString() }], inflight: { a: { media: {}, postIds: ['1'] } } };
+		expect(pickDue({ items: [item('a'), item('b', { priority: 50 })], state, now: primeTime, cadence }).resuming).toBe(true);
+	});
+});
+
+describe('priority', () => {
+	const lifts = loadLifts(root);
+	const post = (text, over = {}) => ({ id: 'x', kind: 'post', lane: 'l', pattern: 'p', notBefore: '2026-09-17T00:00:00Z', posts: [{ text, media: [{ path: 'public/x.webp' }] }], ...over });
+
+	it('reads the measured lifts from the engagement report', () => {
+		expect(lifts.get('topic:token').lift).toBeGreaterThan(1);
+		const keys = engagementSignals(post('The $THREE layer, on @awscloud: three.ws/x'), lifts).map((row) => row.key);
+		expect(keys).toEqual(expect.arrayContaining(['format:image', 'format:mention', 'format:cashtag', 'topic:token']));
+	});
+
+	it('shrinks small samples and does not stack overlapping signals', () => {
+		const scored = scoreItem(post('The $THREE layer, on @awscloud, explained for partners: three.ws/x'), { lifts, now: Date.parse('2026-09-17T00:00:00Z') });
+		expect(scored.predictedLift).toBeGreaterThan(1.5);
+		expect(scored.predictedLift).toBeLessThan(10);
+	});
+
+	it('adds owner boost, timeliness, waiting, and review; penalizes repetition; drops expired posts', () => {
+		const now = Date.parse('2026-09-20T00:00:00Z');
+		const base = scoreItem(post('A plain update about avatars: three.ws/x'), { lifts, now });
+		expect(base.parts.waiting).toBe(3);
+		expect(scoreItem(post('A plain update about avatars: three.ws/x', { priority: 20 }), { lifts, now }).score).toBeCloseTo(base.score + 20, 5);
+		expect(scoreItem(post('A plain update about avatars: three.ws/x', { expiresAt: '2026-09-20T12:00:00Z' }), { lifts, now }).parts.timely).toBe(15);
+		expect(scoreItem(post('A plain update about avatars: three.ws/x', { expiresAt: '2026-09-19T00:00:00Z' }), { lifts, now }).expired).toBe(true);
+		const review = { editor: { scores: { a: 5, b: 5, c: 5, d: 5, e: 5, f: 5 } } };
+		expect(scoreItem(post('A plain update about avatars: three.ws/x'), { lifts, now, review }).parts.review).toBe(5);
+		const published = [{ id: 'q', lane: 'l', pattern: 'p', publishedAt: '2026-09-19T00:00:00Z' }];
+		expect(scoreItem(post('A plain update about avatars: three.ws/x'), { lifts, now, published, quality: { maximumSamePatternInARow: 1 } }).parts.variety).toBe(-25);
+		const ranked = rankItems([post('A plain update about avatars: three.ws/x', { id: 'old' }), post('A plain update about avatars: three.ws/x', { id: 'gone', expiresAt: '2026-09-19T00:00:00Z' })], { lifts, now });
+		expect(ranked.map((row) => row.item.id)).toEqual(['old']);
+	});
+});
+
+describe('holds and fall-through', () => {
+	it('tells a post problem from an account or platform problem', () => {
+		expect(isPostSpecific({ code: 403, data: { detail: 'You are not allowed to create a Tweet with duplicate content.' } })).toBe(true);
+		expect(isPostSpecific({ code: 400, message: 'invalid media' })).toBe(true);
+		expect(isPostSpecific({ code: 403, data: { detail: 'forbidden' } })).toBe(false);
+		expect(isPostSpecific({ code: 401 })).toBe(false);
+		expect(isPostSpecific({ code: 429 })).toBe(false);
+		expect(isPostSpecific({ code: 503 })).toBe(false);
+		expect(isPostSpecific(new Error('socket hang up'))).toBe(false);
+	});
+
+	it('backs off a held post and releases it when the post changes', () => {
+		const dir = sandbox();
+		const item = { id: 'a', kind: 'post', posts: [{ text: HEAD }] };
+		const state = {};
+		const now = Date.parse('2026-09-17T00:00:00Z');
+		expect(placeHold(state, item, dir, 'link down', now).until).toBe('2026-09-17T02:00:00.000Z');
+		expect(placeHold(state, item, dir, 'link down', now).until).toBe('2026-09-17T06:00:00.000Z');
+		expect(placeHold(state, item, dir, 'link down', now).until).toBe('2026-09-18T00:00:00.000Z');
+		expect([...activeHolds(state, [item], dir, now)]).toEqual(['a']);
+		expect([...activeHolds(state, [{ ...item, posts: [{ text: `${HEAD} Now fixed.` }] }], dir, now)]).toEqual([]);
+		expect([...activeHolds(state, [item], dir, Date.parse('2026-09-18T00:00:01Z'))]).toEqual([]);
+	});
+
+	it('counts days of stock per tier and flags the thin ones', () => {
+		const dir = sandbox();
+		const items = [
+			{ id: 'a', status: 'approved', tier: 1, kind: 'post', posts: [{ text: 'a' }] },
+			{ id: 'b', status: 'approved', tier: 2, kind: 'post', posts: [{ text: 'b' }] },
+			{ id: 'c', status: 'approved', tier: 2, kind: 'post', posts: [{ text: 'c' }] },
+			{ id: 'd', status: 'approved', tier: 2, kind: 'post', posts: [{ text: 'd' }] },
+			{ id: 'e', status: 'review', tier: 3, kind: 'post', posts: [{ text: 'e' }] },
+		];
+		const stock = inventory(items, { published: [{ id: 'a' }] }, dir);
+		expect(stock).toEqual([{ tier: 1, days: 0, low: true }, { tier: 2, days: 3, low: false }, { tier: 3, days: 0, low: true }]);
+	});
+
+	it('never ends a tick on a failed post: it holds it and publishes the next best', async () => {
+		const { contentHash, reviewPath } = await import('../api/_lib/x-content/review.js');
+		const dir = sandbox();
+		mkdirSync(join(dir, 'data/x-content/reviews'), { recursive: true });
+		const texts = {
+			broken: 'Rig Doctor names the skeleton convention of a humanoid GLB in the browser and lists the joints that stay frozen: three.ws/broken',
+			rejected: 'Genesis turns a sentence or a selfie into a rigged 3D agent with a custodial wallet, a persona, and a voice: three.ws/rejected',
+			working: 'Materialize measures the true solid volume of a repaired mesh and prices a physical print from that measurement: three.ws/working',
 		};
-		expect(pickDue({ items: [item('a')], state, now, cadence }).resuming).toBe(true);
+		const items = Object.entries(texts).map(([id, text], index) => ({
+			id, status: 'approved', kind: 'post', tier: 1, lane: id, pattern: id, priority: 40 - index * 20,
+			notBefore: '2026-09-17T00:00:00Z', textOnly: true, posts: [{ text }],
+			probes: [{ type: 'api', url: `https://three.ws/api/${id}` }],
+		}));
+		for (const item of items) {
+			writeFileSync(join(dir, reviewPath(item.id)), JSON.stringify({ id: item.id, contentHash: contentHash(item, dir), reviewedAt: '2026-09-17T00:00:00Z', passed: true, blockers: [] }));
+		}
+		const cadence = { windowMinutes: 45, minimumMinutesApart: 240, dailyCap: 3, slots: [{ tier: 3, at: '08:00' }, { tier: 1, at: '16:00' }, { tier: 2, at: '22:00' }] };
+		writeFileSync(join(dir, 'data/x-content/queue.json'), JSON.stringify({ account: 'trythreews', cadence, items }));
+
+		const store = memoryStore();
+		const client = previewClient();
+		const tweet = client.tweet;
+		client.tweet = async (payload) => {
+			if (payload.text.includes('three.ws/rejected')) throw Object.assign(new Error('duplicate content'), { code: 403, data: { detail: 'You are not allowed to create a Tweet with duplicate content.' } });
+			return tweet(payload);
+		};
+		const checks = async (item) => (item.id === 'broken' ? [{ kind: 'probe:api', target: 'https://three.ws/api/broken', ok: false, detail: 'HTTP 500' }] : []);
+		const now = Date.parse('2026-09-17T16:50:00Z');
+
+		const result = await runTick({ root: dir, store, dryRun: false, now, client, checks, env: {} });
+		expect(result.blocked).toEqual([]);
+		expect(result.held.map((row) => row.id)).toEqual(['broken', 'rejected']);
+		expect(result.held[0].reason).toMatch(/probe:api .*HTTP 500/);
+		expect(result.held[1].reason).toMatch(/X rejected the post/);
+		expect(result.published.id).toBe('working');
+		expect(result.published.slot).toBe('2026-09-17#1');
+
+		const state = await store.load();
+		expect(Object.keys(state.holds).sort()).toEqual(['broken', 'rejected']);
+		expect(state.inflight.rejected).toBeUndefined();
+
+		// An account-wide failure is not the post's fault: it stops the tick
+		// instead of burning through the queue, and holds nothing new.
+		const outage = previewClient();
+		outage.tweet = async () => {
+			throw Object.assign(new Error('Service Unavailable'), { code: 503 });
+		};
+		const nextSlot = Date.parse('2026-09-17T22:50:00Z');
+		await expect(runTick({ root: dir, store, dryRun: false, now: nextSlot, client: outage, checks: async () => [], env: {} })).rejects.toThrow('Service Unavailable');
+		expect(Object.keys((await store.load()).holds).sort()).toEqual(['broken', 'rejected']);
 	});
 });
 
@@ -373,39 +522,4 @@ describe('review', () => {
 	});
 });
 
-describe('schedule seed', () => {
-	const day = [
-		{ id: 'forge-max', notBefore: '2026-10-01T13:00:00Z', windowMinutes: 90 },
-		{ id: 'materialize', notBefore: '2026-10-01T18:00:00Z', windowMinutes: 90 },
-		{ id: 'walk-sdk', notBefore: '2026-10-01T23:00:00Z', windowMinutes: 90 },
-	];
 
-	it('changes the minute an item lands, and keeps it stable per seed', () => {
-		const open = dueAt(day[0], {});
-		const secret = dueAt(day[0], {}, { seed: 'production-seed' });
-		expect(secret).not.toBe(open);
-		expect(dueAt(day[0], {}, { seed: 'production-seed' })).toBe(secret);
-		expect(dueAt(day[0], {}, { seed: 'another-seed' })).not.toBe(secret);
-	});
-
-	it('is a plain hash with no seed, so previews and tests are unchanged', () => {
-		expect(jitterMinutes('genesis', 60)).toBe(jitterMinutes('genesis', 60, null));
-		expect(jitterMinutes('genesis', 60, 'seed')).not.toBe(jitterMinutes('genesis', 60));
-	});
-
-	it('deals the day\'s anchors out by seed without leaving the day', () => {
-		const assignments = anchorAssignments(day, 'production-seed');
-		expect([...assignments.values()].sort((left, right) => left - right)).toEqual([13 * 60, 18 * 60, 23 * 60]);
-		expect(anchorAssignments(day, null).size).toBe(0);
-		const orders = new Set(['s1', 's2', 's3', 's4', 's5'].map((seed) => [...anchorAssignments(day, seed)].map(([id]) => id).join(',')));
-		expect(orders.size).toBeGreaterThan(1);
-	});
-
-	it('still respects the cadence when the seed moves an item', () => {
-		const approved = day.map((item) => ({ ...item, status: 'approved', lane: 'developer', pattern: 'mechanism' }));
-		const now = Date.parse('2026-10-02T04:00:00Z');
-		const picked = pickDue({ items: approved, state: {}, now, cadence: { windowMinutes: 90, minimumMinutesApart: 240, dailyCap: 3, quietHoursUtc: ['05:00', '12:00'] }, seed: 'production-seed' });
-		expect(approved.map((item) => item.id)).toContain(picked.item.id);
-		expect(picked.dueAt).toBeLessThanOrEqual(now);
-	});
-});

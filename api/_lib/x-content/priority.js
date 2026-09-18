@@ -1,0 +1,149 @@
+// Which approved post goes out next: always the highest-priority one that is
+// ready, never simply the oldest. Pacing (schedule.js) decides *when* a slot
+// opens; this module decides *what* fills it.
+//
+// A score is a sum of named, explainable parts, so `npm run x:content -- plan`
+// can show exactly why one post outranks another:
+//
+//   engagement  predicted lift from how @trythreews posts with the same signals
+//               actually performed (data/x-archive/analysis), using the same
+//               format, length, and topic classifiers that produced the report
+//   timely      a post with `expiresAt` rises as its window closes, and is
+//               dropped once it has passed (stale news is worse than none)
+//   boost       the owner's explicit `priority` on the item, -50 to +50
+//   waiting     +1 per day an item has been ready, so nothing starves
+//   review      the AI editor's average score above or below 4
+//   variety     a penalty when the post would repeat the last lane or pattern
+//               more times in a row than the queue allows
+//
+// Small samples are shrunk toward no effect: the archive measured "names
+// $THREE" at 13.3x over only four posts, and one lucky post should not decide
+// the whole queue.
+
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { FORMAT_DIMENSIONS, LENGTH_BUCKETS, TOPICS } from '../../../scripts/x-archive-lib.mjs';
+import { weightedLength } from './quality.js';
+
+const DAY = 24 * 60 * 60_000;
+// Prior strength for shrinkage: a signal measured on n posts keeps n / (n + K)
+// of its log-lift.
+const SHRINK_K = 10;
+const TIMELY_WINDOW_MS = 2 * DAY;
+
+export const ENGAGEMENT_REPORT = 'data/x-archive/analysis/trythreews-engagement.json';
+
+export function loadLifts(root) {
+	const path = resolve(root, ENGAGEMENT_REPORT);
+	if (!existsSync(path)) return null;
+	const report = JSON.parse(readFileSync(path, 'utf8')).report || {};
+	const lifts = new Map();
+	const add = (group, row) => {
+		const lift = row.lift ?? row.with?.lift;
+		const count = row.count ?? row.with?.count ?? 0;
+		if (lift > 0 && count > 0) lifts.set(`${group}:${row.key}`, { lift, count });
+	};
+	for (const row of report.formats || []) add('format', row);
+	for (const row of report.lengths || []) add('length', row);
+	for (const row of report.topics || []) add('topic', row);
+	return lifts;
+}
+
+const shrunkLog = ({ lift, count }) => (count / (count + SHRINK_K)) * Math.log(lift);
+
+// The head post, described the way the archive classifiers describe a scraped
+// post, so the signals line up with the ones the report measured.
+function asArchivePost(item) {
+	const head = item.posts?.[0] || {};
+	const media = head.media || [];
+	const text = String(item.kind === 'article' ? `${item.article?.title || ''}\n${head.text || ''}` : head.text || '');
+	return {
+		text,
+		hasImage: media.some((row) => /\.(png|jpe?g|webp|gif)$/i.test(row.path)) || Boolean(item.article?.cover),
+		hasVideo: media.some((row) => /\.(mp4|mov)$/i.test(row.path)),
+		hasCard: false,
+		mentions: text.match(/(?<![\w@])@\w{1,15}/g) || [],
+		urls: [],
+		isReply: false,
+	};
+}
+
+export function engagementSignals(item, lifts) {
+	if (!lifts) return [];
+	const post = asArchivePost(item);
+	const keys = [];
+	for (const dimension of FORMAT_DIMENSIONS) if (dimension.test(post)) keys.push(`format:${dimension.key}`);
+	const length = weightedLength(item.posts?.[0]?.text || '');
+	const bucket = LENGTH_BUCKETS.find((row) => length >= row.min && length <= row.max);
+	if (bucket) keys.push(`length:${bucket.key}`);
+	const topics = TOPICS.filter((topic) => topic.patterns.some((pattern) => pattern.test(post.text))).map((topic) => topic.key);
+	for (const topic of topics.length ? topics : ['other']) keys.push(`topic:${topic}`);
+	return keys.filter((key) => lifts.has(key)).map((key) => ({ key, ...lifts.get(key), weight: shrunkLog(lifts.get(key)) }));
+}
+
+// The signals overlap (a post that tags a partner usually also carries an
+// image and a link), so summing them would count one good post several times.
+// The estimate is the strongest topic signal plus the average of the format
+// and length signals.
+function combinedLog(signals) {
+	const topics = signals.filter((row) => row.key.startsWith('topic:')).map((row) => row.weight);
+	const shape = signals.filter((row) => !row.key.startsWith('topic:')).map((row) => row.weight);
+	const topic = topics.length ? Math.max(...topics) : 0;
+	const form = shape.length ? shape.reduce((a, b) => a + b, 0) / shape.length : 0;
+	return topic + form;
+}
+
+function trailingRun(published, field, value) {
+	let run = 0;
+	for (let index = published.length - 1; index >= 0; index--) {
+		if (published[index][field] !== value) break;
+		run++;
+	}
+	return run;
+}
+
+// Returns { score, parts } or { expired: true } when a timely post has passed.
+export function scoreItem(item, { lifts, published = [], quality = {}, review = null, now = Date.now() }) {
+	const parts = {};
+
+	const signals = engagementSignals(item, lifts);
+	const predicted = Math.exp(combinedLog(signals));
+	parts.engagement = Math.round(10 * Math.log2(predicted) * 10) / 10;
+
+	if (item.expiresAt) {
+		const left = Date.parse(item.expiresAt) - now;
+		if (left <= 0) return { expired: true, score: -Infinity, parts, signals };
+		parts.timely = left < TIMELY_WINDOW_MS ? Math.round(20 * (1 - left / TIMELY_WINDOW_MS)) : 0;
+	}
+
+	const boost = Number(item.priority || 0);
+	if (boost) parts.boost = Math.max(-50, Math.min(50, boost));
+
+	const ready = Date.parse(item.notBefore);
+	if (Number.isFinite(ready) && now > ready) parts.waiting = Math.min(10, Math.floor((now - ready) / DAY));
+
+	const scores = review?.editor?.scores;
+	if (scores) {
+		const values = Object.values(scores).map(Number).filter(Number.isFinite);
+		if (values.length) parts.review = Math.round((values.reduce((a, b) => a + b, 0) / values.length - 4) * 5 * 10) / 10;
+	}
+
+	const sorted = [...published].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+	const maxLane = Number(quality.maximumSameLaneInARow ?? Infinity);
+	const maxPattern = Number(quality.maximumSamePatternInARow ?? Infinity);
+	if (trailingRun(sorted, 'lane', item.lane) >= maxLane || trailingRun(sorted, 'pattern', item.pattern) >= maxPattern) {
+		parts.variety = -25;
+	}
+
+	const score = Math.round(Object.values(parts).reduce((sum, value) => sum + value, 0) * 10) / 10;
+	return { score, parts, signals, predictedLift: Math.round(predicted * 100) / 100 };
+}
+
+// Every ready candidate, best first. Ties go to the item that has been ready
+// longest, then to id order, so the ranking is deterministic.
+export function rankItems(items, context) {
+	return items
+		.map((item) => ({ item, ...scoreItem(item, { ...context, review: context.reviews?.get?.(item.id) || null }) }))
+		.filter((row) => !row.expired)
+		.sort((a, b) => b.score - a.score || Date.parse(a.item.notBefore) - Date.parse(b.item.notBefore) || a.item.id.localeCompare(b.item.id));
+}

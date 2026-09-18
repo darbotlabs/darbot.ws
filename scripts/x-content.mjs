@@ -23,14 +23,17 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { QUEUE_PATH, loadQueue, validateQueue } from '../api/_lib/x-content/queue.js';
-import { anchorAssignments, dueAt, pickDue } from '../api/_lib/x-content/schedule.js';
+import { DEFAULT_CADENCE, TIERS, currentSlot, pickDue, slotOpenings, tierOf } from '../api/_lib/x-content/schedule.js';
+import { loadLifts, rankItems } from '../api/_lib/x-content/priority.js';
+import { activeHolds, inventory } from '../api/_lib/x-content/runner.js';
 import { runTick } from '../api/_lib/x-content/runner.js';
 import { dbStore, memoryStore } from '../api/_lib/x-content/state.js';
 import { VIDEO_LIMITS, mediaType, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
 import { weightedLength } from '../api/_lib/x-content/quality.js';
-import { approvalProblems, reviewItem } from '../api/_lib/x-content/review.js';
+import { approvalProblems, loadReview, reviewItem } from '../api/_lib/x-content/review.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const DAY = 24 * 60 * 60_000;
 
 function loadEnvFile(path) {
 	if (!existsSync(path)) return;
@@ -84,24 +87,54 @@ async function plan() {
 	const s = store();
 	const state = await s.load();
 	const { problems } = validateQueue(queue, root, { state });
-	const published = new Map((state.published || []).map((row) => [row.id, row]));
-	console.log(`ledger: ${s.label}\n`);
-	// Without the production seed the times below are the unseeded ones, which
-	// are not the times production will use. Say so rather than printing a
-	// schedule the operator would trust.
+	const now = Date.now();
+	const cadence = { ...DEFAULT_CADENCE, ...queue.cadence };
 	const seed = process.env.X_CONTENT_SCHEDULE_SEED || null;
-	if (!seed) console.log('note  X_CONTENT_SCHEDULE_SEED is not set here, so these are placeholder times; production picks the real ones\n');
-	const anchors = anchorAssignments(queue.items, seed);
-	const landsAt = (item) => dueAt(item, queue.cadence, { seed, anchorMinutes: anchors.get(item.id) ?? null });
-	for (const item of [...queue.items].sort((a, b) => landsAt(a) - landsAt(b))) {
-		const row = published.get(item.id);
-		const when = row ? `posted ${row.publishedAt}` : `lands ${new Date(landsAt(item)).toISOString()}`;
-		const flag = problems[item.id].length ? `  (${problems[item.id].length} problem(s))` : '';
-		console.log(`${when.padEnd(33)} ${item.status.padEnd(8)} ${item.kind.padEnd(7)} ${item.lane.padEnd(10)} ${item.pattern.padEnd(10)} ${item.id}${flag}${row ? `  ${row.url}` : ''}`);
+	const published = new Map((state.published || []).map((row) => [row.id, row]));
+	const lifts = loadLifts(root);
+	const reviews = new Map(queue.items.map((item) => [item.id, loadReview(root, item.id)]));
+	const holds = activeHolds(state, queue.items, root, now);
+	console.log(`ledger: ${s.label}${seed ? '' : '   (slot minutes are placeholders here: X_CONTENT_SCHEDULE_SEED only exists in production)'}\n`);
+
+	console.log('Slots (T1 flagship, T2 features, T3 proof of work):');
+	const openings = slotOpenings(now, cadence, seed).filter((slot) => slot.opensAt > now - DAY && slot.opensAt < now + DAY);
+	const openKey = currentSlot(now, cadence, seed).slot?.key;
+	for (const slot of openings) {
+		const used = [...published.values()].find((row) => row.slot === slot.key);
+		const state_ = used ? `used by ${used.id}` : slot.key === openKey ? 'OPEN NOW' : slot.opensAt <= now ? 'passed' : 'upcoming';
+		console.log(`  ${new Date(slot.opensAt).toISOString().slice(0, 16)}Z  T${slot.tier}  ${state_}`);
 	}
+
+	console.log('\nStock (approved, ready, not held), one slot per tier per day:');
+	for (const row of inventory(queue.items.filter((item) => !problems[item.id].length), state, root, now)) console.log(`  T${row.tier}: ${row.days} day(s)${row.low ? '   LOW' : ''}`);
+
+	for (const tier of TIERS) {
+		const waiting = queue.items.filter((item) => tierOf(item) === tier && !published.has(item.id));
+		if (!waiting.length) continue;
+		console.log(`\nT${tier} by priority:`);
+		const ranked = rankItems(waiting, { lifts, published: state.published || [], quality: queue.quality, reviews, now });
+		for (const row of ranked) {
+			const item = row.item;
+			const flags = [
+				item.status !== 'approved' ? item.status : null,
+				problems[item.id].length ? `${problems[item.id].length} problem(s)` : null,
+				holds.has(item.id) ? `held until ${state.holds[item.id].until}: ${state.holds[item.id].reason}` : null,
+				Date.parse(item.notBefore) > now ? `embargoed until ${item.notBefore}` : null,
+			].filter(Boolean);
+			const parts = Object.entries(row.parts).map(([key, value]) => `${key} ${value > 0 ? '+' : ''}${value}`).join(', ');
+			console.log(`  ${String(row.score).padStart(6)}  ${item.id.padEnd(26)} ${flags.length ? `[${flags.join('; ')}]` : 'ready'}`);
+			console.log(`          ${parts}  (predicted ${row.predictedLift}x the account median)`);
+		}
+		for (const item of waiting.filter((item) => !ranked.some((row) => row.item.id === item.id))) console.log(`    gone  ${item.id.padEnd(26)} [expired ${item.expiresAt}]`);
+	}
+	if (published.size) {
+		console.log('\nSent:');
+		for (const row of published.values()) console.log(`  ${row.publishedAt}  ${row.id.padEnd(26)} ${row.slot ? `slot ${row.slot} ` : ''}${row.url}`);
+	}
+
 	const publishable = queue.items.filter((item) => !problems[item.id].length);
-	const next = pickDue({ items: publishable, state, cadence: queue.cadence, quality: queue.quality, seed });
-	console.log(`\nnow: ${next.item ? `${next.item.id} is due` : next.reason}`);
+	const next = pickDue({ items: publishable, state, now, cadence: queue.cadence, quality: queue.quality, seed, lifts, reviews, exclude: holds });
+	console.log(`\nnow: ${next.item ? `${next.item.id} would fill slot ${next.slot.key} (T${next.tier}${next.filledDown ? `, filling a T${next.slot.tier} slot` : ''}, score ${next.score})` : next.reason}`);
 }
 
 async function run() {
@@ -114,11 +147,13 @@ async function run() {
 		const result = await runTick({ root, store: s, now, dryRun, requestedId: option('id') });
 		for (const row of result.blocked) console.error(`blocked ${row.id}:\n  ${row.problems.join('\n  ')}`);
 		if (result.preview) {
-			console.log(`Preview of ${result.preview.id} (${result.preview.kind}), lands ${result.preview.dueAt}:\n`);
+			console.log(`Preview of ${result.preview.id} (${result.preview.kind}), score ${result.preview.score ?? 'n/a'}:\n`);
 			for (const call of result.preview.calls) console.log(JSON.stringify(call, null, 2));
 		} else if (result.published) {
+			for (const row of result.held || []) console.log(`held  ${row.id} until ${row.hold.until}: ${row.reason}`);
 			console.log(`Published ${result.published.id}: ${result.published.url}`);
 		} else {
+			for (const row of result.held || []) console.log(`held  ${row.id} until ${row.hold.until}: ${row.reason}`);
 			console.log(result.reason);
 			if (result.skipped) process.exit(1);
 		}
@@ -425,7 +460,7 @@ async function approve() {
 			continue;
 		}
 		item.status = 'approved';
-		console.log(`ok    ${item.id}: approved, lands on ${item.notBefore.slice(0, 10)} at a moment only the schedule seed decides`);
+		console.log(`ok    ${item.id}: approved; it goes out in priority order once ready (embargo ${item.notBefore.slice(0, 10)})`);
 	}
 	writeFileSync(resolve(root, QUEUE_PATH), `${JSON.stringify(queue, null, '\t')}\n`);
 	if (blocked) process.exit(1);

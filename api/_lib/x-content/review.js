@@ -35,6 +35,7 @@ export function contentHash(item, root) {
 			: null,
 		claims: item.claims || [],
 		mentions: item.mentions || {},
+		probes: item.probes || [],
 	};
 	return createHash('sha256').update(JSON.stringify(subject)).digest('hex');
 }

@@ -2,12 +2,26 @@
 	"version": 2,
 	"account": "trythreews",
 	"cadence": {
-		"windowMinutes": 90,
+		"windowMinutes": 45,
 		"minimumMinutesApart": 240,
 		"dailyCap": 3,
 		"quietHoursUtc": [
-			"05:00",
-			"12:00"
+			"02:00",
+			"07:00"
+		],
+		"slots": [
+			{
+				"tier": 3,
+				"at": "08:00"
+			},
+			{
+				"tier": 1,
+				"at": "16:00"
+			},
+			{
+				"tier": 2,
+				"at": "22:00"
+			}
 		]
 	},
 	"quality": {
@@ -107,7 +121,8 @@
 			],
 			"mentions": {
 				"@solana": "Every Genesis agent is provisioned a custodial Solana wallet (POST /api/agents/:id/wallet/provision); Solana is the platform's home chain."
-			}
+			},
+			"tier": 2
 		},
 		{
 			"id": "rig-doctor",
@@ -174,7 +189,8 @@
 						}
 					]
 				}
-			]
+			],
+			"tier": 2
 		},
 		{
 			"id": "aws-authorization-spine",
@@ -242,7 +258,8 @@
 			],
 			"mentions": {
 				"@awscloud": "The article is published on the AWS Builder Center under the three.ws byline, as an AWS Partner."
-			}
+			},
+			"tier": 1
 		},
 		{
 			"id": "three-token-mcp",
@@ -325,7 +342,8 @@
 			],
 			"mentions": {
 				"@solana": "three_burn signs and broadcasts one Solana mainnet transaction (packages/three-token-mcp/src/lib/token.js); $THREE is an SPL token and Solana is the platform's home chain."
-			}
+			},
+			"tier": 1
 		},
 		{
 			"id": "forge-max",
@@ -362,7 +380,8 @@
 					]
 				}
 			],
-			"mentions": {}
+			"mentions": {},
+			"tier": 2
 		},
 		{
 			"id": "materialize",
@@ -409,7 +428,8 @@
 					]
 				}
 			],
-			"mentions": {}
+			"mentions": {},
+			"tier": 2
 		}
 	]
 }

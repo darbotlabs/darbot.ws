@@ -119,6 +119,14 @@ export function validateItem(item, root) {
 	if (!KINDS.includes(item.kind)) problems.push(`kind must be one of ${KINDS.join(', ')}`);
 	if (!item.lane || !item.pattern) problems.push('lane and pattern are required (they drive rotation)');
 	if (!Number.isFinite(Date.parse(item.notBefore))) problems.push('notBefore must be an ISO-8601 timestamp');
+	if (![1, 2, 3].includes(Number(item.tier))) problems.push('tier must be 1 (flagship), 2 (feature), or 3 (proof of work)');
+	if (item.expiresAt !== undefined && !Number.isFinite(Date.parse(item.expiresAt))) problems.push('expiresAt must be an ISO-8601 timestamp');
+	if (item.priority !== undefined && !(Number(item.priority) >= -50 && Number(item.priority) <= 50)) problems.push('priority is an owner boost from -50 to 50');
+	for (const probe of item.probes || []) {
+		if (!['api', 'browser', 'command'].includes(probe.type)) problems.push(`probe type ${probe.type} must be api, browser, or command`);
+		if (probe.type === 'api' && !/^https:\/\//.test(String(probe.url || ''))) problems.push('api probes need an https url');
+		if (probe.type === 'command' && !Array.isArray(probe.argv)) problems.push('command probes need an argv array');
+	}
 
 	if (item.kind === 'post') {
 		if (!item.posts?.length) problems.push('a post item needs at least one post');

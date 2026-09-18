@@ -1,18 +1,18 @@
-// Picks the one item a tick should publish, or explains why nothing is due.
-//
-// Human cadence, not cron cadence. An account that posts at 14:00:00 every day
-// in lane order is obviously a bot. So:
-//   - each item lands at a stable jittered moment inside its window after
-//     `notBefore` (hashed from its id, so a preview and the real tick agree);
-//   - posts keep a minimum gap and a rolling 24h cap;
-//   - quiet hours are respected;
-//   - the same lane or format never runs more times in a row than the config
-//     allows, unless the item has waited a full day past its moment (so a
-//     one-lane queue still drains).
+// Decides when the next post may go out, and hands the slot to the
+// highest-priority ready post (priority.js). Which post and when are separate
+// questions on purpose: the queue always spends a slot on the most valuable
+// thing it has, and the slot itself follows a human cadence, not a cron one:
+//   - a minimum gap between posts, stretched by a secret per-gap jitter, so the
+//     account never posts on the hour and the next minute cannot be predicted;
+//   - a rolling 24h cap and quiet hours;
+//   - `notBefore` is an embargo: an item is not ready before it;
+//   - a half-published item (thread cut off, Article drafted) always resumes
+//     first, ahead of every pacing and priority rule.
 // Pure: no I/O, so the rules are unit-tested and the CLI shows the same
 // decision the cron will make.
 
 import { createHash, createHmac } from 'node:crypto';
+import { rankItems } from './priority.js';
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -45,42 +45,6 @@ export function jitterMinutes(id, windowMinutes, seed = null) {
 	return digest.readUInt32BE(0) % Math.max(1, windowMinutes);
 }
 
-const startOfUtcDay = (timestamp) => Date.parse(`${new Date(timestamp).toISOString().slice(0, 10)}T00:00:00Z`);
-const minutesOfUtcDay = (timestamp) => (timestamp - startOfUtcDay(timestamp)) / MINUTE;
-
-// The anchor each of a day's items takes, as minutes past midnight UTC. The
-// anchors are the ones the plan already chose; the seed only decides which item
-// gets which, so no item ever moves outside the day, the quiet hours, or the
-// cadence it was planned under.
-export function anchorAssignments(items, seed = null) {
-	const assignments = new Map();
-	if (!seed) return assignments;
-	const byDay = new Map();
-	for (const item of items) {
-		const at = Date.parse(item.notBefore);
-		if (!Number.isFinite(at)) continue;
-		const day = startOfUtcDay(at);
-		if (!byDay.has(day)) byDay.set(day, []);
-		byDay.get(day).push(item);
-	}
-	for (const [, dayItems] of byDay) {
-		const anchors = dayItems.map((item) => minutesOfUtcDay(Date.parse(item.notBefore))).sort((left, right) => left - right);
-		const order = [...dayItems].sort((left, right) => {
-			const rank = (item) => createHmac('sha256', String(seed)).update(`order:${item.id}`).digest('hex');
-			return rank(left).localeCompare(rank(right));
-		});
-		order.forEach((item, index) => assignments.set(item.id, anchors[index]));
-	}
-	return assignments;
-}
-
-export function dueAt(item, cadence = DEFAULT_CADENCE, { seed = null, anchorMinutes = null } = {}) {
-	const window = Number(item.windowMinutes ?? cadence.windowMinutes ?? DEFAULT_CADENCE.windowMinutes);
-	const planned = Date.parse(item.notBefore);
-	const base = anchorMinutes === null || anchorMinutes === undefined ? planned : startOfUtcDay(planned) + anchorMinutes * MINUTE;
-	return base + jitterMinutes(item.id, window, seed) * MINUTE;
-}
-
 export function inQuietHours(now, quiet) {
 	if (!Array.isArray(quiet) || quiet.length !== 2) return false;
 	const minutes = new Date(now).getUTCHours() * 60 + new Date(now).getUTCMinutes();
@@ -91,62 +55,134 @@ export function inQuietHours(now, quiet) {
 	return start <= end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
 
-function trailingRun(published, field, value) {
-	let run = 0;
-	for (let index = published.length - 1; index >= 0; index--) {
-		if (published[index][field] !== value) break;
-		run++;
+// ── The day plan ────────────────────────────────────────────────────────────
+// Three slots a day, each owned by a tier:
+//   T1 flagship         partner news, $THREE utility, major launches
+//   T2 features         shipped features with proof
+//   T3 proof of work    short demos, stats, build notes
+// Slot times come from the engagement report's hour-of-day data, and each slot
+// opens at a jittered minute only the seed can reproduce. A slot stays open
+// until the next one starts, so a missed tick (deploy, outage) still posts, but
+// a day never gets more than one post per slot.
+//
+// Filling a slot: the slot's own tier first, then lower tiers (T1 slot empty ->
+// best T2), so the best available post always gets the best time. A higher tier
+// only fills a lower slot when it has a surplus, so the last flagship post is
+// kept for prime time instead of being spent off-peak. Nothing ready at all
+// means nothing posts: 3 a day is a ceiling, not a quota.
+
+export const TIERS = [1, 2, 3];
+
+export const DEFAULT_SLOTS = [
+	{ tier: 3, at: '08:00' },
+	{ tier: 1, at: '16:00' },
+	{ tier: 2, at: '22:00' },
+];
+
+const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);
+const atMinutes = (at) => {
+	const [h, m] = String(at).split(':').map(Number);
+	return h * 60 + (m || 0);
+};
+
+// Every slot opening from yesterday through tomorrow, in time order, so the
+// slot spanning midnight (22:00 until the next morning) is found too.
+export function slotOpenings(now, cadence = DEFAULT_CADENCE, seed = null) {
+	const slots = cadence.slots?.length ? cadence.slots : DEFAULT_SLOTS;
+	const window = Number(cadence.windowMinutes ?? DEFAULT_CADENCE.windowMinutes);
+	const today = Date.parse(`${dayKey(now)}T00:00:00Z`);
+	const openings = [];
+	for (const offset of [-1, 0, 1]) {
+		const day = today + offset * DAY;
+		slots.forEach((slot, index) => {
+			const key = `${dayKey(day)}#${index}`;
+			openings.push({ key, tier: Number(slot.tier), opensAt: day + (atMinutes(slot.at) + jitterMinutes(`slot:${key}`, window, seed)) * MINUTE });
+		});
 	}
-	return run;
+	return openings.sort((a, b) => a.opensAt - b.opensAt);
 }
 
-// `requestedId` names one item and skips pacing; `anyStatus` lets a preview of
-// that item run before it is approved.
-export function pickDue({ items, state, now = Date.now(), cadence: rawCadence = {}, quality = {}, requestedId = null, anyStatus = false, seed = null }) {
+// The slot that is open right now (the latest one that has opened), and when
+// the next one opens.
+export function currentSlot(now, cadence = DEFAULT_CADENCE, seed = null) {
+	const openings = slotOpenings(now, cadence, seed);
+	const index = openings.findLastIndex((slot) => slot.opensAt <= now);
+	return { slot: index >= 0 ? openings[index] : null, next: openings[index + 1] || null };
+}
+
+// The order tiers are tried in for a slot: its own, then every lower tier,
+// then higher tiers that have more than one post ready.
+export function tierOrder(slotTier, readyByTier) {
+	const lower = TIERS.filter((tier) => tier >= slotTier);
+	const higher = TIERS.filter((tier) => tier < slotTier && (readyByTier.get(tier) || 0) > 1).reverse();
+	return [...lower, ...higher];
+}
+
+export const tierOf = (item) => (TIERS.includes(Number(item.tier)) ? Number(item.tier) : 2);
+
+// `requestedId` names one item and skips pacing and ranking; `anyStatus` lets a
+// preview of that item run before it is approved. `exclude` holds ids this
+// tick already tried and could not send, so the slot falls to the next best.
+export function pickDue({
+	items,
+	state,
+	now = Date.now(),
+	cadence: rawCadence = {},
+	quality = {},
+	requestedId = null,
+	anyStatus = false,
+	seed = null,
+	lifts = null,
+	reviews = null,
+	exclude = new Set(),
+}) {
 	const cadence = { ...DEFAULT_CADENCE, ...rawCadence };
 	const published = [...(state?.published || [])].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
 	const publishedIds = new Set(published.map((row) => row.id));
 	const inflight = state?.inflight || {};
 
-	const eligible = items
+	const unpublished = items
 		.filter((item) => (item.status === 'approved' || (anyStatus && requestedId)) && !publishedIds.has(item.id))
 		.filter((item) => !requestedId || item.id === requestedId);
-	const anchors = anchorAssignments(eligible, seed);
-	const candidates = eligible
-		.map((item) => ({ item, at: dueAt(item, cadence, { seed, anchorMinutes: anchors.get(item.id) ?? null }) }))
-		.sort((a, b) => a.at - b.at);
 
 	if (requestedId) {
-		return candidates[0] ? { item: candidates[0].item, dueAt: candidates[0].at, forced: true } : { item: null, reason: `no ${anyStatus ? '' : 'approved '}unpublished item named ${requestedId}` };
+		return unpublished[0] ? { item: unpublished[0], forced: true } : { item: null, reason: `no ${anyStatus ? '' : 'approved '}unpublished item named ${requestedId}` };
 	}
 
-	// A half-published item (thread cut off mid-way, Article drafted but not
-	// yet published) always resumes first, ahead of every pacing rule.
-	const resuming = candidates.find(({ item }) => inflight[item.id]);
-	if (resuming) return { item: resuming.item, dueAt: resuming.at, resuming: true };
+	const resuming = unpublished.find((item) => inflight[item.id] && !exclude.has(item.id));
+	if (resuming) return { item: resuming, resuming: true };
 
 	if (inQuietHours(now, cadence.quietHoursUtc)) return { item: null, reason: 'quiet hours' };
+	const { slot, next } = currentSlot(now, cadence, seed);
+	const nextAt = next ? new Date(next.opensAt).toISOString() : 'tomorrow';
+	if (!slot) return { item: null, reason: `no slot is open; the next opens at ${nextAt}` };
+	if (published.some((row) => row.slot === slot.key)) return { item: null, reason: `slot ${slot.key} (T${slot.tier}) is used; the next opens at ${nextAt}` };
 
 	const last = published[published.length - 1];
-	if (last) {
-		const nextAllowed = Date.parse(last.publishedAt) + cadence.minimumMinutesApart * MINUTE;
-		if (now < nextAllowed) return { item: null, reason: `spacing: next post allowed at ${new Date(nextAllowed).toISOString()}` };
+	if (last && now < Date.parse(last.publishedAt) + cadence.minimumMinutesApart * MINUTE) {
+		return { item: null, reason: `spacing: the last post went out at ${last.publishedAt}` };
 	}
 	const lastDay = published.filter((row) => now - Date.parse(row.publishedAt) < DAY).length;
 	if (lastDay >= cadence.dailyCap) return { item: null, reason: `daily cap of ${cadence.dailyCap} reached` };
 
-	const maxLane = Number(quality.maximumSameLaneInARow ?? Infinity);
-	const maxPattern = Number(quality.maximumSamePatternInARow ?? Infinity);
-	const due = candidates.filter(({ at }) => at <= now);
-	if (!due.length) {
-		const next = candidates[0];
-		return { item: null, reason: next ? `next item ${next.item.id} is due at ${new Date(next.at).toISOString()}` : 'queue has no approved unpublished items' };
+	const ready = unpublished.filter((item) => !exclude.has(item.id) && Date.parse(item.notBefore) <= now);
+	const context = { lifts, published, quality, reviews, now };
+	const readyByTier = new Map(TIERS.map((tier) => [tier, ready.filter((item) => tierOf(item) === tier).length]));
+	for (const tier of tierOrder(slot.tier, readyByTier)) {
+		const ranked = rankItems(ready.filter((item) => tierOf(item) === tier), context);
+		if (!ranked.length) continue;
+		const [top] = ranked;
+		return {
+			item: top.item,
+			slot,
+			tier,
+			filledDown: tier !== slot.tier,
+			score: top.score,
+			parts: top.parts,
+			ranking: ranked.map((row) => ({ id: row.item.id, score: row.score })),
+		};
 	}
-	for (const candidate of due) {
-		const starved = now - candidate.at >= DAY;
-		const laneRun = trailingRun(published, 'lane', candidate.item.lane);
-		const patternRun = trailingRun(published, 'pattern', candidate.item.pattern);
-		if (starved || (laneRun < maxLane && patternRun < maxPattern)) return { item: candidate.item, dueAt: candidate.at };
-	}
-	return { item: null, reason: 'every due item would repeat the previous lane or pattern; waiting for variety' };
+	const embargoed = unpublished.filter((item) => !exclude.has(item.id) && Date.parse(item.notBefore) > now).sort((a, b) => a.notBefore.localeCompare(b.notBefore));
+	if (embargoed[0]) return { item: null, slot, reason: `nothing is ready for slot ${slot.key}; ${embargoed[0].id} is embargoed until ${embargoed[0].notBefore}` };
+	return { item: null, slot, reason: exclude.size ? `every ready post was held this tick; slot ${slot.key} stays open` : 'queue has no approved unpublished posts' };
 }

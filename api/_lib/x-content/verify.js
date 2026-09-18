@@ -205,6 +205,94 @@ async function spellingChecks(item, texts, glossary) {
 		}));
 }
 
+// ── Feature probes ──────────────────────────────────────────────────────────
+// A claim check proves the page says something. A probe proves the feature
+// does it. Every item headed for approval declares at least one, in `probes`:
+//
+//   api      fetch a URL; expect a status, text, or a JSON value. Cheap and
+//            dependency-free, so it runs at review AND seconds before posting.
+//   browser  drive the live page in a real browser: goto, click, expect text.
+//   command  run a repo test that exercises the exact behavior the post claims
+//            (e.g. `node --test packages/three-token-mcp/test/burn-policy.test.mjs`).
+// Browser and command probes need a browser and a checkout, so they run at
+// review time only; the production pre-flight runs the api probes.
+
+const jsonPath = (value, path) => String(path).split('.').reduce((node, key) => (node == null ? node : node[key]), value);
+
+async function apiProbe(probe) {
+	const response = await fetchWithTimeout(probe.url, {
+		method: probe.method || 'GET',
+		headers: probe.body ? { 'content-type': 'application/json' } : {},
+		body: probe.body ? JSON.stringify(probe.body) : undefined,
+	}, probe.timeoutMs || 20_000);
+	const expect = probe.expect || {};
+	const statusOk = expect.status ? response.status === expect.status : response.ok;
+	if (!statusOk) return { ok: false, detail: `HTTP ${response.status}` };
+	const body = await response.text();
+	if (expect.contains && !body.includes(expect.contains)) return { ok: false, detail: `response does not contain "${expect.contains}"` };
+	if (expect.json) {
+		let parsed;
+		try {
+			parsed = JSON.parse(body);
+		} catch {
+			return { ok: false, detail: 'response is not JSON' };
+		}
+		const value = jsonPath(parsed, expect.json.path);
+		if ('equals' in expect.json && JSON.stringify(value) !== JSON.stringify(expect.json.equals)) return { ok: false, detail: `${expect.json.path} is ${JSON.stringify(value)}` };
+		if (expect.json.exists && value === undefined) return { ok: false, detail: `${expect.json.path} is missing` };
+		if ('min' in expect.json && !(Number(value?.length ?? value) >= expect.json.min)) return { ok: false, detail: `${expect.json.path} is ${JSON.stringify(value)}; needs at least ${expect.json.min}` };
+	}
+	return { ok: true, detail: `HTTP ${response.status}, expectations met` };
+}
+
+async function browserProbe(probe) {
+	const { chromium } = await import('playwright');
+	const browser = await chromium.launch();
+	try {
+		const page = await browser.newPage({ userAgent: UA });
+		for (const step of probe.steps || []) {
+			if (step.goto) await page.goto(step.goto, { waitUntil: 'networkidle', timeout: 60_000 });
+			else if (step.click) await page.getByText(step.click, { exact: false }).first().click({ timeout: 20_000 });
+			else if (step.expect) await page.getByText(step.expect, { exact: false }).first().waitFor({ timeout: step.timeoutMs || 45_000 });
+		}
+		return { ok: true, detail: `${(probe.steps || []).length} steps passed` };
+	} catch (err) {
+		return { ok: false, detail: err.message.split('\n')[0] };
+	} finally {
+		await browser.close();
+	}
+}
+
+async function commandProbe(probe, root) {
+	const { spawnSync } = await import('node:child_process');
+	const [command, ...args] = probe.argv || [];
+	if (!command) return { ok: false, detail: 'command probe has no argv' };
+	const run = spawnSync(command, args, { cwd: root, encoding: 'utf8', timeout: probe.timeoutMs || 180_000 });
+	if (run.status === 0) return { ok: true, detail: 'exit 0' };
+	const tail = `${run.stdout || ''}${run.stderr || ''}`.trim().split('\n').slice(-3).join(' | ');
+	return { ok: false, detail: `exit ${run.status ?? run.signal}: ${tail}` };
+}
+
+// `where` is 'review' (every probe) or 'publish' (api probes only).
+export async function probeChecks(item, { root, where = 'review' }) {
+	const checks = [];
+	for (const probe of item.probes || []) {
+		if (where === 'publish' && probe.type !== 'api') continue;
+		const label = probe.name || probe.url || (probe.argv || []).join(' ');
+		try {
+			let result;
+			if (probe.type === 'api') result = await apiProbe(probe);
+			else if (probe.type === 'browser') result = await browserProbe(probe);
+			else if (probe.type === 'command') result = await commandProbe(probe, root);
+			else result = { ok: false, detail: `unknown probe type ${probe.type}` };
+			checks.push({ kind: `probe:${probe.type}`, target: label, ...result });
+		} catch (err) {
+			checks.push({ kind: `probe:${probe.type}`, target: label, ok: false, detail: err.message });
+		}
+	}
+	return checks;
+}
+
 export async function verifyItem(item, { root, glossary = [], env = process.env }) {
 	const texts = itemTexts(item);
 	const pages = createPageReader();
@@ -222,6 +310,10 @@ export async function verifyItem(item, { root, glossary = [], env = process.env 
 	} finally {
 		await pages.close();
 	}
+	if (!item.probes?.length) {
+		checks.push({ kind: 'probe', target: item.id, ok: false, detail: 'no feature probe declared; add one to `probes` that proves the feature works, not just that its page loads' });
+	}
+	checks.push(...(await probeChecks(item, { root, where: 'review' })));
 	checks.push(...(await linkChecks(texts)));
 	checks.push(...(await mentionChecks(texts, env)));
 	checks.push(...(await spellingChecks(item, texts, glossary)));

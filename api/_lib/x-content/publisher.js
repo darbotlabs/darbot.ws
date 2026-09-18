@@ -108,9 +108,13 @@ async function publishArticle({ client, root, item, progress, persist }) {
 }
 
 // Publishes `item`, resuming from state.inflight. Returns the ledger row.
-export async function publishItem({ item, client, root, state, store, account = 'trythreews' }) {
+// `meta` (the slot and tier the scheduler gave this post) is pinned on the
+// first attempt, so a thread resumed after a crash is still credited to the
+// slot it started in and that slot is never spent twice.
+export async function publishItem({ item, client, root, state, store, account = 'trythreews', meta = {}, now = Date.now() }) {
 	state.inflight ||= {};
 	const progress = (state.inflight[item.id] ||= { media: {}, postIds: [] });
+	progress.meta ||= meta;
 	const persist = () => store.save(state);
 
 	if (item.kind === 'article') await publishArticle({ client, root, item, progress, persist });
@@ -122,10 +126,11 @@ export async function publishItem({ item, client, root, state, store, account = 
 		kind: item.kind,
 		lane: item.lane,
 		pattern: item.pattern,
-		publishedAt: new Date().toISOString(),
+		publishedAt: new Date(Math.max(now, Date.now() - 60 * 60_000 * 24 * 365)).toISOString(),
 		text: item.kind === 'article' ? item.article.title : item.posts[0].text,
 		postIds: progress.postIds,
 		url: `https://x.com/${account}/status/${leadId}`,
+		...progress.meta,
 	};
 	if (progress.articlePostId) row.articlePostId = progress.articlePostId;
 	state.published = [...(state.published || []), row];
