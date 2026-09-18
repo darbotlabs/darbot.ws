@@ -47,9 +47,18 @@ a link.
 <!-- assets:start -->
 | Campaign | File | Dimensions | Duration | Size | Captured URL | Capture date | What it shows |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| MKT-2026-10-AWS-MARKET | `desktop@2x.png` (held for owner approval, not committed) | 3200x1800 | still | 0.24 MB | https://three.ws/aws | 2026-09-17 | Desktop hero at 1600x900 (2x): The three.ws on AWS page: the AWS Partner software path and procurement story |
-| MKT-2026-10-AWS-MARKET | `x-1600x900.jpg` (held for owner approval, not committed) | 1600x900 | still | 0.07 MB | https://three.ws/aws | 2026-09-17 | X post still, 16:9 JPEG under 5 MB: The three.ws on AWS page: the AWS Partner software path and procurement story |
-| MKT-2026-10-AWS-MARKET | `mobile@3x.png` (held for owner approval, not committed) | 1170x1992 | still | 0.16 MB | https://three.ws/aws | 2026-09-17 | Mobile at 390x844 (3x): The three.ws on AWS page: the AWS Partner software path and procurement story |
+| MKT-2026-09-OPENAI-STUDIO | [desktop@2x.png](./MKT-2026-09-OPENAI-STUDIO/desktop@2x.png) | 3200x1800 | still | 0.21 MB | https://three.ws/openai | 2026-09-18 | Desktop hero at 1600x900 (2x): The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless |
+| MKT-2026-09-OPENAI-STUDIO | [x-1600x900.jpg](./MKT-2026-09-OPENAI-STUDIO/x-1600x900.jpg) | 1600x900 | still | 0.08 MB | https://three.ws/openai | 2026-09-18 | X post still, 16:9 JPEG under 5 MB: The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless |
+| MKT-2026-09-OPENAI-STUDIO | [mobile@3x.png](./MKT-2026-09-OPENAI-STUDIO/mobile@3x.png) | 1170x2532 | still | 0.21 MB | https://three.ws/openai | 2026-09-18 | Mobile at 390x844 (3x): The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless |
+| MKT-2026-10-CDP-X402 | `desktop@2x.png` (held for owner approval, not committed) | 3200x1800 | still | 0.37 MB | https://three.ws/bazaar | 2026-09-18 | Desktop hero at 1600x900 (2x): The x402 Bazaar: a live catalog of paid APIs an agent can discover and buy |
+| MKT-2026-10-CDP-X402 | `x-1600x900.jpg` (held for owner approval, not committed) | 1600x900 | still | 0.12 MB | https://three.ws/bazaar | 2026-09-18 | X post still, 16:9 JPEG under 5 MB: The x402 Bazaar: a live catalog of paid APIs an agent can discover and buy |
+| MKT-2026-10-CDP-X402 | [mobile@3x.png](./MKT-2026-10-CDP-X402/mobile@3x.png) | 1170x2532 | still | 0.18 MB | https://three.ws/bazaar | 2026-09-18 | Mobile at 390x844 (3x): The x402 Bazaar: a live catalog of paid APIs an agent can discover and buy |
+| MKT-2026-10-AWS-MARKET | [desktop@2x.png](./MKT-2026-10-AWS-MARKET/desktop@2x.png) | 3200x1800 | still | 0.24 MB | https://three.ws/aws | 2026-09-18 | Desktop hero at 1600x900 (2x): The three.ws on AWS page: the AWS Partner software path and procurement story |
+| MKT-2026-10-AWS-MARKET | [x-1600x900.jpg](./MKT-2026-10-AWS-MARKET/x-1600x900.jpg) | 1600x900 | still | 0.07 MB | https://three.ws/aws | 2026-09-18 | X post still, 16:9 JPEG under 5 MB: The three.ws on AWS page: the AWS Partner software path and procurement story |
+| MKT-2026-10-AWS-MARKET | [mobile@3x.png](./MKT-2026-10-AWS-MARKET/mobile@3x.png) | 1170x2532 | still | 0.22 MB | https://three.ws/aws | 2026-09-18 | Mobile at 390x844 (3x): The three.ws on AWS page: the AWS Partner software path and procurement story |
+| MKT-2026-11-GCP-AGENT | [desktop@2x.png](./MKT-2026-11-GCP-AGENT/desktop@2x.png) | 3200x1800 | still | 0.26 MB | https://three.ws/.well-known/agent-card.json | 2026-09-18 | Desktop hero at 1600x900 (2x): The public A2A Agent Card served at /.well-known/agent-card.json |
+| MKT-2026-11-GCP-AGENT | [x-1600x900.jpg](./MKT-2026-11-GCP-AGENT/x-1600x900.jpg) | 1600x900 | still | 0.09 MB | https://three.ws/.well-known/agent-card.json | 2026-09-18 | X post still, 16:9 JPEG under 5 MB: The public A2A Agent Card served at /.well-known/agent-card.json |
+| MKT-2026-11-GCP-AGENT | [mobile@3x.png](./MKT-2026-11-GCP-AGENT/mobile@3x.png) | 1170x2531 | still | 0.31 MB | https://three.ws/.well-known/agent-card.json | 2026-09-18 | Mobile at 390x844 (3x): The public A2A Agent Card served at /.well-known/agent-card.json |
 <!-- assets:end -->
 
 ## Findings at capture
@@ -60,7 +69,10 @@ WebGL canvases that never painted, as observed on production at capture time.
 <!-- findings:start -->
 | Campaign | Captured URL | Finding |
 | --- | --- | --- |
+| MKT-2026-09-OPENAI-STUDIO | https://three.ws/openai | No defect observed at capture |
+| MKT-2026-10-CDP-X402 | https://three.ws/bazaar | No defect observed at capture |
 | MKT-2026-10-AWS-MARKET | https://three.ws/aws | No defect observed at capture |
+| MKT-2026-11-GCP-AGENT | https://three.ws/.well-known/agent-card.json | No defect observed at capture |
 <!-- findings:end -->
 
 ## Anchors without a three.ws capture

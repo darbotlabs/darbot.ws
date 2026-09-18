@@ -3,41 +3,161 @@
 	"source": "marketing/growth/campaigns.csv",
 	"campaigns": [
 		{
-			"campaign": "MKT-2026-10-AWS-MARKET",
-			"publishDate": "2026-10-20",
-			"partner": "AWS",
-			"url": "https://three.ws/aws",
-			"capturedAt": "2026-09-17T03:25:19.828Z",
+			"campaign": "MKT-2026-09-OPENAI-STUDIO",
+			"publishDate": "2026-09-29",
+			"partner": "OpenAI",
+			"url": "https://three.ws/openai",
+			"capturedAt": "2026-09-18T20:16:59.485Z",
 			"files": [
 				{
-					"file": "MKT-2026-10-AWS-MARKET/desktop@2x.png",
-					"bytes": 247834,
-					"sha256": "88f8cbe19feee88770703c5b13c58be18630457010da63e3f6c7e7aa94b6cd80",
+					"file": "MKT-2026-09-OPENAI-STUDIO/desktop@2x.png",
+					"bytes": 223497,
+					"sha256": "cc713e6a1039607dda7524638b6dc84b21499ca2cad40e1fbab0a86d33a80716",
+					"kind": "desktop",
+					"width": 3200,
+					"height": 1800,
+					"gated": false,
+					"shows": "Desktop hero at 1600x900 (2x): The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless"
+				},
+				{
+					"file": "MKT-2026-09-OPENAI-STUDIO/x-1600x900.jpg",
+					"bytes": 80624,
+					"sha256": "93237fd509dea9940c9024f04012c7e9748373a67c1b9a7c5131decfe335bb15",
+					"kind": "x",
+					"width": 1600,
+					"height": 900,
+					"gated": false,
+					"shows": "X post still, 16:9 JPEG under 5 MB: The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless"
+				},
+				{
+					"file": "MKT-2026-09-OPENAI-STUDIO/mobile@3x.png",
+					"bytes": 220065,
+					"sha256": "999e6c850e213341c5eca148572031edeffc26e13eada9ef2b0401a9a30f0b15",
+					"kind": "mobile",
+					"width": 1170,
+					"height": 2532,
+					"gated": false,
+					"shows": "Mobile at 390x844 (3x): The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless"
+				}
+			],
+			"defects": []
+		},
+		{
+			"campaign": "MKT-2026-10-CDP-X402",
+			"publishDate": "2026-10-13",
+			"partner": "Coinbase Developer Platform",
+			"url": "https://three.ws/bazaar",
+			"capturedAt": "2026-09-18T20:24:17.909Z",
+			"files": [
+				{
+					"file": "MKT-2026-10-CDP-X402/desktop@2x.png",
+					"bytes": 389191,
+					"sha256": "6809e9a487128f56a594e74bc2810a3a6966fa30ca5035cfe3ad106749b8d68e",
 					"kind": "desktop",
 					"width": 3200,
 					"height": 1800,
 					"gated": true,
-					"shows": "Desktop hero at 1600x900 (2x): The three.ws on AWS page: the AWS Partner software path and procurement story"
+					"shows": "Desktop hero at 1600x900 (2x): The x402 Bazaar: a live catalog of paid APIs an agent can discover and buy"
 				},
 				{
-					"file": "MKT-2026-10-AWS-MARKET/x-1600x900.jpg",
-					"bytes": 77400,
-					"sha256": "1d018775cfe654d2ebbe17e3ec651eade1624896c46c229bc83cd324e2520299",
+					"file": "MKT-2026-10-CDP-X402/x-1600x900.jpg",
+					"bytes": 128486,
+					"sha256": "c5a1a893283aaa4eb94f0a4d069e3ab6eb1161988e57a876286360a716191284",
 					"kind": "x",
 					"width": 1600,
 					"height": 900,
 					"gated": true,
+					"shows": "X post still, 16:9 JPEG under 5 MB: The x402 Bazaar: a live catalog of paid APIs an agent can discover and buy"
+				},
+				{
+					"file": "MKT-2026-10-CDP-X402/mobile@3x.png",
+					"bytes": 188230,
+					"sha256": "115fbcc10ebf12eb0fbcd601914d9d7dd9418b751b682c52ccd7a94f31ddf4ee",
+					"kind": "mobile",
+					"width": 1170,
+					"height": 2532,
+					"gated": false,
+					"shows": "Mobile at 390x844 (3x): The x402 Bazaar: a live catalog of paid APIs an agent can discover and buy"
+				}
+			],
+			"defects": []
+		},
+		{
+			"campaign": "MKT-2026-10-AWS-MARKET",
+			"publishDate": "2026-10-20",
+			"partner": "AWS",
+			"url": "https://three.ws/aws",
+			"capturedAt": "2026-09-18T20:09:29.700Z",
+			"files": [
+				{
+					"file": "MKT-2026-10-AWS-MARKET/desktop@2x.png",
+					"bytes": 251561,
+					"sha256": "c4fc064c297c63d6abacedbfd0174eb14e9547d29d01fde0e13d3f4f57c4df25",
+					"kind": "desktop",
+					"width": 3200,
+					"height": 1800,
+					"gated": false,
+					"shows": "Desktop hero at 1600x900 (2x): The three.ws on AWS page: the AWS Partner software path and procurement story"
+				},
+				{
+					"file": "MKT-2026-10-AWS-MARKET/x-1600x900.jpg",
+					"bytes": 78506,
+					"sha256": "52a017609bc2ffd138024286db23b76771ce7788c2f1e005ca71bb492b0edc0e",
+					"kind": "x",
+					"width": 1600,
+					"height": 900,
+					"gated": false,
 					"shows": "X post still, 16:9 JPEG under 5 MB: The three.ws on AWS page: the AWS Partner software path and procurement story"
 				},
 				{
 					"file": "MKT-2026-10-AWS-MARKET/mobile@3x.png",
-					"bytes": 167998,
-					"sha256": "3261aa79a9f9cc2b91fed4cc988ae9167f7e282968a3edb49ca1ec846e094c74",
+					"bytes": 232922,
+					"sha256": "b1d0cd5c689d052a7963a5e76bf620964fc89331b4e17379796f9f9e341028af",
 					"kind": "mobile",
 					"width": 1170,
-					"height": 1992,
-					"gated": true,
+					"height": 2532,
+					"gated": false,
 					"shows": "Mobile at 390x844 (3x): The three.ws on AWS page: the AWS Partner software path and procurement story"
+				}
+			],
+			"defects": []
+		},
+		{
+			"campaign": "MKT-2026-11-GCP-AGENT",
+			"publishDate": "2026-11-10",
+			"partner": "Google Cloud",
+			"url": "https://three.ws/.well-known/agent-card.json",
+			"capturedAt": "2026-09-18T20:30:57.223Z",
+			"files": [
+				{
+					"file": "MKT-2026-11-GCP-AGENT/desktop@2x.png",
+					"bytes": 271588,
+					"sha256": "ee49ac2ec345affbfbac5216ab4d96e27ab4b0ca9d25a8a19cda3328a0eb3991",
+					"kind": "desktop",
+					"width": 3200,
+					"height": 1800,
+					"gated": false,
+					"shows": "Desktop hero at 1600x900 (2x): The public A2A Agent Card served at /.well-known/agent-card.json"
+				},
+				{
+					"file": "MKT-2026-11-GCP-AGENT/x-1600x900.jpg",
+					"bytes": 95834,
+					"sha256": "d229b99a0134a6533f54b21c1228e050bfbd745c9e92392e17992983ce9dfdb3",
+					"kind": "x",
+					"width": 1600,
+					"height": 900,
+					"gated": false,
+					"shows": "X post still, 16:9 JPEG under 5 MB: The public A2A Agent Card served at /.well-known/agent-card.json"
+				},
+				{
+					"file": "MKT-2026-11-GCP-AGENT/mobile@3x.png",
+					"bytes": 326928,
+					"sha256": "c3665efe9aa6a85ac24b6630066ffddaac66ec8e672e2b99decfcf3ee680a539",
+					"kind": "mobile",
+					"width": 1170,
+					"height": 2531,
+					"gated": false,
+					"shows": "Mobile at 390x844 (3x): The public A2A Agent Card served at /.well-known/agent-card.json"
 				}
 			],
 			"defects": []
