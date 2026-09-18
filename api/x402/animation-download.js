@@ -20,6 +20,7 @@ import { presignGet } from '../_lib/r2.js';
 import { cors, error, json } from '../_lib/http.js';
 import { env } from '../_lib/env.js';
 import animationDownloadListing from '../_lib/service-catalog/services/animation-download.js';
+import { generatedRotation, isFreeGeneratedListing } from '../_lib/generated-clip-market.js';
 
 const ROUTE = '/api/x402/animation-download';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -85,7 +86,7 @@ const BAZAAR = {
 
 async function loadListing(id) {
 	const rows = await sql`
-		select id, slug, name, listed, price_amount, price_currency, artifact_key,
+		select id, owner_id, slug, tags, name, listed, price_amount, price_currency, artifact_key,
 		       artifact_mime, artifact_bytes, creator_payto_base,
 		       creator_payto_solana, creator_payto_bsc
 		from animation_clips
@@ -157,6 +158,17 @@ function sendDiscoveryChallenge(res, errText) {
 	});
 }
 
+// The rotation is a DB read; if it fails the clip is charged its stored price,
+// which is the safe direction to fail in for a paid product.
+async function inFreeRotation(row) {
+	try {
+		return isFreeGeneratedListing(row, await generatedRotation());
+	} catch (err) {
+		console.warn('[animation-download] free rotation unavailable', err?.message || err);
+		return false;
+	}
+}
+
 // Exported for contract tests (price/statement/payout logic) without a live DB.
 export const __test__ = { priceAtomics, buildSiwxStatement, buildPayToOverride, UUID_RE };
 
@@ -199,8 +211,10 @@ export default async function handler(req, res) {
 		);
 	}
 
-	// Free listing — no paywall, hand back the presigned URL directly.
-	if (!row.price_amount || Number(row.price_amount) <= 0) {
+	// Free listing — no paywall, hand back the presigned URL directly. That
+	// includes a generated listing in this week's free rotation, which keeps its
+	// stored price and is simply not charged while the rotation holds it.
+	if (!row.price_amount || Number(row.price_amount) <= 0 || (await inFreeRotation(row))) {
 		try {
 			res.setHeader('Cache-Control', 'no-store');
 			return json(res, 200, await presignPayload(row));

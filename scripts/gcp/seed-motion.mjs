@@ -24,6 +24,7 @@
  *   node scripts/gcp/seed-motion.mjs --publish             # upload + manifest
  *   node scripts/gcp/seed-motion.mjs --report              # checkpoint stats only
  *   node scripts/gcp/seed-motion.mjs --repair --publish    # fix the live library
+ *   node scripts/gcp/seed-motion.mjs --list                # list the keepers for sale
  *
  * REPAIRING THE PUBLISHED SET. --repair reads every generated clip already live
  * in the library, converts it out of the generator's identity rest basis into the
@@ -39,6 +40,15 @@
  * that service (assertSelfHostedLane). If a job ever comes back from a paid
  * third-party lane the batch aborts immediately rather than quietly billing a
  * few hundred generations to someone else's API.
+ *
+ * LISTING. --list bakes every published keeper onto the platform rig
+ * (public/avatars/default.glb) as a GLB, uploads it under
+ * animations/library/generated/glb/, and upserts one animation_clips row per
+ * clip under the platform account, so the collection sells through
+ * GET /api/marketplace/animations and the x402 animation-download route. A clip
+ * that is no longer published is delisted. Price and the rotating free subset
+ * follow api/_lib/generated-clip-market.js; --price=<USDC> overrides the price.
+ * Needs the storage credentials below plus DATABASE_URL.
  *
  * PUBLISHING. --publish needs the R2 credentials the production API uses
  * (S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET,
@@ -90,6 +100,7 @@ const RETRY_REJECTS = !!args['retry-rejects'];
 const PUBLISH = !!args.publish;
 const REPORT_ONLY = !!args.report;
 const REPAIR = !!args.repair;
+const LIST = !!args.list;
 // Independent samples to draw per prompt. The sampler is stochastic, so the
 // same prompt yields a different take every time; several takes per prompt is
 // how a 137-prompt library grows into several hundred clips while the gate
@@ -411,6 +422,15 @@ function gateWithBasis(clip, prompt) {
 	return verdict;
 }
 
+/** Accepted takes recorded for a prompt so far. */
+function keepersOf(state, promptId) {
+	let n = 0;
+	for (const record of Object.values(state.prompts)) {
+		if (record.status === 'accepted' && record.prompt_id === promptId) n++;
+	}
+	return n;
+}
+
 /** Checkpoint key for one take of one prompt. Take 0 keeps the bare id, so
  * checkpoints written before --samples existed resume unchanged. */
 function sampleKey(prompt) {
@@ -468,8 +488,14 @@ function report(state) {
 
 function stagedManifestEntries(state, publicDomain) {
 	const entries = [];
-	for (const record of Object.values(state.prompts)) {
-		if (record.status !== 'accepted') continue;
+	const perPrompt = {};
+	// Lowest take first, so the cap keeps the same clips on every publish.
+	const accepted = Object.values(state.prompts)
+		.filter((r) => r.status === 'accepted')
+		.sort((a, b) => (a.sample ?? 0) - (b.sample ?? 0) || a.name.localeCompare(b.name));
+	for (const record of accepted) {
+		perPrompt[record.prompt_id] = (perPrompt[record.prompt_id] || 0) + 1;
+		if (perPrompt[record.prompt_id] > KEEP_PER_PROMPT) continue;
 		const file = join(CLIPS_DIR, `${record.name}.json`);
 		if (!existsSync(file)) continue;
 		entries.push({
@@ -487,7 +513,7 @@ function stagedManifestEntries(state, publicDomain) {
 	return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function publish(state) {
+async function storage(step) {
 	const endpoint =
 		process.env.S3_ENDPOINT ||
 		(process.env.R2_ACCOUNT_ID ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : null);
@@ -497,14 +523,20 @@ async function publish(state) {
 	const publicDomain = (process.env.S3_PUBLIC_DOMAIN || '').replace(/\/+$/, '');
 
 	if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicDomain) {
-		log('  publish skipped: storage credentials are not set in this environment.');
+		log(`  ${step} skipped: storage credentials are not set in this environment.`);
 		log('  Needs S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET, S3_PUBLIC_DOMAIN');
 		log('  (they live on the three-ws-api Cloud Run service, not in the repo).');
-		return { published: 0 };
+		return null;
 	}
-
 	const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
 	const client = new S3Client({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } });
+	return { client, PutObjectCommand, bucket, publicDomain };
+}
+
+async function publish(state) {
+	const store = await storage('publish');
+	if (!store) return { published: 0 };
+	const { client, PutObjectCommand, bucket, publicDomain } = store;
 	const entries = stagedManifestEntries(state, publicDomain);
 
 	let uploaded = 0;
@@ -534,6 +566,98 @@ async function publish(state) {
 	);
 	log(`  ${R2_PREFIX}/manifest.json → ${entries.length} generated clips live via /api/animations/library`);
 	return { published: entries.length };
+}
+
+// ── List for sale ────────────────────────────────────────────────────────────
+
+/**
+ * Bake every published keeper onto the platform rig and list it in the
+ * marketplace under the platform account. Idempotent: a re-run re-bakes and
+ * updates rows in place (purchase and play counts survive), and a clip that is
+ * no longer in the published set is delisted rather than deleted, so a buyer's
+ * SIWX re-download grant still resolves to a row.
+ */
+async function listForSale(state) {
+	const store = await storage('listing');
+	if (!store) return { listed: 0 };
+	if (!process.env.DATABASE_URL) {
+		log('  listing skipped: DATABASE_URL is not set (it lives in .env.local).');
+		return { listed: 0 };
+	}
+	const { client, PutObjectCommand, bucket, publicDomain } = store;
+	const { sql } = await import('../../api/_lib/db.js');
+	const { bakeMotionGlb } = await import('../../api/_lib/motion-glb.js');
+	const market = await import('../../api/_lib/generated-clip-market.js');
+
+	const [owner] = await sql`select id from users where lower(email::text) = ${market.PLATFORM_CREATOR_EMAIL} limit 1`;
+	if (!owner) throw new Error(`platform account ${market.PLATFORM_CREATOR_EMAIL} does not exist; nothing can be listed under it`);
+
+	const price = args.price !== undefined ? Number(args.price) : market.generatedListingPrice();
+	if (!Number.isFinite(price) || price < 0) throw new Error(`--price must be a non-negative USDC amount, got ${args.price}`);
+	const rig = readFileSync(join(ROOT, 'public/avatars/default.glb'));
+	const entries = stagedManifestEntries(state, publicDomain);
+	const prompts = new Map(loadPrompts().map((p) => [p.id, p]));
+	log(`Listing ${entries.length} generated clips at ${price} USDC under ${market.PLATFORM_CREATOR_EMAIL}`);
+
+	let listed = 0;
+	for (const entry of entries) {
+		const clip = JSON.parse(readFileSync(join(CLIPS_DIR, `${entry.name}.json`), 'utf8'));
+		// A clip already in the library basis has had its drift removed and, for
+		// a travelling clip, its real root motion restored; flattening it again
+		// would turn a walk back into a treadmill. Only a legacy clip is flattened.
+		const { glb } = bakeMotionGlb({ rig, clip, name: entry.label || entry.name, flatten: needsRebase(clip) });
+		const artifactKey = `${market.GENERATED_GLB_PREFIX}/${entry.name}.glb`;
+		await client.send(
+			new PutObjectCommand({
+				Bucket: bucket,
+				Key: artifactKey,
+				Body: glb,
+				ContentType: 'model/gltf-binary',
+				CacheControl: 'private, max-age=31536000, immutable',
+			}),
+		);
+		const promptId = clip.userData?.prompt_id;
+		const row = market.generatedListingRow(entry, clip, {
+			ownerId: owner.id,
+			price,
+			artifactKey,
+			artifactBytes: glb.length,
+			tags: prompts.get(promptId)?.tags ?? [],
+		});
+		const storageKey = `${R2_PREFIX}/clips/${entry.name}.json`;
+		await sql`
+			insert into animation_clips
+				(owner_id, slug, name, description, kind, format, duration_ms, frame_count, fps, loop,
+				 storage_key, tags, visibility, price_amount, price_currency,
+				 artifact_key, artifact_bytes, artifact_mime, listed)
+			values
+				(${row.owner_id}, ${row.slug}, ${row.name}, ${row.description}, ${row.kind}, ${row.format},
+				 ${row.duration_ms}, ${row.frame_count}, ${row.fps}, ${row.loop},
+				 ${storageKey}, ${row.tags}, ${row.visibility}, ${row.price_amount}, ${row.price_currency},
+				 ${row.artifact_key}, ${row.artifact_bytes}, ${row.artifact_mime}, ${row.listed})
+			on conflict (owner_id, slug) do update set
+				name = excluded.name, description = excluded.description, kind = excluded.kind,
+				format = excluded.format, duration_ms = excluded.duration_ms,
+				frame_count = excluded.frame_count, fps = excluded.fps, loop = excluded.loop,
+				storage_key = excluded.storage_key, tags = excluded.tags,
+				visibility = excluded.visibility, price_amount = excluded.price_amount,
+				price_currency = excluded.price_currency, artifact_key = excluded.artifact_key,
+				artifact_bytes = excluded.artifact_bytes, artifact_mime = excluded.artifact_mime,
+				listed = true, deleted_at = null
+		`;
+		listed++;
+		if (listed % 25 === 0) log(`  listed ${listed}/${entries.length}`);
+	}
+
+	const names = entries.map((e) => e.name);
+	const delisted = await sql`
+		update animation_clips set listed = false
+		where owner_id = ${owner.id} and ${market.GENERATED_TAG} = any(tags) and listed = true
+		      and not (slug = any(${names}::text[]))
+		returning slug
+	`;
+	log(`  ${listed} listed, ${delisted.length} delisted (no longer published)`);
+	return { listed, delisted: delisted.length };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -639,6 +763,11 @@ async function main() {
 		return;
 	}
 
+	if (LIST && !PUBLISH && !REPAIR && !args.limit && !args.categories && !args.samples) {
+		await listForSale(state);
+		return;
+	}
+
 	if (REPAIR) {
 		const outcome = await repair(state);
 		if (PUBLISH) await publish(state);
@@ -658,12 +787,8 @@ async function main() {
 		// partial run covers the whole library before it deepens any one prompt.
 		const takes = [];
 		for (let sample = 0; sample < SAMPLES; sample++) for (const p of prompts) takes.push({ ...p, sample });
-		const keepers = {};
-		for (const record of Object.values(state.prompts)) {
-			if (record.status === 'accepted') keepers[record.prompt_id] = (keepers[record.prompt_id] || 0) + 1;
-		}
 		const queue = takes
-			.filter((p) => (keepers[p.id] || 0) < KEEP_PER_PROMPT && shouldRun(state.prompts[sampleKey(p)]))
+			.filter((p) => keepersOf(state, p.id) < KEEP_PER_PROMPT && shouldRun(state.prompts[sampleKey(p)]))
 			.slice(0, LIMIT);
 
 		log(`Seeding motion from ${PROMPTS_PATH.replace(`${ROOT}/`, '')}`);
@@ -679,6 +804,9 @@ async function main() {
 		const worker = async () => {
 			while (index < queue.length && !aborted) {
 				const prompt = queue[index++];
+				// Re-checked at dispatch, not only when the queue was built: an
+				// earlier take of this prompt may have landed its last keeper since.
+				if (keepersOf(state, prompt.id) >= KEEP_PER_PROMPT) continue;
 				try {
 					const record = await runPrompt(prompt);
 					state.prompts[sampleKey(prompt)] = record;
@@ -716,6 +844,7 @@ async function main() {
 
 	const stats = report(state);
 	if (PUBLISH) await publish(state);
+	if (LIST) await listForSale(state);
 
 	// A batch that gated nothing at all is an infrastructure failure dressed up
 	// as a clean run, so it exits non-zero rather than reporting "0 accepted".

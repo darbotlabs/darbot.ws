@@ -38,6 +38,10 @@ import {
 	maxUprightGap,
 	uprightGap,
 	CLIP_BASIS,
+	despikeFootFlicks,
+	lockRootToContacts,
+	forwardKinematicsFrame,
+	ROOT_LOCK,
 } from '../api/_lib/motion-seed.js';
 import { CANONICAL_REST } from '../src/animation-canonical-rest.js';
 
@@ -593,5 +597,122 @@ describe('root drift', () => {
 		const result = flattenRootDrift(clip);
 		expect(result.removed).toBe(0);
 		expect(result.clip).toBe(clip);
+	});
+});
+
+describe('foot flicks', () => {
+	/** Toe position relative to its ankle, the quantity a flick disturbs. */
+	function toeRel(clip, frame) {
+		const w = forwardKinematicsFrame(clip, frame);
+		return w.LeftToeBase.map((v, k) => v - w.LeftFoot[k]);
+	}
+
+	/** Swing the left foot away from its neighbours on the given frames only. */
+	function flicked(frames) {
+		const clip = buildClip();
+		const track = clip.tracks.find((t) => t.name === 'LeftFoot.quaternion');
+		for (const f of frames) {
+			const q = track.values.slice(f * 4, f * 4 + 4);
+			const swung = quatMul(q, quatX(1.4));
+			for (let k = 0; k < 4; k += 1) track.values[f * 4 + k] = swung[k];
+		}
+		return clip;
+	}
+
+	it('repairs a one-frame flick back onto the line between its neighbours', () => {
+		const clip = flicked([40]);
+		const before = Math.hypot(...toeRel(clip, 40).map((v, k) => v - toeRel(clip, 39)[k]));
+		expect(before).toBeGreaterThan(0.03);
+		const { clip: fixed, repaired } = despikeFootFlicks(clip);
+		expect(repaired).toBe(1);
+		const after = Math.hypot(...toeRel(fixed, 40).map((v, k) => v - toeRel(fixed, 39)[k]));
+		expect(after).toBeLessThan(0.01);
+	});
+
+	it('repairs a two-frame excursion as one span', () => {
+		const { repaired } = despikeFootFlicks(flicked([60, 61]));
+		expect(repaired).toBe(2);
+	});
+
+	it('leaves a clip with no flicks untouched', () => {
+		const clip = buildClip();
+		const result = despikeFootFlicks(clip);
+		expect(result.repaired).toBe(0);
+		expect(result.clip).toBe(clip);
+	});
+
+	it('does not treat a held change of foot pose as a flick', () => {
+		// Frames 40 onward all turn the foot: a real, held movement, not a spike.
+		const frames = Array.from({ length: 80 }, (_, i) => 40 + i);
+		const { repaired } = despikeFootFlicks(flicked(frames));
+		expect(repaired).toBe(0);
+	});
+});
+
+describe('root travel from foot contact', () => {
+	/**
+	 * A treadmill: the body stays put while the planted left leg sweeps under
+	 * it, and the right leg is held up off the floor so the left is always the
+	 * one bearing weight. With the root pinned, the planted foot skates.
+	 */
+	function treadmill({ sweep = 0.3, frames = 31 } = {}) {
+		const clip = buildClip({ frames, swing: 0 });
+		const left = clip.tracks.find((t) => t.name === 'LeftUpLeg.quaternion');
+		const right = clip.tracks.find((t) => t.name === 'RightUpLeg.quaternion');
+		for (let i = 0; i < frames; i += 1) {
+			const angle = -sweep / 2 + (sweep * i) / (frames - 1);
+			const l = quatMul(CANONICAL_REST.LeftUpLeg, quatX(angle));
+			const r = quatMul(CANONICAL_REST.RightUpLeg, quatX(0.6));
+			for (let k = 0; k < 4; k += 1) {
+				left.values[i * 4 + k] = l[k];
+				right.values[i * 4 + k] = r[k];
+			}
+		}
+		const hips = clip.tracks.find((t) => t.name === 'Hips.position');
+		for (let i = 0; i < frames; i += 1) hips.values[i * 3 + 1] = 0.984;
+		return clip;
+	}
+
+	it('gives a striding clip the travel its planted foot implies', () => {
+		const clip = treadmill();
+		const before = footContactMetrics(clip);
+		const locked = lockRootToContacts(clip);
+		expect(locked.applied).toBe(true);
+		expect(locked.speed).toBeGreaterThan(ROOT_LOCK.MIN_SPEED);
+		const after = footContactMetrics(locked.clip);
+		expect(after.slide).toBeLessThan(before.slide * 0.25);
+		expect(after.stride).toBeGreaterThan(before.stride);
+	});
+
+	it('keeps the root of a clip that stands still', () => {
+		const clip = buildClip({ swing: 0.05 });
+		const locked = lockRootToContacts(clip);
+		expect(locked.applied).toBe(false);
+		expect(locked.clip).toBe(clip);
+	});
+
+	it('never touches vertical travel', () => {
+		const clip = treadmill();
+		const y = (c) => c.tracks.find((t) => t.name === 'Hips.position').values.filter((_, i) => i % 3 === 1);
+		expect(y(lockRootToContacts(clip).clip)).toEqual(y(clip));
+	});
+
+	it('trusts nothing when no foot is ever planted', () => {
+		// Floor work: the hips pinned low with the knees folded under the body,
+		// the same construction the foot-contact suite uses, so no foot bears
+		// weight and there is no plant to derive travel from.
+		const clip = treadmill();
+		const hips = clip.tracks.find((t) => t.name === 'Hips.position');
+		for (let i = 0; i < hips.values.length / 3; i += 1) hips.values[i * 3 + 1] = 0.15;
+		for (const bone of ['LeftLeg', 'RightLeg']) {
+			const track = clip.tracks.find((t) => t.name === `${bone}.quaternion`);
+			const folded = quatMul(CANONICAL_REST[bone], quatX(2.2));
+			for (let i = 0; i < track.values.length; i += 4) {
+				[track.values[i], track.values[i + 1], track.values[i + 2], track.values[i + 3]] = folded;
+			}
+		}
+		const locked = lockRootToContacts(clip);
+		expect(locked.applied).toBe(false);
+		expect(locked.contactShare).toBeLessThan(ROOT_LOCK.MIN_CONTACT_SHARE);
 	});
 });

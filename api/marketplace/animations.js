@@ -13,18 +13,59 @@
 //   ?sort=       recent (default) | popular | price_low | price_high
 //   ?limit=      1..60 (default 24)
 //   ?cursor=     opaque pagination cursor
+//
+// The platform's generated collection (api/_lib/generated-clip-market.js) is
+// listed here too, under the platform account. A rotating subset of it is free
+// for the current week: those rows report `free: true` with `free_rotation`
+// set, and the price filters and price sorts treat them as free.
 
 import { sql } from '../_lib/db.js';
 import { cors, error, json, method, wrap } from '../_lib/http.js';
 import { thumbnailUrl } from '../_lib/r2.js';
 import { isUuid } from '../_lib/validate.js';
+import {
+	freeEpochEndsAt,
+	generatedRotation,
+	GENERATED_TAG,
+	isFreeGeneratedListing,
+} from '../_lib/generated-clip-market.js';
 
+// `effective_price` is the price a buyer pays right now: the stored price,
+// except for a generated listing in this week's free rotation (see
+// rotationFreeSql below).
 const SORTS = {
-	recent: 'created_at desc',
-	popular: 'purchase_count desc, created_at desc',
-	price_low: 'price_amount asc nulls first, created_at desc',
-	price_high: 'price_amount desc nulls last, created_at desc',
+	recent: 'c.created_at desc',
+	popular: 'c.purchase_count desc, c.created_at desc',
+	price_low: 'effective_price asc nulls first, c.created_at desc',
+	price_high: 'effective_price desc nulls last, c.created_at desc',
 };
+
+/**
+ * SQL that is true for a generated listing free this epoch, appending its
+ * parameters to `params`. With no platform account there is no rotation and
+ * the predicate is constant false.
+ */
+function rotationFreeSql(rotation, params) {
+	if (!rotation.platformId || rotation.free.size === 0) return 'false';
+	params.push(rotation.platformId);
+	const owner = params.length;
+	params.push(GENERATED_TAG);
+	const tag = params.length;
+	params.push([...rotation.free]);
+	const slugs = params.length;
+	return `(c.owner_id = $${owner} and $${tag} = any(c.tags) and c.slug = any($${slugs}::text[]))`;
+}
+
+// The rotation is read from the database, so a failure there must not take the
+// whole feed down: without it every listing simply reports its stored price.
+async function rotationOrNone() {
+	try {
+		return await generatedRotation();
+	} catch (err) {
+		console.warn('[marketplace/animations] free rotation unavailable', err?.message || err);
+		return { platformId: null, free: new Set(), epoch: 0 };
+	}
+}
 
 const DOWNLOAD_ROUTE = '/api/x402/animation-download';
 
@@ -49,7 +90,10 @@ export default wrap(async (req, res) => {
 
 	// Positional-parameter WHERE — the Neon client doesn't interpolate nested
 	// sql`` fragments (same pattern as api/animations/clips.js).
+	const rotation = await rotationOrNone();
 	const params = [];
+	const rotationFree = rotationFreeSql(rotation, params);
+	const effectivePrice = `(case when ${rotationFree} then null else c.price_amount end)`;
 	const conds = ['c.listed = true', 'c.deleted_at is null', 'c.artifact_key is not null'];
 
 	if (q) {
@@ -64,8 +108,8 @@ export default wrap(async (req, res) => {
 		params.push(kind);
 		conds.push(`c.kind = $${params.length}`);
 	}
-	if (price === 'free') conds.push('(c.price_amount is null or c.price_amount <= 0)');
-	if (price === 'paid') conds.push('c.price_amount > 0');
+	if (price === 'free') conds.push(`(${effectivePrice} is null or ${effectivePrice} <= 0)`);
+	if (price === 'paid') conds.push(`${effectivePrice} > 0`);
 	if (cursor) {
 		const decoded = decodeCursor(cursor);
 		if (decoded) {
@@ -78,10 +122,11 @@ export default wrap(async (req, res) => {
 	let rows;
 	try {
 		rows = await sql(
-			`select c.id, c.slug, c.name, c.description, c.kind, c.duration_ms,
+			`select c.id, c.owner_id, c.slug, c.name, c.description, c.kind, c.duration_ms,
 			        c.frame_count, c.fps, c.loop, c.tags, c.thumbnail_key,
 			        c.price_amount, c.price_currency, c.artifact_bytes,
 			        c.play_count, c.purchase_count, c.created_at,
+			        ${effectivePrice} as effective_price,
 			        u.display_name as creator_name, u.username as creator_username,
 			        u.avatar_url as creator_avatar
 			 from animation_clips c
@@ -98,7 +143,7 @@ export default wrap(async (req, res) => {
 
 	const hasMore = rows.length > limit;
 	const page = hasMore ? rows.slice(0, limit) : rows;
-	const items = page.map(shape);
+	const items = page.map((row) => shape(row, rotation));
 	const nextCursor = hasMore ? encodeCursor({ createdAt: rows[limit - 1].created_at }) : null;
 
 	res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
@@ -110,7 +155,7 @@ async function handleOne(res, id) {
 	let row;
 	try {
 		[row] = await sql`
-			select c.id, c.slug, c.name, c.description, c.kind, c.duration_ms,
+			select c.id, c.owner_id, c.slug, c.name, c.description, c.kind, c.duration_ms,
 			       c.frame_count, c.fps, c.loop, c.tags, c.thumbnail_key,
 			       c.price_amount, c.price_currency, c.artifact_bytes,
 			       c.play_count, c.purchase_count, c.created_at,
@@ -127,12 +172,16 @@ async function handleOne(res, id) {
 		return error(res, 500, 'db_error', 'Failed to load animation');
 	}
 	if (!row) return error(res, 404, 'not_found', 'animation listing not found');
+	const rotation = await rotationOrNone();
 	res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
-	return json(res, 200, { item: shape(row) });
+	return json(res, 200, { item: shape(row, rotation) });
 }
 
-function shape(row) {
-	const paid = row.price_amount != null && Number(row.price_amount) > 0;
+function shape(row, rotation = { platformId: null, free: new Set() }) {
+	const listPaid = row.price_amount != null && Number(row.price_amount) > 0;
+	const rotating = listPaid && isFreeGeneratedListing(row, rotation);
+	const paid = listPaid && !rotating;
+	const generated = !!rotation.platformId && row.owner_id === rotation.platformId && (row.tags || []).includes(GENERATED_TAG);
 	return {
 		id: row.id,
 		slug: row.slug,
@@ -148,6 +197,12 @@ function shape(row) {
 		thumbnail_url: thumbnailUrl(row.thumbnail_key),
 		price: paid ? { amount: String(row.price_amount), currency: row.price_currency || 'USDC' } : null,
 		free: !paid,
+		// Set only while a generated listing is in this week's free rotation:
+		// what it normally costs, and when the rotation moves on.
+		free_rotation: rotating
+			? { regular_price: { amount: String(row.price_amount), currency: row.price_currency || 'USDC' }, until: freeEpochEndsAt() }
+			: null,
+		generated,
 		size_bytes: row.artifact_bytes != null ? Number(row.artifact_bytes) : null,
 		play_count: Number(row.play_count || 0),
 		purchase_count: Number(row.purchase_count || 0),
@@ -181,4 +236,4 @@ function decodeCursor(cursor) {
 	}
 }
 
-export const __test__ = { shape, encodeCursor, decodeCursor, SORTS };
+export const __test__ = { shape, encodeCursor, decodeCursor, SORTS, rotationFreeSql };

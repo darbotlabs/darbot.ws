@@ -3717,7 +3717,7 @@ function renderCreatorListings() {
 	}
 
 	grid.innerHTML = filtered.map((it) => {
-		const priceLabel = it.free ? 'Free' : `${formatPrice(it.price.amount)} ${it.price.currency}`;
+		const priceLabel = listingPriceLabel(it);
 		const dur = it.duration ? `${it.duration.toFixed(it.duration % 1 ? 1 : 0)}s` : '';
 		const typeLabel = it.loop !== false ? 'Loop' : 'Action';
 		const thumb = it.thumbnail_url
@@ -3749,6 +3749,23 @@ function renderCreatorListings() {
 			if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
 		});
 	});
+}
+
+// A generated listing in this week's free rotation says so, rather than
+// reading as permanently free: the label is what tells a visitor to grab it now.
+function listingPriceLabel(it) {
+	if (it.free_rotation) return 'Free this week';
+	return it.free ? 'Free' : `${formatPrice(it.price.amount)} ${it.price.currency}`;
+}
+
+function rotationNote(it) {
+	const regular = it.free_rotation?.regular_price;
+	const until = it.free_rotation?.until ? new Date(it.free_rotation.until) : null;
+	const when = until && !Number.isNaN(until.getTime())
+		? until.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+		: 'the end of the week';
+	const price = regular ? `${formatPrice(regular.amount)} ${regular.currency}` : 'its listed price';
+	return `Free this week as part of the rotating generated collection, until ${when}. After that it returns to ${price}. The GLB plays on any three.ws avatar and opens in Blender, Unity or Unreal.`;
 }
 
 function formatPrice(amount) {
@@ -3845,7 +3862,7 @@ async function openAnimationPurchase(id) {
 	overlay.setAttribute('aria-modal', 'true');
 	overlay.setAttribute('aria-label', `Get ${item.name}`);
 
-	const priceLabel = item.free ? 'Free' : `${formatPrice(item.price.amount)} ${item.price.currency}`;
+	const priceLabel = listingPriceLabel(item);
 	const endpoint = `${location.origin}${item.download_url}`;
 	const dur = item.duration ? `${item.duration.toFixed(item.duration % 1 ? 1 : 0)}s` : '';
 	const snippet =
@@ -3876,7 +3893,9 @@ async function openAnimationPurchase(id) {
 				<div class="anim-buy-actions">
 					<button class="btn-primary anim-buy-go" type="button">${item.free ? 'Download GLB' : `Buy for ${escapeHtml(priceLabel)}`}</button>
 				</div>
-				<p class="anim-buy-note" id="anim-buy-note">${item.free
+				<p class="anim-buy-note" id="anim-buy-note">${item.free_rotation
+					? escapeHtml(rotationNote(item))
+					: item.free
 					? 'Free download — a self-contained animated GLB that plays on any three.ws avatar.'
 					: 'Pay once in USDC (Base or Solana). Re-download free anytime by signing in with the same wallet.'}</p>
 				${item.free ? '' : `
