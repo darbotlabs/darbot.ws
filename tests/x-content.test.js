@@ -264,7 +264,7 @@ describe('editorial', () => {
 	it('blocks brand errors, financial promotion, slang, pushy asks, and ad-copy structure', async () => {
 		const { languageProblems } = await import('../api/_lib/x-content/editorial.js');
 		const rules = (text) => languageProblems(text).map((row) => `${row.rule}:${row.severity}`);
-		expect(rules('Three.ws ships agents on Github: three.ws/a')).toEqual(['brand:blocking', 'brand:blocking']);
+		expect(rules('Three.ws ships agents on Github: three.ws/a')).toEqual(['brand:blocking', 'brand:blocking', 'links:blocking']);
 		expect(rules('$THREE has 100x potential for holders: three.ws/a')).toContain('compliance:blocking');
 		expect(rules('gm frens, agents are live: three.ws/a')).toContain('register:blocking');
 		expect(rules('A robust agent runtime: three.ws/a')).toEqual(['register:major']);
@@ -272,6 +272,15 @@ describe('editorial', () => {
 		expect(rules('Fast. Simple. Onchain. three.ws/a')).toContain('structure:blocking');
 		expect(rules('What if agents could pay? They can: three.ws/a')).toContain('structure:blocking');
 		expect(rules('Two links: three.ws/a and three.ws/b')).toContain('links:blocking');
+	});
+
+	it('counts a bare domain as a link, the way X renders it', async () => {
+		const { urlsIn, weightedLength } = await import('../api/_lib/x-content/quality.js');
+		const { languageProblems } = await import('../api/_lib/x-content/editorial.js');
+		expect(urlsIn('Agents on three.ws spend budgets: https://builder.aws.com/x')).toEqual(['three.ws', 'https://builder.aws.com/x']);
+		expect(urlsIn('A .glb loads in Three.js and Node.js; write to me@x.com')).toEqual([]);
+		expect(weightedLength('on three.ws')).toBe(3 + 23);
+		expect(languageProblems('Agents on three.ws spend budgets: https://builder.aws.com/x').map((row) => row.rule)).toEqual(['links']);
 	});
 
 	it('treats names as names and ordinals as numbers', async () => {

@@ -16,9 +16,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { mediaType } from './media.js';
+import { urlsIn } from './quality.js';
 
-const URLS = /(?:https?:\/\/|\b(?:www\.)?three\.ws\/)[^\s]+/gi;
-const withoutUrls = (text) => String(text || '').replace(URLS, ' ');
+// Prose checks strip links but keep bare domains, so a brand name written
+// "Three.ws" is still caught; link counting uses X's own notion of a link.
+const LINKS_WITH_PATHS = /https?:\/\/[^\s]+|(?<![@\w.-])(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s]*/gi;
+const withoutUrls = (text) => String(text || '').replace(LINKS_WITH_PATHS, ' ');
 
 // Written wrong -> written right. Case-sensitive on purpose.
 export const BRAND_RULES = [
@@ -103,7 +106,7 @@ export function languageProblems(text) {
 	if (oneWord.some((flag, index) => flag && oneWord[index + 1] && oneWord[index + 2])) {
 		problems.push({ rule: 'structure', severity: 'blocking', message: 'one-word-sentence drumbeat reads as ad copy' });
 	}
-	const links = String(text).match(URLS) || [];
+	const links = urlsIn(text);
 	if (links.length > 1) problems.push({ rule: 'links', severity: 'blocking', message: `${links.length} links; one post links one surface` });
 	const mentions = prose.match(/(?<![\w@])@\w{1,15}/g) || [];
 	if (mentions.length > 2) problems.push({ rule: 'mentions', severity: 'major', message: `${mentions.length} mentions; more than two reads as tag-baiting` });

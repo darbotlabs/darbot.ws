@@ -19,8 +19,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mentionsIn } from './editorial.js';
+import { urlRe, urlsIn } from './quality.js';
 
-const URLS = /(?:https?:\/\/|\b(?:www\.)?three\.ws\/)[^\s]+/gi;
 const UA = 'three.ws editorial verifier (+https://three.ws)';
 const normalize = (text) => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -30,7 +30,7 @@ export function itemTexts(item) {
 
 export function linksIn(texts) {
 	const links = new Set();
-	for (const text of texts) for (const match of String(text).match(URLS) || []) links.add(/^https?:/i.test(match) ? match : `https://${match}`);
+	for (const text of texts) for (const match of urlsIn(text)) links.add(/^https?:/i.test(match) ? match : `https://${match}`);
 	return [...links].map((link) => link.replace(/[).,;:!?]+$/, ''));
 }
 
@@ -187,7 +187,7 @@ async function mentionChecks(texts, env) {
 async function spellingChecks(item, texts, glossary) {
 	const { spellCheckDocument } = await import('cspell-lib');
 	const handles = mentionsIn(texts.join('\n')).map((handle) => handle.slice(1));
-	const prose = texts.join('\n').replace(URLS, ' ').replace(/\$THREE\b/g, ' ');
+	const prose = texts.join('\n').replace(urlRe('gi'), ' ').replace(/\$THREE\b/g, ' ');
 	const altTexts = (item.posts || []).flatMap((post) => (post.media || []).map((media) => media.alt)).filter(Boolean);
 	const result = await spellCheckDocument(
 		{ uri: 'file:///x-content.txt', text: [prose, ...altTexts].join('\n'), languageId: 'plaintext', locale: 'en-US,en-GB' },

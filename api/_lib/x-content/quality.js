@@ -3,8 +3,14 @@
 // machine-generated: launch-deck openers, hype vocabulary, hashtags, emoji,
 // shouting, and a post that repeats an earlier one.
 
-const URL_PATTERN = String.raw`(?:https?:\/\/|\b(?:www\.)?three\.ws\/)[^\s]+`;
-const urlRe = (flags = '') => new RegExp(URL_PATTERN, flags);
+// What X turns into a t.co link: anything with a scheme, and any bare domain
+// on a common TLD, with or without a path. Bare domains matter: X linked the
+// brand name "three.ws" inside the first pipeline test post, which cost 23
+// weighted characters and a second link the one-link rule never saw.
+const TLDS = 'com|net|org|io|ai|ws|dev|app|co|xyz|gg|so|sh|fun|me|tv|us|uk|de|gl|ly|to|fm|cc|info|tech|site|online|cloud|link|news|blog';
+export const URL_PATTERN = String.raw`https?:\/\/[^\s]+|(?<![@\w.-])(?:[a-z0-9-]+\.)+(?:${TLDS})\b(?:\/[^\s]*)?`;
+export const urlRe = (flags = '') => new RegExp(URL_PATTERN, flags);
+export const urlsIn = (value) => String(value || '').match(urlRe('gi')) || [];
 
 export const hasUrl = (value) => urlRe('i').test(String(value || ''));
 
