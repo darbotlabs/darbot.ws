@@ -34,24 +34,40 @@ substitutions:
 steps:
   # Stage the weights into the shared weights bucket once. Re-runs skip the
   # 16 GB download when the pinned revision is already there.
-  - id: stage-weights
+  - id: check-weights
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: bash
     args:
       - -ceu
       - |
-        dest="gs://${_WEIGHTS_BUCKET}/${_WEIGHTS_PATH}"
-        if gcloud storage cat "$dest/REVISION" 2>/dev/null | grep -qx "${_HF_REVISION}"; then
-          echo "weights at $dest already on ${_HF_REVISION}"
-          exit 0
+        if gcloud storage cat "gs://${_WEIGHTS_BUCKET}/${_WEIGHTS_PATH}/REVISION" 2>/dev/null | grep -qx "${_HF_REVISION}"; then
+          echo "weights already staged on ${_HF_REVISION}"
+          touch /workspace/weights-staged
         fi
-        python3 -m venv /tmp/hf && /tmp/hf/bin/pip install -q "huggingface_hub[hf_transfer]>=0.34,<1"
-        HF_HUB_ENABLE_HF_TRANSFER=1 /tmp/hf/bin/huggingface-cli download "${_HF_REPO}" \
+
+  - id: download-weights
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        [ -f /workspace/weights-staged ] && exit 0
+        pip install -q "huggingface_hub[hf_transfer]>=0.34,<1"
+        HF_HUB_ENABLE_HF_TRANSFER=1 huggingface-cli download "${_HF_REPO}" \
           --revision "${_HF_REVISION}" --local-dir /workspace/weights \
           --exclude "*.gguf" ".gitattributes" "README.md"
         rm -rf /workspace/weights/.cache
         echo "${_HF_REVISION}" > /workspace/weights/REVISION
-        gcloud storage rsync --recursive --delete-unmatched-destination-objects /workspace/weights "$dest"
+
+  - id: upload-weights
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        [ -f /workspace/weights-staged ] && exit 0
+        gcloud storage rsync --recursive --delete-unmatched-destination-objects \
+          /workspace/weights "gs://${_WEIGHTS_BUCKET}/${_WEIGHTS_PATH}"
 
   # Mirror the pinned vLLM image into Artifact Registry so a Docker Hub pull
   # limit can never block a cold start.
