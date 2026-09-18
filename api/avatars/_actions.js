@@ -20,7 +20,7 @@ import { resolveProviderKey } from '../_lib/forge-provider-key.js';
 import { finalizeReconstructStage, pollRiggingStage } from '../_lib/reconstruct-finalize.js';
 import { finalizeAutoRigStage } from '../_lib/auto-rig.js';
 import { isAllowedProviderResultUrl } from '../_lib/provider-result-url.js';
-import { textToImage } from '../_mcp3d/text-to-image.js';
+import { generateReferenceImage } from '../_lib/forge-reference-image.js';
 import { planPromptAvatarLanes, promptAvatarImagePrompt } from '../_lib/prompt-avatar.js';
 import { laneHealthSnapshot } from '../_lib/forge-lane-health.js';
 
@@ -1170,14 +1170,18 @@ const handleReconstruct = wrap(async (req, res) => {
 	let referenceImageUrl = null;
 	if (fromPrompt) {
 		try {
-			const generated = await textToImage(promptAvatarImagePrompt(body.prompt), {
-				aspectRatio: '2:3',
+			// The forge's reference-image lane (Vertex first, then the shared
+			// text→image ladder), square like the forge's own avatar references:
+			// the free FLUX rung returned a visibly blurred 832x1216 portrait
+			// frame for this framing while its 1:1 output was sharp.
+			const generated = await generateReferenceImage(promptAvatarImagePrompt(body.prompt), {
+				aspectRatio: '1:1',
 			});
 			referenceImageUrl = generated.imageUrl;
 			photos = [generated.imageUrl];
 		} catch (err) {
 			// Map the reference-image failure to the most accurate status so the
-			// symptom is self-explanatory instead of a blank 502. textToImage tags
+			// symptom is self-explanatory instead of a blank 502. The text→image ladder tags
 			// its errors: 'unconfigured' (no provider), 'rate_limited' (Replicate
 			// throttle — common when account credit is low, carries retryAfter),
 			// 'provider_unreachable' (network), or a raw providerStatus (e.g. 402
@@ -1202,7 +1206,7 @@ const handleReconstruct = wrap(async (req, res) => {
 			if (err?.code === 'billing' || err?.providerStatus === 402) {
 				// Never relay the provider's raw "purchase credit at …/billing"
 				// copy — even the error_description must be buyer-safe, since a
-				// client may surface it verbatim. textToImage already logged the
+				// client may surface it verbatim. The text→image ladder already logged the
 				// raw detail (providerDetail) for operators.
 				return error(
 					res,

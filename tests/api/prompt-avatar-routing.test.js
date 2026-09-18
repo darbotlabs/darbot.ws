@@ -28,7 +28,7 @@ import {
 vi.mock('../../api/_lib/zauth.js', () => ({ instrument: () => {}, drain: async () => {} }));
 vi.mock('../../api/_lib/sentry.js', () => ({ captureException: () => {} }));
 
-const state = { inserts: [], health: {}, gcpSubmit: null, textToImageCalls: [] };
+const state = { inserts: [], health: {}, gcpSubmit: null, referenceCalls: [] };
 
 const sqlMock = vi.fn(async (strings, ...values) => {
 	const text = (Array.isArray(strings) ? strings.join('?') : String(strings)).toLowerCase();
@@ -75,10 +75,10 @@ vi.mock('../../api/_lib/forge-provider-key.js', () => ({ resolveProviderKey: asy
 vi.mock('../../api/_lib/forge-lane-health.js', () => ({
 	laneHealthSnapshot: async () => ({ byId: state.health, statusMap: {} }),
 }));
-vi.mock('../../api/_mcp3d/text-to-image.js', () => ({
-	textToImage: vi.fn(async (prompt) => {
-		state.textToImageCalls.push(prompt);
-		return { imageUrl: 'https://cdn.example.com/ref/full-body.png' };
+vi.mock('../../api/_lib/forge-reference-image.js', () => ({
+	generateReferenceImage: vi.fn(async (prompt, opts) => {
+		state.referenceCalls.push({ prompt, opts });
+		return { imageUrl: 'https://cdn.example.com/ref/full-body.png', model: 'test' };
 	}),
 }));
 
@@ -169,7 +169,7 @@ describe('POST /api/avatars/reconstruct with a prompt', () => {
 	beforeEach(() => {
 		state.inserts = [];
 		state.health = {};
-		state.textToImageCalls = [];
+		state.referenceCalls = [];
 		gcpInstance.submit.mockClear();
 		state.gcpSubmit = async ({ mode }) => ({ extJobId: `env-${mode}`, eta: 120 });
 	});
@@ -178,7 +178,8 @@ describe('POST /api/avatars/reconstruct with a prompt', () => {
 		const { statusCode, body } = await reconstruct({ name: 'Explorer', prompt: 'a silver-haired explorer in a teal flight jacket' });
 		expect(statusCode).toBe(202);
 		expect(body).toMatchObject({ ok: true, provider: 'gcp', status: 'queued' });
-		expect(state.textToImageCalls[0]).toMatch(/^a silver-haired explorer in a teal flight jacket, full-body/);
+		expect(state.referenceCalls[0].prompt).toMatch(/^a silver-haired explorer in a teal flight jacket, full-body/);
+		expect(state.referenceCalls[0].opts).toMatchObject({ aspectRatio: '1:1' });
 
 		const call = gcpInstance.submit.mock.calls[0][0];
 		expect(call.mode).toBe('hunyuan');
@@ -205,7 +206,7 @@ describe('POST /api/avatars/reconstruct with a prompt', () => {
 	it('still routes a photo submission through the face pipeline', async () => {
 		const { statusCode } = await reconstruct({ name: 'Me', photos: ['https://cdn.example.com/selfie.jpg'] });
 		expect(statusCode).toBe(202);
-		expect(state.textToImageCalls).toHaveLength(0);
+		expect(state.referenceCalls).toHaveLength(0);
 		expect(gcpInstance.submit.mock.calls[0][0].mode).toBe('reconstruct');
 		expect(state.inserts[0].params.source).toBeUndefined();
 	});
