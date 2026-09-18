@@ -13,7 +13,7 @@
 // Spec: { "out": "public/x-media/<id>/card.png", "headline": "Line one\nLine two",
 //         "body": "One or two plain sentences.", "code": ["<line>", "<line>"],
 //         "frame": "browser" | "phone", "shot": "path/to.png" | "https://three.ws/page",
-//         "label": "yoursite.com" }
+//         "label": "yoursite.com", "scrollBy": 400, "settleMs": 12000 }
 // `shot` is a local PNG (a capture of the feature really running) or a live URL that is
 // captured on the spot. A capture that comes back blank fails the run, so a card can
 // never ship showing nothing.
@@ -48,6 +48,7 @@ async function shotUri() {
 		const page = await browser.newPage({ viewport: spec.frame === 'phone' ? { width: 412, height: 892 } : { width: 1280, height: 800 }, deviceScaleFactor: 2, colorScheme: 'dark' });
 		try { await page.goto(spec.shot, { waitUntil: 'networkidle', timeout: 90000 }); } catch { /* an open socket never idles; the settle below covers it */ }
 		await page.addStyleTag({ content: `${OVERLAYS.join(',')}{display:none!important}` });
+		if (spec.scrollBy) await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'instant' }), spec.scrollBy);
 		await page.waitForTimeout(spec.settleMs ?? 9000);
 		buf = await page.screenshot({ type: 'png' });
 		await page.close();
@@ -56,10 +57,18 @@ async function shotUri() {
 	}
 	const means = (await sharp(buf).stats()).channels.slice(0, 3).map((c) => c.mean);
 	if (means.every((m) => m < 6)) throw new Error(`[x-card] the capture for ${spec.out} is effectively blank`);
-	return `data:image/png;base64,${buf.toString('base64')}`;
+	// A 2x capture of a WebGL-heavy page is tens of megabytes as PNG, enough to make the
+	// card's own screenshot fail. The frame is under 800px wide, so 1600 is already 2x.
+	const fitted = await sharp(buf).resize({ width: 1600, withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+	return `data:image/jpeg;base64,${fitted.toString('base64')}`;
 }
 
 const shot = await shotUri();
+// Capturing a WebGL-heavy page can wedge the software GPU process, after which every
+// further screenshot in that browser fails. The card is plain HTML, so it renders in a
+// fresh instance that never touched WebGL.
+await browser.close();
+const cardBrowser = await chromium.launch();
 const headline = esc(spec.headline).replace(/\n/g, '<br>');
 const code = (spec.code || []).map((line) => `<div>${esc(line).replace(/(&lt;\/?)([a-z0-9-]+)/gi, '$1<b>$2</b>').replace(/([a-z-]+)=(&quot;|")/gi, '<i>$1</i>=$2')}</div>`).join('');
 const phoneFrame = spec.frame === 'phone';
@@ -103,12 +112,12 @@ h1{font-family:'Space Grotesk',sans-serif;font-weight:600;letter-spacing:-.04em;
 ${spec.foot ? `<div class="foot">${esc(spec.foot)}</div>` : ''}
 ${phoneFrame ? `<div class="phone"><img src="${shot}" alt=""></div>` : `<div class="browser"><div class="bar"><u></u><u></u><u></u><span>${esc(spec.label || 'yoursite.com')}</span></div><img src="${shot}" alt=""></div>`}`;
 
-const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+const page = await cardBrowser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 await page.setContent(html, { waitUntil: 'load' });
 await page.waitForTimeout(400);
 const out = path.resolve(ROOT, spec.out);
 mkdirSync(path.dirname(out), { recursive: true });
 const png = await page.screenshot({ type: 'png' });
-await browser.close();
+await cardBrowser.close();
 writeFileSync(out, await sharp(png).png({ compressionLevel: 9 }).toBuffer());
 console.log(`[x-card] wrote ${spec.out} (${W}x${H})`);
