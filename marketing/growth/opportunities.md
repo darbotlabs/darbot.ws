@@ -187,6 +187,53 @@ public good, such as open agent identity/payment/3D tooling, not general company
 **Official sources:** [Foundation grants](https://solana.org/grants-funding),
 [ecosystem directory process](https://solana.com/news/new-solana-ecosystem-directory).
 
+## From the CloudCredits sweep (2026-09-18)
+
+All 187 programs in the [CloudCredits](https://cloudcredits.io/) sitemap were checked against
+two questions, in the order the [CloudCredits filter](./github-growth-surfaces.md#use-cloudcredits-as-a-filter-not-a-shopping-list)
+sets: does the shipping product already use the vendor, and does the program offer
+distribution or co-marketing on top of credits? Every row below was then re-checked on the
+vendor's own page on 2026-09-18, because the directory lags: it still lists ElevenLabs as a
+three-month grant (the official page now says 12 months) and still links two program pages
+that return 404.
+
+### Passes the filter
+
+| Program | Stack fit, from the code | What it gives beyond credits | Gate before applying |
+| --- | --- | --- | --- |
+| [PostHog for Startups](https://posthog.com/startups) | Production analytics: `src/analytics.js` is the PostHog identity and event taxonomy | $50,000 in credits for 12 months, about $12,000 in partner benefits, and a **startup spotlight** | Apply at `app.posthog.com/startups` from the production PostHog org. The official page no longer states age or funding caps (the directory still quotes under 2 years and under $5M raised); confirm on the application form |
+| [Codex for Open Source](https://developers.openai.com/community/codex-for-oss) | The platform is public on GitHub (194 stars, 44 forks on 2026-09-18) with npm packages in monthly use (`@three-ws/avatar` 711 downloads, `@three-ws/avatar-mcp` 557, last 30 days). OpenAI models are a live lane via `@ai-sdk/openai` | Six months of ChatGPT Pro with Codex, conditional Codex Security access, and up to $25,000 in API credits from the Codex Open Source Fund. It deepens the existing OpenAI Select Partner relationship | Aimed at "core maintainers and operators of widely-used public projects", judged on merit with no stated threshold. The form at `openai.com/form/codex-for-oss/` blocks automated reads, so its questions are unverified |
+| [Microsoft for Startups](https://www.microsoft.com/en-us/startups) | None in production today | Up to $150,000 in Azure credits and "access to the Microsoft network of customers": the natural entry route for the Azure Marketplace row in the [partnership pipeline](../../docs/partners/opportunities.md) | Sequencing only. Do not start before the AWS Marketplace listing is live, the same rule the pipeline already sets for Azure |
+| Cerebras startup deal | Free-tier Llama rung in the LLM failover chain (`api/_lib/llm.js`, active when `CEREBRAS_API_KEY` is set) | Up to $22,500 in inference credits with priority support and **co-marketing** | The public `cerebras.ai/startup-deal` page returned 404 on 2026-09-18; only the [YC variant](https://www.cerebras.ai/yc-startup-deal) is live. Ask `info@cerebras.ai` whether the non-YC deal still exists before preparing anything |
+| [Deepgram Startup Program](https://deepgram.com/startup-program) | Not in the stack. `/api/asr` runs on NVIDIA Riva with no paid backstop by design | Up to $100,000 in credits for 12 months, a founder community, and "powered by Deepgram" customer stories | **Owner decision first.** Joining means onboarding a new external speech API as a second ASR rung, which needs approval. If approved, the rung and the application ship together; if not, record the no-go |
+
+### Credit-only: file when cost relief matters, never for reach
+
+These fit the stack but offer no distribution, so they never outrank a row above.
+
+- [Cloudflare for Startups](https://www.cloudflare.com/forstartups/): $10,000 for bootstrapped
+  companies, up to $350,000 when backed by an affiliated investor. Workers AI is already an
+  optional LLM rung. First-time applicants only.
+- [Sentry startup sponsorship](https://sentry.io/sponsorship/?promo_name=startup-sponsorship):
+  error reporting already runs through `api/_lib/sentry.js`. Eligible only while the account
+  has no prior paid usage.
+- [OVHcloud Startup Program](https://startup.ovhcloud.com/en/): OVH AI Endpoints are a keyless
+  rung in the LLM chain. EUR 10,000 in credits plus six hours with an engineer.
+
+### Checked and ruled out
+
+| Program | Why not |
+| --- | --- |
+| ElevenLabs grants | Already a P1 row; the directory's terms are stale. Use the [grant packet](../partner-packets/elevenlabs-startup-grants.md) |
+| Google AI Startup Program | Eligibility is gated on prior Google Cloud credit usage, and three.ws already draws the Google for Startups Web3 grant. The Google Cloud AI Agents row above is the route that adds reach |
+| Nebius for Startups | Credits now flow only through Nebius VC partners with $5M+ raised, and "crypto-only businesses" are excluded |
+| Scaleway program for NVIDIA Inception members | Requires an EU-based startup; the three.ws Terms of Service are governed by Delaware law |
+| Alibaba Cloud Startup Catalyst | The program page returns 404. The existing Alibaba Cloud Marketplace listing is unaffected |
+| Mistral AI Ambassador Program | The page returns 404 and the only cohort ran August 2025 to January 2026. It was an individual advocacy role, not a company program |
+| xAI data sharing credits | Pays in exchange for sharing request data and outputs. Our requests carry user prompts, so the trade is not ours to make |
+| 1Password for Open Source | Limited to non-commercial projects |
+| Mem0 startup program | New users only, three months of Pro, no co-marketing; agent memory is self-hosted |
+
 ## High-value editorial routes
 
 These are earned after a measurable launch, not submitted as generic company profiles:
@@ -227,4 +274,4 @@ can be prepared completely in advance; the actual dispatch is recorded only afte
 - Never imply a partner endorsed three.ws because an employee replied. Preserve the exact
   public action and exact relationship wording.
 
-Last verified: **2026-09-15**.
+Last verified: **2026-09-15**; the CloudCredits sweep section on **2026-09-18**.

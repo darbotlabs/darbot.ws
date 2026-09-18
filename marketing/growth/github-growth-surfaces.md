@@ -144,6 +144,11 @@ credits:
 | [DigitalOcean Startups](https://www.digitalocean.com/startups)     | Official materials offer marketplace reach, co-marketing support, and event partner opportunities in addition to infrastructure support. | Confirm company and product eligibility, then propose one marketplace-ready developer tool and one customer story. |
 | [MongoDB for Startups](https://www.mongodb.com/solutions/startups) | The program advertises technical support and go-to-market opportunities; select startups can receive co-marketing and co-sell access.    | Apply only if the production architecture genuinely uses the product and three.ws meets the current stage rules.   |
 
+The full sweep of all 187 CloudCredits programs, run on 2026-09-18, is in the
+[opportunity register](./opportunities.md#from-the-cloudcredits-sweep-2026-09-18): five
+programs pass this filter (PostHog, Codex for Open Source, Microsoft for Startups, Cerebras,
+Deepgram), three are credit-only, and nine are ruled out with the reason recorded.
+
 Do not migrate infrastructure to chase credits. Score the value of customer access,
 technical support, migration cost, lock-in, and engineering distraction separately.
 

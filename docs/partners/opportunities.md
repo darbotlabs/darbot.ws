@@ -13,7 +13,7 @@ does not restate the reference docs:
 This page is the part those three do not answer: **what is actually stuck, on whom, and
 what unblocks it.**
 
-Last reconciled against the source docs and live program pages on 2026-09-15. On 2026-09-16 the
+Last reconciled against the source docs and live program pages on 2026-09-15. Startup programs from the CloudCredits sweep were added on 2026-09-18 and carry "checked 2026-09-18". On 2026-09-16 the
 external directories, PRs, and program windows that were unverified or stale were re-checked
 against their live sources; only rows that say "checked 2026-09-16" carry that re-check, and each
 states what the live page showed and links the proof.
@@ -155,8 +155,12 @@ Real opportunities with no owner and no motion. Each needs a decision before it 
 | Opportunity | Why it is plausible | What it needs first |
 |---|---|---|
 | Google Cloud Marketplace | Production already runs entirely on Google Cloud Run and Vertex AI. The technical story is finished before the conversation starts | A decision to pursue co-listing and joint GTM |
-| Microsoft Azure Marketplace | Third leg of the enterprise procurement story after AWS and Alibaba | Sequencing decision. Do not start before the AWS listing exists |
+| Microsoft Azure Marketplace | Third leg of the enterprise procurement story after AWS and Alibaba. Checked 2026-09-18: [Microsoft for Startups](https://www.microsoft.com/en-us/startups) is open (up to USD 150,000 in Azure credits plus customer-network access) and is the entry route | Sequencing decision. Do not start before the AWS listing exists |
 | LobeHub chat plugin index | `public/.well-known/lobehub-plugin.json` (identifier `3d-agent`) is shipped, dated 2026-04-17. Checked 2026-09-16: the [plugin index](https://chat-plugins.lobehub.com/index.json) holds 40 plugins and none is three.ws. Our MCP servers are already listed separately | A decision: submit the plugin to the LobeHub plugin index, or retire the manifest in favour of the MCP listings that already exist |
+| PostHog for Startups | PostHog is the production analytics stack (`src/analytics.js`). Checked 2026-09-18: USD 50,000 in credits for 12 months plus a startup spotlight | Apply from the production org; confirm the age and funding rules on the form |
+| OpenAI Codex for Open Source | A new program inside an existing partner: six months of ChatGPT Pro with Codex and up to USD 25,000 in API credits for maintainers of widely used public projects. Checked 2026-09-18: open | Submit the maintainer application |
+| Cerebras startup deal | Cerebras is a live free-tier rung in the LLM chain and the deal includes co-marketing. Checked 2026-09-18: the public non-YC page returns 404 | Ask Cerebras whether the non-YC deal still exists |
+| Deepgram Startup Program | Up to USD 100,000 in speech credits and customer stories. Not in the stack: `/api/asr` runs on NVIDIA Riva | A decision to add a second ASR rung, which onboards a new external API |
 | A DeFi protocol partnership | A five-pillar proposal was drafted 2026-07-08 and lives in this directory. It is a point-in-time pitch with figures that are now over a year stale | Decide whether to revive. If yes, the numbers need refreshing before it is sent |
 
 ---
@@ -192,6 +196,7 @@ morning rediscovering it.
 | `ibm.com/community/ibm-champion-nominate/` | Returns 404 despite ranking in search results. Use the programme page |
 | OpenAI Grove | Explicitly aimed at pre-idea and pre-seed founders. three.ws is past that stage |
 | Solana ecosystem directory | Checked 2026-09-16: [solana.com/ecosystem](https://solana.com/ecosystem) is now a hub page with no project directory, search, or listing form, and every `/ecosystem/<slug>` path redirects to it. The [solana-labs/ecosystem](https://github.com/solana-labs/ecosystem) data repo behind the 2021 directory is archived, last pushed 2024-03-29. There is nothing to be listed in |
+| Nebius, Scaleway (Inception track), Alibaba Startup Catalyst, Mistral Ambassador, xAI data-sharing credits | Checked 2026-09-18 in the CloudCredits sweep: Nebius credits flow only through VC partners and exclude crypto-only businesses; Scaleway's Inception track requires an EU-based startup; the Alibaba and Mistral program pages return 404; xAI pays for sharing request data that carries user prompts. Details in the [growth register](../../marketing/growth/opportunities.md#checked-and-ruled-out) |
 | OpenAI Cookbook as a *primary* channel | The repo promises no merges and most that land come from staff or affiliated partners. Worth reviving, never worth leading with |
 
 ---
