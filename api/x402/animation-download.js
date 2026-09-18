@@ -211,7 +211,7 @@ export default async function handler(req, res) {
 		);
 	}
 
-	// Free listing — no paywall, hand back the presigned URL directly. That
+	// Free listing: no paywall, hand back the presigned URL directly. That
 	// includes a generated listing in this week's free rotation, which keeps its
 	// stored price and is simply not charged while the rotation holds it.
 	if (!row.price_amount || Number(row.price_amount) <= 0 || (await inFreeRotation(row))) {
