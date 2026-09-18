@@ -1,7 +1,7 @@
 {
 	"id": "rig-doctor",
-	"contentHash": "bc07655b36d67b249b48873127c5969e94e0154c3a0036f08bb66a346a585166",
-	"reviewedAt": "2026-09-16T19:41:34.498Z",
+	"contentHash": "2965eaf3a04d510908f5defacb3c985077167431b74e00d1d961c8ac20b0c169",
+	"reviewedAt": "2026-09-18T01:50:13.986Z",
 	"passed": true,
 	"blockers": [],
 	"texts": [
@@ -47,6 +47,24 @@
 				"detail": "live page shows \"0 bytes leave your machine\""
 			},
 			{
+				"kind": "probe:browser",
+				"target": "the Mixamo sample diagnoses end to end",
+				"ok": true,
+				"detail": "3 steps passed"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the page serves the convention count",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the sample rig the demo loads is live",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
 				"kind": "link",
 				"target": "https://three.ws/rig-doctor",
 				"ok": true,
@@ -58,21 +76,13 @@
 		"verdict": "publish",
 		"scores": {
 			"accuracy": 5,
-			"clarity": 4,
+			"clarity": 5,
 			"specificity": 5,
 			"voice": 5,
 			"professionalism": 5,
 			"visual": 5
 		},
-		"issues": [
-			{
-				"severity": "minor",
-				"area": "clarity",
-				"quote": "Rig Doctor names which of 15 rig conventions a .glb follows",
-				"problem": "A new reader learns what the tool checks but not why it matters (whether the avatar's animation will actually play). A single clause would close that gap.",
-				"fix": "Optional only: 'Rig Doctor checks which of 15 rig conventions a .glb follows, so you know its animations will play' if it fits the character band. Not required to publish."
-			}
-		],
+		"issues": [],
 		"rewrite": {
 			"posts": [
 				"Approved for GitHub's Open Source Friday. Rig Doctor names which of 15 rig conventions a .glb follows, right in your browser, with nothing uploaded: three.ws/rig-doctor"
@@ -81,7 +91,7 @@
 				"The three.ws Rig Doctor page: a drop zone for a .glb file that runs entirely in the browser, above stats reading 0 bytes leave your machine, 52 canonical joints scored, and 15 rig conventions recognised"
 			]
 		},
-		"summary": "Every claim verifies: the approved label on issue #254, the 15 conventions on the live page and in src/rig-report.js, and the no-upload claim twice over, and the screenshot matches the live page and the copy (15, not the pack's stale 11). Voice, length, link, and alt text all conform; the only note is an optional clarity tweak that is not required to ship.",
+		"summary": "Every claim is verified: the approved label on open-source-friday#254, the live page's \"15 rig conventions recognised\" and \"0 bytes leave your machine\", and the screenshot agrees with all of them, so the pack's stale 11-convention caution is correctly superseded by the live product. Voice, length, link, image, and alt text all meet the contract; ship as is.",
 		"model": "nvidia:moonshotai/kimi-k3",
 		"fallbacks": [
 			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",
@@ -89,5 +99,6 @@
 			"openai 429: {\n    \"error\": {\n        \"message\": \"Your account is not active, please check your billing details on our website.\",\n        \"type\": \"billing_not_active\",\n        \"param\": null,\n        \"code\": \"billi"
 		],
 		"rewriteFindings": []
-	}
+	},
+	"editorError": null
 }

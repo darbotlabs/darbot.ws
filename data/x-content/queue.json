@@ -190,7 +190,38 @@
 					]
 				}
 			],
-			"tier": 2
+			"tier": 2,
+			"probes": [
+				{
+					"type": "browser",
+					"name": "the Mixamo sample diagnoses end to end",
+					"steps": [
+						{
+							"goto": "https://three.ws/rig-doctor"
+						},
+						{
+							"click": "Mixamo rig"
+						},
+						{
+							"expect": "52 of 52 canonical joints mapped",
+							"timeoutMs": 60000
+						}
+					]
+				},
+				{
+					"type": "api",
+					"name": "the page serves the convention count",
+					"url": "https://three.ws/rig-doctor",
+					"expect": {
+						"contains": "rig conventions recognised"
+					}
+				},
+				{
+					"type": "api",
+					"name": "the sample rig the demo loads is live",
+					"url": "https://three.ws/avatars/michelle.glb"
+				}
+			]
 		},
 		{
 			"id": "aws-authorization-spine",
@@ -259,7 +290,14 @@
 			"mentions": {
 				"@awscloud": "The article is published on the AWS Builder Center under the three.ws byline, as an AWS Partner."
 			},
-			"tier": 1
+			"tier": 1,
+			"probes": [
+				{
+					"type": "api",
+					"name": "the article is live on the AWS Builder Center",
+					"url": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner"
+				}
+			]
 		},
 		{
 			"id": "three-token-mcp",
@@ -343,7 +381,37 @@
 			"mentions": {
 				"@solana": "three_burn signs and broadcasts one Solana mainnet transaction (packages/three-token-mcp/src/lib/token.js); $THREE is an SPL token and Solana is the platform's home chain."
 			},
-			"tier": 1
+			"tier": 1,
+			"probes": [
+				{
+					"type": "command",
+					"name": "three_burn refuses to sign without confirm: true",
+					"argv": [
+						"node",
+						"--test",
+						"packages/three-token-mcp/test/burn-policy.test.mjs"
+					]
+				},
+				{
+					"type": "api",
+					"name": "the package is published on npm",
+					"url": "https://registry.npmjs.org/@three-ws%2fthree-token-mcp",
+					"expect": {
+						"json": {
+							"path": "dist-tags.latest",
+							"exists": true
+						}
+					}
+				},
+				{
+					"type": "api",
+					"name": "the live tool catalog lists three_burn",
+					"url": "https://three.ws/mcp-catalog.json",
+					"expect": {
+						"contains": "\"three_burn\""
+					}
+				}
+			]
 		},
 		{
 			"id": "forge-max",

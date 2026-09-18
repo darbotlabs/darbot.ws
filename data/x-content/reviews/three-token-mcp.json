@@ -1,7 +1,7 @@
 {
 	"id": "three-token-mcp",
-	"contentHash": "d10703c970c96b3050ccd71b7f96f0d8539a605614e91ebdcddd8bdee2595ce4",
-	"reviewedAt": "2026-09-18T00:25:41.571Z",
+	"contentHash": "111e25308a115a7ccba1e68bc0ad1fe93010472f09bc8047041efbafe327cbc1",
+	"reviewedAt": "2026-09-18T01:47:41.686Z",
 	"passed": true,
 	"blockers": [],
 	"texts": [
@@ -68,6 +68,24 @@
 				"detail": "file supports the claim"
 			},
 			{
+				"kind": "probe:command",
+				"target": "three_burn refuses to sign without confirm: true",
+				"ok": true,
+				"detail": "exit 0"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the package is published on npm",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the live tool catalog lists three_burn",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
 				"kind": "link",
 				"target": "https://three.ws/mcp-tools?server=three-token-mcp",
 				"ok": true,
@@ -100,7 +118,7 @@
 				"The three.ws MCP Tool Catalog filtered to the @three-ws/three-token-mcp server: 3 of 321 tools, with three_balance and three_price labelled read-only and three_burn labelled irreversible, all free"
 			]
 		},
-		"summary": "Every claim is verified against the live catalog page and source files, and the screenshot matches the copy exactly, including the Irreversible badge on three_burn. The post leads with the mechanism, stays in the length band, tags only @solana which the burn genuinely runs on, and carries no hype or unverified numbers. Ship as is.",
+		"summary": "Every claim (burn on Solana mainnet, irreversible flag, confirm:true gate) is verified against the live page, source files, and a live probe that confirmed the server refuses to sign without confirmation. The screenshot matches the live catalog exactly, the alt text accurately describes it, and the post sits in the 100-179 band with no hashtags, emoji, or hype.",
 		"model": "nvidia:moonshotai/kimi-k3",
 		"fallbacks": [
 			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",

@@ -1,7 +1,7 @@
 {
 	"id": "aws-authorization-spine",
-	"contentHash": "6e58ebbae0ede45676e03a4c23f72c6c74e909d111982d89ace09f26de38829a",
-	"reviewedAt": "2026-09-18T01:08:24.922Z",
+	"contentHash": "1bcdb206507f86e1dc27210fedcff3270fccfc3417334bbdd08fa73d41b91e0b",
+	"reviewedAt": "2026-09-18T01:45:20.708Z",
 	"passed": true,
 	"blockers": [],
 	"texts": [
@@ -40,6 +40,12 @@
 				"detail": "live page shows \"AWS Builder Center\""
 			},
 			{
+				"kind": "probe:api",
+				"target": "the article is live on the AWS Builder Center",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
 				"kind": "link",
 				"target": "https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner",
 				"ok": true,
@@ -57,30 +63,22 @@
 		"verdict": "publish",
 		"scores": {
 			"accuracy": 5,
-			"clarity": 5,
-			"specificity": 5,
+			"clarity": 4,
+			"specificity": 4,
 			"voice": 5,
 			"professionalism": 5,
 			"visual": 5
 		},
-		"issues": [
-			{
-				"severity": "minor",
-				"area": "visual",
-				"quote": "alt text: \"The article live on the AWS Builder Center under the three.ws byline, headlined Budgets, entitlements, and the $THREE token layer: how we authorize autonomous agent spending, published 11 September 2026\"",
-				"problem": "The attached alt text drops the series context (\"as the second article in the three.ws series\") that the announcement pack requires and the screenshot visibly shows (\"Series: three.ws (2 articles)\").",
-				"fix": "Use the pack's required alt text verbatim: \"The article live on the AWS Builder Center under the three.ws byline, headlined \\\"Budgets, entitlements, and the $THREE token layer: how we authorize autonomous agent spending\\\", published 11 September 2026 as the second article in the three.ws series\""
-			}
-		],
+		"issues": [],
 		"rewrite": {
 			"posts": [
 				"Our agents spend against budgets, never private keys. How we authorize that spending, and the $THREE token layer behind it, on @awscloud's Builder Center: https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner"
 			],
 			"altText": [
-				"The article live on the AWS Builder Center under the three.ws byline, headlined \"Budgets, entitlements, and the $THREE token layer: how we authorize autonomous agent spending\", published 11 September 2026 as the second article in the three.ws series"
+				"The article live on the AWS Builder Center under the three.ws byline, headlined \"Budgets, entitlements, and the $THREE token layer: how we authorize autonomous agent spending\", published 11 September 2026."
 			]
 		},
-		"summary": "Every claim in the post passes verification against the live page, the screenshot matches the live article (headline, byline, publish date, series block), and the text is inside the voice contract with a genuine @awscloud tag. Ship it unchanged; only swap in the pack's full alt text to include the series context visible in the frame.",
+		"summary": "Every claim in the post is verified against the live Builder Center page, and the screenshot matches that page exactly, chrome, headline, byline, and date all included. The copy states the mechanism plainly, stays in house voice, and the @awscloud tag is earned by the article's own venue; ship it.",
 		"model": "nvidia:moonshotai/kimi-k3",
 		"fallbacks": [
 			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",
