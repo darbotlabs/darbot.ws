@@ -602,6 +602,30 @@ export function resolveBackendIdWithHealth({ path, tier, backend, userImages = f
 	return defaultBackendForHealthAware(p, tierId, userImages, health, subjectClass);
 }
 
+// Where a request goes after the free HuggingFace Spaces lane failed to serve it.
+//
+// The health-aware router picks HuggingFace whenever every self-host lane reads
+// 'down' at that instant. That happens far more often than a real outage: one
+// failed job (a bad reference image is enough) cools the Hunyuan3D lane for 90
+// seconds fleet-wide, and with self-host TRELLIS also out, HuggingFace (reported
+// 'unknown', never probed) became the pick. Its Spaces sit GPU-quota-dead for
+// most of the day, so the request answered 502 while our own Hunyuan3D worker
+// sat healthy and idle (forge_avatar, 2026-09-18). A health snapshot is a
+// routing hint; the submit is the authority. So an auto-routed request that HF
+// could not serve now tries our self-host Hunyuan3D worker, and a text prompt
+// with no self-host lane still gets the free NVIDIA NIM text lane.
+//
+// An explicitly chosen HuggingFace engine keeps its designed busy state: the
+// caller named that engine, so it is never silently swapped.
+//
+// Returns 'hunyuan3d' | 'nvidia' | null (null = surface the busy state).
+export function laneAfterHfFailure({ explicit = false, userImages = false } = {}) {
+	if (explicit) return null;
+	if (backendIsConfigured('hunyuan3d')) return 'hunyuan3d';
+	if (!userImages && backendIsConfigured('nvidia')) return 'nvidia';
+	return null;
+}
+
 function readEnv(name) {
 	if (typeof process !== 'undefined' && process.env && process.env[name]) return process.env[name];
 	return null;

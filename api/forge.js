@@ -77,6 +77,7 @@ import {
 	estimateCredits,
 	preferFreeReconstruct,
 	backendIsConfigured,
+	laneAfterHfFailure,
 	backendAcceptsInlineViews,
 	buildCatalog,
 	selfhostQualityForTier,
@@ -2199,12 +2200,26 @@ async function startJob(req, res) {
 				})
 			)
 				return;
-			return json(res, 502, {
-				error: 'provider_busy',
-				backend: 'huggingface',
-				message:
-					'The free 3D Spaces are all busy or warming up right now. Try again in a moment, or pick another engine.',
-			});
+			// Failover instead of a dead end: see laneAfterHfFailure for why an
+			// auto-routed request lands here while our own GPU worker is healthy.
+			const nextLane = laneAfterHfFailure({ explicit: backendExplicit, userImages: isImageMode });
+			if (nextLane === 'hunyuan3d') {
+				console.warn('[forge] free HuggingFace lane could not serve this request; failing over to self-hosted Hunyuan3D');
+				backendId = 'hunyuan3d';
+				provider = createGcpProvider();
+			} else if (nextLane === 'nvidia' && !nvidiaTried) {
+				nvidiaTried = true;
+				console.warn('[forge] free HuggingFace lane could not serve this request; failing over to free NVIDIA NIM');
+				if (await runNvidiaTextLane({ req, res, ip, prompt, aspect, tier, path, opts, cacheKey })) return;
+			}
+			if (backendId === 'huggingface') {
+				return json(res, 502, {
+					error: 'provider_busy',
+					backend: 'huggingface',
+					message:
+						'The free 3D Spaces are all busy or warming up right now. Try again in a moment, or pick another engine.',
+				});
+			}
 		}
 
 		// Free-first: exhaust the free reconstruct lane (HuggingFace Spaces) BEFORE
