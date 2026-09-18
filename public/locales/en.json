@@ -2100,7 +2100,7 @@
 		"extension": "Extension",
 		"filters": "Filters",
 		"http_endpoints": "HTTP endpoints",
-		"live_catalog_merged_across_x402_facilitators": "Live catalog merged across x402 facilitators. Search, filter, and pay any endpoint with a single click — settlement is on-chain via the x402 protocol.",
+		"live_catalog_merged_across_x402_facilitators": "Live catalog merged across x402 facilitators. Search, filter, and pay any endpoint with a single click. Settlement is on-chain via the x402 protocol.",
 		"max_price_usdc": "Max price (USDC)",
 		"mcp_tools": "MCP tools",
 		"meta_description": "Search and browse the x402 facilitator catalog. Filter by network, price, extensions. Pay any service in one click.",
