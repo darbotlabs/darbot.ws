@@ -89,6 +89,14 @@ const atMinutes = (at) => {
 	return h * 60 + (m || 0);
 };
 
+// Saturday and Sunday, by the UTC day a slot belongs to. The $THREE pool trades
+// about two thirds of its weekday volume on a weekend, and the hour after a post
+// moves less than half the dollars, though a post is just as likely to get a
+// reaction. A flagship post is worth the most on a weekday, so with
+// `flagshipWeekdaysOnly` the T1 slot does not open on a weekend and T1 posts are
+// not spent in the lower slots either: they wait for Monday.
+export const isWeekend = (timestamp) => [0, 6].includes(new Date(timestamp).getUTCDay());
+
 // Every slot opening from yesterday through tomorrow, in time order, so the
 // slot spanning midnight (22:00 until the next morning) is found too.
 export function slotOpenings(now, cadence = DEFAULT_CADENCE, seed = null) {
@@ -99,6 +107,7 @@ export function slotOpenings(now, cadence = DEFAULT_CADENCE, seed = null) {
 	for (const offset of [-1, 0, 1]) {
 		const day = today + offset * DAY;
 		slots.forEach((slot, index) => {
+			if (cadence.flagshipWeekdaysOnly && Number(slot.tier) === 1 && isWeekend(day)) return;
 			const key = `${dayKey(day)}#${index}`;
 			openings.push({ key, tier: Number(slot.tier), opensAt: day + (atMinutes(slot.at) + jitterMinutes(`slot:${key}`, window, seed)) * MINUTE });
 		});
@@ -177,7 +186,9 @@ export function pickDue({
 	const lastDay = published.filter((row) => now - Date.parse(row.publishedAt) < DAY).length;
 	if (lastDay >= cadence.dailyCap) return { item: null, reason: `daily cap of ${cadence.dailyCap} reached` };
 
-	const ready = unpublished.filter((item) => !exclude.has(item.id) && Date.parse(item.notBefore) <= now);
+	// On a weekend a flagship post waits for Monday instead of filling a lower slot.
+	const holdFlagship = Boolean(cadence.flagshipWeekdaysOnly) && isWeekend(slot.opensAt);
+	const ready = unpublished.filter((item) => !exclude.has(item.id) && Date.parse(item.notBefore) <= now && !(holdFlagship && tierOf(item) === 1));
 	const context = { lifts, published, quality, reviews, now };
 	const readyByTier = new Map(TIERS.map((tier) => [tier, ready.filter((item) => tierOf(item) === tier).length]));
 	for (const tier of tierOrder(slot.tier, readyByTier)) {

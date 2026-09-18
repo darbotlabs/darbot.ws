@@ -5,6 +5,7 @@
 		"windowMinutes": 30,
 		"minimumMinutesApart": 180,
 		"dailyCap": 3,
+		"flagshipWeekdaysOnly": true,
 		"quietHoursUtc": [
 			"02:00",
 			"07:00"

@@ -196,6 +196,8 @@ describe('schedule', () => {
 	});
 });
 
+const tierOfPick = (pick) => Number(pick.item.tier);
+
 describe('priority', () => {
 	const lifts = loadLifts(root);
 	const post = (text, over = {}) => ({ id: 'x', kind: 'post', lane: 'l', pattern: 'p', notBefore: '2026-09-17T00:00:00Z', posts: [{ text, media: [{ path: 'public/x.webp' }] }], ...over });
@@ -252,6 +254,27 @@ describe('priority', () => {
 		for (let index = 1; index < minutes.length; index++) {
 			expect(minutes[index] - (minutes[index - 1] + queue.cadence.windowMinutes)).toBeGreaterThanOrEqual(queue.cadence.minimumMinutesApart);
 		}
+	});
+
+	it('keeps flagship posts off the weekend, when the pool trades a third less', () => {
+		const cadence = { ...loadQueue(root).cadence, quietHoursUtc: null };
+		expect(cadence.flagshipWeekdaysOnly).toBe(true);
+		const saturday = Date.parse('2026-09-19T16:20:00Z');
+		const monday = Date.parse('2026-09-21T16:45:00Z');
+		const tiersOn = (day) => slotOpenings(day, cadence, 'seed').filter((slot) => slot.key.startsWith(new Date(day).toISOString().slice(0, 10))).map((slot) => slot.tier);
+		expect(tiersOn(saturday)).toEqual([3, 2]);
+		expect(tiersOn(monday)).toEqual([3, 1, 2]);
+
+		// Two flagship posts ready: a surplus that would normally fill a lower slot.
+		const flagship = (id) => ({ id, status: 'approved', kind: 'post', tier: 1, lane: id, pattern: id, notBefore: '2026-09-01T00:00:00Z', posts: [{ text: `${id} is now live: three.ws/x`, media: [] }] });
+		const feature = { id: 'feature', status: 'approved', kind: 'post', tier: 2, lane: 'f', pattern: 'f', notBefore: '2026-09-01T00:00:00Z', posts: [{ text: 'A feature: three.ws/x', media: [] }] };
+		const items = [flagship('one'), flagship('two'), feature];
+		const pick = (now) => pickDue({ items, state: { published: [] }, now, cadence, quality: {}, seed: 'seed', lifts: null, reviews: new Map(), exclude: new Set() });
+		const weekendSlot = slotOpenings(saturday, cadence, 'seed').find((slot) => slot.key.startsWith('2026-09-19') && slot.tier === 2);
+		const weekendPick = pick(weekendSlot.opensAt + 60_000);
+		expect(weekendPick.item.id).toBe('feature');
+		const mondaySlot = slotOpenings(monday, cadence, 'seed').find((slot) => slot.key.startsWith('2026-09-21') && slot.tier === 1);
+		expect(tierOfPick(pick(mondaySlot.opensAt + 60_000))).toBe(1);
 	});
 
 	it('adds owner boost, timeliness, waiting, and review; penalizes repetition; drops expired posts', () => {
