@@ -42,7 +42,7 @@ import { proxiedImageURL } from './ipfs.js';
 import { agentAvatarGlb, hasCustomAvatar, seeInWorldHref } from './shared/agent-3d.js';
 import { resolveDevR2Url } from './shared/dev-r2-proxy.js';
 import { terminalLinks } from './shared/trading-terminals.js';
-import { CHART_EMBEDS, chartEmbedUrls, resolveGeckoPool } from './shared/chart-embeds.js';
+import { CHART_EMBEDS, chartEmbedUrls, resolveChartPool } from './shared/chart-embeds.js';
 import { watchEmbed, embedFallbackNode, DEFAULT_EMBED_TIMEOUT_MS } from './shared/embed-guard.js';
 import { mountPriceChart } from './mission-control/chart.js';
 import { flashValue, rippleOnce, liveDot, setLiveDot } from './ui-juice.js';
@@ -61,7 +61,7 @@ const state = {
 	chartView: 'native', // a CHART_VIEWS id; hydrated from localStorage in boot()
 	chartSeq: 0, // bumps on every chart render so a stale async load never paints
 	chartTeardown: null, // cancels the active view's watchdog, stream or chart
-	gecko: null, // { pool, indexed } once resolved for this mint
+	chartPools: {}, // provider id → { pool, indexed } once resolved for this mint
 	priceTimer: 0,
 	statsPromise: null, // shared /api/pump/token-stats read (stats + holders panels)
 	statsWindow: '1h', // selected timeframe tab in the stats panel
@@ -836,8 +836,9 @@ function chartIntervalBar() {
 //   · TradingView  TradingView's charting engine (lightweight-charts) drawing
 //                  real candles from the same OHLCV, ticked live by the trade
 //                  stream. Shared with Mission Control and /trades.
-//   · DexScreener, Birdeye, GMGN, GeckoTerminal: each provider's own chart,
-//                  embedded. URL shapes live in src/shared/chart-embeds.js.
+//   · DexScreener, Birdeye, GMGN, DEXTools, GeckoTerminal: each provider's
+//                  own chart, embedded. URL shapes live in
+//                  src/shared/chart-embeds.js.
 // Only the chosen view loads, so the default stays light.
 const CHART_VIEWS = [
 	{ id: 'native', label: 'three.ws', kind: 'native' },
@@ -955,35 +956,39 @@ async function renderEmbedChart(target, view, seq) {
 	let pool = null;
 	if (provider.needs === 'pool') {
 		try {
-			state.gecko ||= await resolveGeckoPool('solana', state.mint, { signal: AbortSignal.timeout(10_000) });
+			state.chartPools[provider.id] ||= await resolveChartPool(provider.id, 'solana', state.mint, {
+				signal: AbortSignal.timeout(10_000),
+			});
 		} catch {
 			if (seq !== state.chartSeq) return;
 			wrap.replaceChildren(
 				el('div', { class: 'ld-empty ld-empty-sm ld-embed-fallback' }, [
-					el('p', { text: `Could not reach ${provider.label} to find this coin's pool.` }),
+					el('p', { text: `We could not look up this coin's trading pool for ${provider.label}.` }),
 					el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Try again', onclick: () => renderChart() }),
 				]),
 			);
 			return;
 		}
 		if (seq !== state.chartSeq) return;
-		if (!state.gecko.indexed) {
-			// GeckoTerminal lists a pump.fun coin once it has traded enough. Until
-			// then its embed is a 404 page, so say so and point at charts that
-			// already cover the coin.
+		const resolved = state.chartPools[provider.id];
+		if (!resolved.indexed) {
+			// A pool provider cannot draw a coin whose pool it does not know:
+			// GeckoTerminal lists a pump.fun coin only once it has traded enough
+			// (its embed is a 404 page until then), and DEXTools needs a pair to
+			// exist at all. Say so and point at charts that already cover the coin.
 			wrap.replaceChildren(
 				el('div', { class: 'ld-empty ld-empty-sm ld-embed-fallback' }, [
-					el('p', { class: 'ld-empty-title', text: `${provider.label} has not indexed this coin yet.` }),
-					el('p', { text: 'It lists new pump.fun coins once they build trading history. Birdeye, GMGN and DexScreener chart it from the first trade.' }),
+					el('p', { class: 'ld-empty-title', text: `${provider.label} cannot chart this coin yet.` }),
+					el('p', { text: 'It picks up new pump.fun coins once they build trading history. Birdeye, GMGN and DexScreener chart it from the first trade.' }),
 					el('div', { class: 'ld-dex-fallback-actions' }, [
 						el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Show Birdeye', onclick: () => setChartView('birdeye') }),
-						el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Check again', onclick: () => { state.gecko = null; renderChart(); } }),
+						el('button', { class: 'ld-btn ld-btn-ghost', type: 'button', text: 'Check again', onclick: () => { delete state.chartPools[provider.id]; renderChart(); } }),
 					]),
 				]),
 			);
 			return;
 		}
-		pool = state.gecko.pool;
+		pool = resolved.pool;
 	}
 
 	const urls = chartEmbedUrls(provider.id, { chain: 'solana', token: state.mint, pool, theme: currentTheme() });

@@ -12,7 +12,7 @@ import {
 	CHART_CHAINS,
 	CHART_EMBEDS,
 	chartEmbedUrls,
-	resolveGeckoPool,
+	resolveChartPool,
 	validChartAddress,
 } from './shared/chart-embeds.js';
 import {
@@ -125,9 +125,10 @@ function renderHead(coin) {
 // zero-dependency native line chart (with the time-range selector); the other
 // sources lazy-mount a full third-party chart in an iframe only when picked:
 //   • TradingView   advanced candlestick widget, for coins with a ticker.
-//   • DexScreener, Birdeye, GMGN, GeckoTerminal: each provider's on-chain chart
-//     for the token's contract, built by src/shared/chart-embeds.js so this page
-//     and /launches/<mint> embed identically.
+//   • DexScreener, Birdeye, GMGN, DEXTools, GeckoTerminal: each provider's
+//     on-chain chart for the token's contract, built by
+//     src/shared/chart-embeds.js so this page and /launches/<mint> embed
+//     identically.
 // Each source is offered only when it can actually render for the coin, so the
 // switcher never lands on a dead chart. The picked source persists across coins.
 const CHART_SOURCE_KEY = 'tws_coin_chart_source';
@@ -187,9 +188,10 @@ const chartState = {
 	loading: true,
 	error: null,
 	source: storedChartSource(),
-	// GeckoTerminal pool resolution is async, resolved once per coin.
-	gtPool: null,
-	gtState: 'idle', // idle | loading | ready | unindexed | error
+	// Pool-keyed providers (DEXTools, GeckoTerminal) resolve their pool async,
+	// once per coin: provider id → { pool, state }, where state is
+	// loading | ready | unindexed | error. A missing entry means not started.
+	pools: {},
 };
 
 // The source actually rendered for this coin: the stored preference when it's
@@ -292,22 +294,27 @@ function mountEmbed(host, url, title, fallback) {
 	host.replaceChildren(iframeEl(url, title, fallback));
 }
 
-// GeckoTerminal embeds are keyed by pool, not token, and 404 for a pool it has
-// not indexed, so resolve and confirm the pool once per coin, then mount. State
-// drives the loading, not-indexed and error UI.
-async function loadGtPool(coin, ref) {
-	if (chartState.gtState === 'loading') return;
-	chartState.gtState = 'loading';
+// DEXTools and GeckoTerminal embeds are keyed by pool, not token, and each has
+// its own idea of whether it can draw that pool (GeckoTerminal 404s on one it
+// has not indexed), so resolve through the provider once per coin, then mount.
+// State drives the loading, not-indexed and error UI.
+async function loadProviderPool(coin, ref, provider) {
+	if (chartState.pools[provider.id]?.state === 'loading') return;
+	chartState.pools[provider.id] = { pool: null, state: 'loading' };
 	renderChart(coin);
 	try {
-		const { pool, indexed } = await resolveGeckoPool(ref.platform, ref.address);
-		chartState.gtPool = pool;
-		chartState.gtState = indexed ? 'ready' : 'unindexed';
+		const { pool, indexed } = await resolveChartPool(provider.id, ref.platform, ref.address);
+		chartState.pools[provider.id] = { pool, state: indexed ? 'ready' : 'unindexed' };
 	} catch {
-		chartState.gtPool = null;
-		chartState.gtState = 'error';
+		chartState.pools[provider.id] = { pool: null, state: 'error' };
 	}
 	renderChart(coin);
+}
+
+// A chart that can stand in for a pool provider that cannot draw this coin:
+// the first token-keyed provider offered for it.
+function tokenKeyedFallback(coin) {
+	return availableSources(coin).find((s) => s.kind === 'embed' && s.provider.needs === 'token');
 }
 
 function setChartSource(coin, id) {
@@ -411,6 +418,10 @@ function renderChart(coin) {
 	el.querySelectorAll('.cv-range-btn[data-source]').forEach((btn) => {
 		btn.addEventListener('click', () => setChartSource(coin, btn.dataset.source));
 	});
+	el.querySelector('[data-pool-retry]')?.addEventListener('click', () => {
+		delete chartState.pools[active.id];
+		renderChart(coin);
+	});
 
 	if (native) wireChartPointer();
 	else mountActiveEmbed(coin, active);
@@ -477,22 +488,27 @@ function embedChartBody(coin, source) {
 		const urls = chartEmbedUrls(provider.id, { chain: ref.platform, token: ref.address, theme: chartTheme() });
 		return `${wrap}<p class="cv-tv-credit"><a href="${esc(urls.page)}" target="_blank" rel="noopener nofollow noreferrer">Open in ${label} ↗</a></p>`;
 	}
-	if (chartState.gtState === 'error') {
-		return `<div class="cv-chart-state">${label} could not be reached for this coin's pool.</div>`;
+	const { pool, state } = chartState.pools[provider.id] || {};
+	if (state === 'error') {
+		return `<div class="cv-chart-state col"><p>We could not look up this coin's trading pool for ${label}.</p><button type="button" class="cv-range-btn" data-pool-retry>Try again</button></div>`;
 	}
-	if (chartState.gtState === 'unindexed') {
-		return `<div class="cv-chart-state">${label} has not indexed a pool for this coin yet. DexScreener and Birdeye chart it now.</div>`;
+	if (state === 'unindexed') {
+		const alt = tokenKeyedFallback(coin);
+		const altBtn = alt
+			? `<button type="button" class="cv-range-btn" data-source="${alt.id}" aria-pressed="false">Show ${esc(alt.label)}</button>`
+			: '';
+		return `<div class="cv-chart-state col"><p>${label} has no pool to chart for this coin yet.</p>${altBtn}</div>`;
 	}
-	if (chartState.gtState !== 'ready' || !chartState.gtPool) {
+	if (state !== 'ready' || !pool) {
 		return `<div class="cv-chart-state"><span class="cv-spinner" aria-hidden="true"></span>Loading ${label}…</div>`;
 	}
-	const urls = chartEmbedUrls(provider.id, { chain: ref.platform, token: ref.address, pool: chartState.gtPool, theme: chartTheme() });
+	const urls = chartEmbedUrls(provider.id, { chain: ref.platform, token: ref.address, pool, theme: chartTheme() });
 	return `${wrap}<p class="cv-tv-credit"><a href="${esc(urls.page)}" target="_blank" rel="noopener nofollow noreferrer">Open in ${label} ↗</a></p>`;
 }
 
-// Mount the iframe for the active non-native source into #cv-adv. GeckoTerminal
-// first resolves its pool (kicking off the async fetch on the idle→loading
-// transition); the other charts mount synchronously.
+// Mount the iframe for the active non-native source into #cv-adv. A pool-keyed
+// provider first resolves its pool (kicking off the async fetch the first time
+// it is shown); the other charts mount synchronously.
 function mountActiveEmbed(coin, source) {
 	ensureThemeRemount(coin);
 	// Re-rendering the whole chart panel rebuilds the host node and remounts the
@@ -511,17 +527,18 @@ function mountActiveEmbed(coin, source) {
 	const ref = onchainRef(coin);
 	if (!ref) return;
 	const { provider } = source;
+	const resolved = chartState.pools[provider.id];
 	if (provider.needs === 'pool') {
-		if (chartState.gtState === 'idle') {
-			loadGtPool(coin, ref);
+		if (!resolved) {
+			loadProviderPool(coin, ref, provider);
 			return;
 		}
-		if (chartState.gtState !== 'ready' || !chartState.gtPool) return;
+		if (resolved.state !== 'ready' || !resolved.pool) return;
 	}
 	const urls = chartEmbedUrls(provider.id, {
 		chain: ref.platform,
 		token: ref.address,
-		pool: chartState.gtPool,
+		pool: resolved?.pool,
 		theme: chartTheme(),
 	});
 	if (!urls) return;

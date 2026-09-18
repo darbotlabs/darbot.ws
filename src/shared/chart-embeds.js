@@ -5,15 +5,24 @@
 // /coin/:id build identical embeds and a provider changing its embed format is
 // a one-file fix.
 //
-// Only providers verified to render inside a cross-origin <iframe> without a
-// key are listed. Checked in a real browser, 2026-09-17:
+// Only providers that publish a keyless embed a cross-origin <iframe> can load
+// are listed. Checked in a real browser, 2026-09-17:
 //   DexScreener    token address, resolves the top pair itself
 //   Birdeye        token address (its TradingView-based tv-widget)
 //   GMGN           token address (its kline widget), Solana/ETH/Base/BSC only
 //   GeckoTerminal  pool address, and only once GeckoTerminal indexed that pool
-// Refused framing or needs a key, so deliberately absent: DEXTools
-// (X-Frame-Options), Codex/Defined (frame-ancestors / bot checkpoint), Moralis
-// (key-restricted widget), pump.fun, Jupiter, Photon, Axiom, Solscan.
+// Added 2026-09-18 on its HTTP contract, because its Cloudflare rule refuses the
+// automated browsers this repo can run (so no in-browser check was possible):
+//   DEXTools       pair address, through its published /widget-chart/ route.
+//                  That route answers a cross-site framed request 200 with no
+//                  X-Frame-Options and no frame-ancestors. DEXTools' normal
+//                  /app/ pages DO refuse framing, and so does the Cloudflare
+//                  challenge page a flagged client gets instead of the widget,
+//                  which is what an earlier check here mistook for the widget's
+//                  own policy. Never embed an /app/ URL.
+// Refused framing or needs a key, so deliberately absent: Codex/Defined
+// (frame-ancestors / bot checkpoint), Moralis (key-restricted widget), pump.fun,
+// Jupiter, Photon, Axiom, Solscan.
 //
 // Each chain entry holds the slug every provider uses for that chain. A chain a
 // provider does not index is simply missing from its field, and the provider is
@@ -24,14 +33,14 @@ const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 /** Chain id (CoinGecko asset-platform id) → per-provider slug. Solana leads. */
 export const CHART_CHAINS = {
-	solana: { ds: 'solana', gt: 'solana', be: 'solana', gm: 'sol', evm: false },
-	ethereum: { ds: 'ethereum', gt: 'eth', be: 'ethereum', gm: 'eth', evm: true },
-	base: { ds: 'base', gt: 'base', be: 'base', gm: 'base', evm: true },
-	'binance-smart-chain': { ds: 'bsc', gt: 'bsc', be: 'bsc', gm: 'bsc', evm: true },
-	'polygon-pos': { ds: 'polygon', gt: 'polygon_pos', be: 'polygon', evm: true },
-	'arbitrum-one': { ds: 'arbitrum', gt: 'arbitrum', be: 'arbitrum', evm: true },
-	'optimistic-ethereum': { ds: 'optimism', gt: 'optimism', be: 'optimism', evm: true },
-	avalanche: { ds: 'avalanche', gt: 'avax', be: 'avalanche', evm: true },
+	solana: { ds: 'solana', gt: 'solana', be: 'solana', gm: 'sol', dt: 'solana', evm: false },
+	ethereum: { ds: 'ethereum', gt: 'eth', be: 'ethereum', gm: 'eth', dt: 'ether', evm: true },
+	base: { ds: 'base', gt: 'base', be: 'base', gm: 'base', dt: 'base', evm: true },
+	'binance-smart-chain': { ds: 'bsc', gt: 'bsc', be: 'bsc', gm: 'bsc', dt: 'bnb', evm: true },
+	'polygon-pos': { ds: 'polygon', gt: 'polygon_pos', be: 'polygon', dt: 'polygon', evm: true },
+	'arbitrum-one': { ds: 'arbitrum', gt: 'arbitrum', be: 'arbitrum', dt: 'arbitrum', evm: true },
+	'optimistic-ethereum': { ds: 'optimism', gt: 'optimism', be: 'optimism', dt: 'optimism', evm: true },
+	avalanche: { ds: 'avalanche', gt: 'avax', be: 'avalanche', dt: 'avalanche', evm: true },
 };
 
 /** True when `address` is well-formed for `chain`. */
@@ -47,9 +56,12 @@ const enc = encodeURIComponent;
  * The embeddable providers, in the order a switcher shows them.
  *
  * `needs` is 'token' (keyed by the token address) or 'pool' (keyed by a pool
- * address the caller resolves first). `embed()` returns the iframe URL and
- * `page()` the provider's own page for the same market, used by "open in"
- * links and by the fallback panel when an embed is blocked.
+ * address the caller resolves first, through resolveChartPool()). A pool
+ * provider carries its own `resolvePool`, because "which pool" is shared but
+ * "will this provider draw it" is not: GeckoTerminal 404s on a pool it has not
+ * indexed, DEXTools charts any pair it is handed. `embed()` returns the iframe
+ * URL and `page()` the provider's own page for the same market, used by "open
+ * in" links and by the fallback panel when an embed is blocked.
  */
 export const CHART_EMBEDS = [
 	{
@@ -95,10 +107,28 @@ export const CHART_EMBEDS = [
 		page: ({ slug, token }) => `https://gmgn.ai/${slug}/token/${enc(token)}`,
 	},
 	{
+		id: 'dextools',
+		label: 'DEXTools',
+		needs: 'pool',
+		slug: 'dt',
+		resolvePool: resolveTopPool,
+		// chartType 1 is candles; the drawing toolbar is off because it eats a
+		// third of the width at the sizes this chart is embedded at.
+		embed: ({ slug, pool, theme }) =>
+			`https://www.dextools.io/widget-chart/en/${slug}/pe-light/${enc(pool)}?${new URLSearchParams({
+				theme,
+				chartType: '1',
+				chartResolution: '15',
+				drawingToolbars: 'false',
+			})}`,
+		page: ({ slug, pool }) => `https://www.dextools.io/app/${slug}/pair-explorer/${enc(pool)}`,
+	},
+	{
 		id: 'geckoterminal',
 		label: 'GeckoTerminal',
 		needs: 'pool',
 		slug: 'gt',
+		resolvePool: resolveGeckoPool,
 		embed: ({ slug, pool, theme }) =>
 			`https://www.geckoterminal.com/${slug}/pools/${enc(pool)}?${new URLSearchParams({
 				embed: '1',
@@ -136,19 +166,17 @@ export function chartEmbedUrls(providerId, { chain, token, pool = null, theme = 
 }
 
 /**
- * Resolves the pool GeckoTerminal's embed is keyed by, and whether GeckoTerminal
- * has indexed it. /api/coin/pool falls back to DexScreener for a token
- * GeckoTerminal does not know yet (every young pump.fun coin), and GeckoTerminal
- * answers its embed for an unindexed pool with a full-page 404, so the pool is
- * confirmed against GeckoTerminal's own public API (CORS-open, keyless) before
- * the embed is mounted.
+ * The most liquid pool for a token, from /api/coin/pool (GeckoTerminal first,
+ * DexScreener for a token GeckoTerminal does not know yet, which is every young
+ * pump.fun coin). `indexed` here only means "a pool exists": it is the shape
+ * every `resolvePool` returns, so callers treat all pool providers alike.
  *
  * @param {string} chain
  * @param {string} token
  * @param {{ signal?: AbortSignal }} [opts]
  * @returns {Promise<{ pool: string|null, indexed: boolean }>}
  */
-export async function resolveGeckoPool(chain, token, { signal } = {}) {
+export async function resolveTopPool(chain, token, { signal } = {}) {
 	const network = CHART_CHAINS[chain]?.gt;
 	if (!network) return { pool: null, indexed: false };
 	const r = await fetch(`/api/coin/pool?address=${enc(token)}&network=${enc(network)}`, {
@@ -158,7 +186,24 @@ export async function resolveGeckoPool(chain, token, { signal } = {}) {
 	if (r.status === 404) return { pool: null, indexed: false };
 	if (!r.ok) throw new Error(`pool lookup ${r.status}`);
 	const { pool } = await r.json();
+	return { pool: pool || null, indexed: !!pool };
+}
+
+/**
+ * Resolves the pool GeckoTerminal's embed is keyed by, and whether GeckoTerminal
+ * has indexed it. GeckoTerminal answers its embed for an unindexed pool with a
+ * full-page 404, so the pool is confirmed against GeckoTerminal's own public API
+ * (CORS-open, keyless) before the embed is mounted.
+ *
+ * @param {string} chain
+ * @param {string} token
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<{ pool: string|null, indexed: boolean }>}
+ */
+export async function resolveGeckoPool(chain, token, { signal } = {}) {
+	const { pool } = await resolveTopPool(chain, token, { signal });
 	if (!pool) return { pool: null, indexed: false };
+	const network = CHART_CHAINS[chain].gt;
 	const gt = await fetch(`https://api.geckoterminal.com/api/v2/networks/${enc(network)}/pools/${enc(pool)}`, {
 		headers: { accept: 'application/json' },
 		signal,
@@ -166,4 +211,20 @@ export async function resolveGeckoPool(chain, token, { signal } = {}) {
 	if (gt.status === 404) return { pool, indexed: false };
 	if (!gt.ok) throw new Error(`GeckoTerminal ${gt.status}`);
 	return { pool, indexed: true };
+}
+
+/**
+ * Resolves the pool a pool-keyed provider needs, the way that provider needs it.
+ *
+ * @param {string} providerId
+ * @param {string} chain
+ * @param {string} token
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<{ pool: string|null, indexed: boolean }>} `indexed: false`
+ *   means the provider cannot draw this coin yet; `pool` may still be set.
+ */
+export function resolveChartPool(providerId, chain, token, opts) {
+	const provider = CHART_EMBEDS.find((p) => p.id === providerId);
+	if (provider?.needs !== 'pool') return Promise.resolve({ pool: null, indexed: false });
+	return provider.resolvePool(chain, token, opts);
 }
