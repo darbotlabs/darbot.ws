@@ -39,12 +39,28 @@
 			<description>For several hours on September 18, nearly every paid endpoint on three.ws, the x402 discovery document at /.well-known/x402, the payment facilitator and the MCP server answered with a server error instead of a price. A routine update to the library behind wallet sign-in changed what it needs at startup, and our code tripped over it the moment it loaded, before any request could be served. Agents and marketplace validators that probed us saw a broken seller. The sign-in code now supplies what the library expects, returning buyers can sign back in to what they already paid for exactly as before, and the deploy checks now refuse to ship when the tested dependencies differ from the ones the live site will run, which is how this got past us.</description>
 		</item>
 		<item>
+			<title>Standard Anthropic SDK clients can now use a three.ws agent's AI budget</title>
+			<link>https://three.ws/docs/api-reference</link>
+			<guid isPermaLink="false">2026-09-18:Standard Anthropic SDK clients can now use a three.ws agent's AI budget</guid>
+			<pubDate>Fri, 18 Sep 2026 12:00:00 GMT</pubDate>
+			<category>feature</category>
+			<description>The AI proxy behind every embedded three.ws agent now answers at the address an Anthropic SDK or command-line tool builds for itself. Point a client at /api/llm/anthropic/agents/&lt;your agent id&gt; with one of your API keys and it runs on that agent's model, limits, and monthly budget. The proxy also stopped turning such clients away over their defaults: a system prompt sent as a list of text blocks is accepted, and an output limit above 16,000 tokens is lowered to 16,000 instead of rejected.</description>
+		</item>
+		<item>
 			<title>The $THREE page now has a live DEXTools chart and the Social Boost wins</title>
 			<link>https://three.ws/three-token</link>
 			<guid isPermaLink="false">2026-09-18:The $THREE page now has a live DEXTools chart and the Social Boost wins</guid>
 			<pubDate>Fri, 18 Sep 2026 12:00:00 GMT</pubDate>
 			<category>feature</category>
 			<description>The $THREE page shows a live candle chart of the three / SOL pair, drawn by DEXTools. Below the platform's own buybacks there is a new section for the community's: the three DEXTools Social Boost prizes $THREE has won so far, $11,382 of buybacks in total, each with a link to its receipt on DEXTools. Social Boost ranks tokens by visits to their DEXTools page, so the section also links straight there. Every visit counts toward the next win.</description>
+		</item>
+		<item>
+			<title>The embedded 3D agent is readable on light websites and quiet in the console</title>
+			<link>https://three.ws/tutorials/embed-in-30-seconds</link>
+			<guid isPermaLink="false">2026-09-18:The embedded 3D agent is readable on light websites and quiet in the console</guid>
+			<pubDate>Fri, 18 Sep 2026 12:00:00 GMT</pubDate>
+			<category>fix</category>
+			<description>Two fixes for anyone who has put a three.ws agent on their own site with the two-line embed. The floating widget had no background of its own, so on a light page its white button labels and name vanished into the page; it now has its own dark panel, and the suggestion buttons carry a solid ground, so it reads the same on any site. You can still ask for a transparent or light panel with the background attribute. The embed also made two background requests that browsers blocked on every site but ours, logging errors in the host page's console; those requests now succeed, and only the public, signed-out answer is ever shared across sites.</description>
 		</item>
 		<item>
 			<title>The Trade Terminal finally looks the way it was designed</title>
