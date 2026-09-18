@@ -1767,7 +1767,9 @@ production spends:
 
 - `SEED_CRON_VISION=1` (with `SEED_CRON_VISION_MS` to bound it, default 20,000)
   turns the judge on inside the tick. Watch the cron's duration afterwards; the
-  70 s wall is the reason it is off.
+  70 s wall is the reason it is off. As of 2026-09-18 the flip is blocked on
+  the Vertex billing hold: the judge is Gemini-only (see the motion library
+  section below).
 The rigging half needed no flip: `SEED_CRON_RIG` is **on by default since
 2026-09-09**. **Zero of the 17,349 seed avatars published before that had ever
 been rigged**, so every one of them animates through the retarget fallback
@@ -1813,6 +1815,43 @@ figures in the "Cost per asset" section above (8 vCPU / 32 GiB + L4 = \$1.69/hr,
 `scripts/gcp/burn-report.mjs` needs a live `gcloud` credential and this session's
 had expired again (`Reauthentication failed`). Lane seconds are measured, the rate
 is the published list price, and the product of the two is what is quoted here.
+
+
+---
+
+## Motion library: 469 generated clips live and for sale (measured 2026-09-18)
+
+Supersedes the 2026-09-09 motion figures above. Full write-up, including the two
+new defects found and fixed on the way:
+[docs/animation-seeding.md](../animation-seeding.md).
+
+| | |
+|---|---|
+| Takes generated | 843, all on `model-text2motion` (lane-asserted per job, zero paid calls) |
+| Accept rate | **70.7%** (596 of 843) through the full motion gate, plus 33 of the 39 legacy clips |
+| Published | **469** clips (three takes per prompt at most), 175 of 180 prompts covered |
+| GPU | 3,805 lane-seconds in 18 minutes of batch wall time, at most two L4 instances |
+| Cost | **\$0.73 to \$1.27 in total, \$0.002 to \$0.003 per accepted clip** at \$1.20/hr |
+| Marketplace | all 469 listed at 0.01 USDC under the platform account, 12 free per week |
+
+Two defects the gate could not see were found by rendering the clips on the
+default rig, which is why every clip was re-derived (no GPU) before publishing:
+the lane's rest shape (arms hanging, head forward of the neck) had been treated as
+a T-pose, so every generated clip, the 39 already live included, played with the
+head thrown back and the arms raised; and the foot rotation flicked to its other
+Kabsch solution for a frame at a time. Both are fixed in
+`api/_lib/motion-seed.js`, and the same conversion now runs on the
+`/api/forge-motion` poll so on-demand clips play upright too. That route change
+ships with the next `three-ws-api` deploy.
+
+**`SEED_CRON_VISION` stays off, and it is not an env flip any more.** Its judge
+(`api/_lib/seed-quality.js`: `judgeOnce` and `rigReadinessVertex`) runs Gemini
+2.5 Pro on Vertex AI and has no other lane, and Vertex is denied project-wide by
+a billing hold ("Lightning dunning decision is deny") that only the owner can
+clear. Turning it on today would record a failed judge on every gated keeper.
+Order of operations: clear the billing hold, confirm one Vertex call succeeds,
+then flip `SEED_CRON_VISION=1` with `--update-env-vars` and read the verdicts
+back from `forge_seed_jobs`.
 
 ---
 

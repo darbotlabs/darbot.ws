@@ -12,11 +12,13 @@ that is easy to get catastrophically wrong.
 
 | Piece | What it does |
 |---|---|
-| `data/motion-prompts.json` | The prompt library: 137 prompts across 10 categories. Data, never a hardcoded list. |
+| `data/motion-prompts.json` | The prompt library: 180 prompts across 10 categories. Data, never a hardcoded list. |
 | `workers/model-text2motion/` | The GPU worker. Samples a motion-diffusion model and returns a three.js `AnimationClip` JSON. |
 | `api/forge-motion.js` | The public route: `POST` a prompt, poll for a clip. Rate limited per IP. |
-| `api/_lib/motion-seed.js` | The prompt loader, the quality gate, the publishing shape, the free-subset rotation. |
-| `scripts/gcp/seed-motion.mjs` | The resumable bulk runner. |
+| `api/_lib/motion-seed.js` | The prompt loader, the rest-shape conversion, the foot-flick and root-travel repairs, the quality gate, the publishing shape, the free-subset rotation. |
+| `api/_lib/motion-glb.js` | Bakes a clip onto the platform rig as one portable GLB, the artifact the marketplace sells. |
+| `api/_lib/generated-clip-market.js` | The generated collection as a marketplace product line: listing rows, price, and the weekly free rotation. |
+| `scripts/gcp/seed-motion.mjs` | The resumable bulk runner: generate, re-derive, publish, list for sale. |
 | `api/animations/library.js` | Serves the clip manifest that generated clips are merged into. |
 
 Generated clips are named `gen-<prompt id>-<hash>`, so they are distinguishable from
@@ -55,9 +57,64 @@ into the library's. It is `bindCorrections` with the source rest set to identity
 Measured over the whole published set, head-above-feet goes from -0.26 m to
 +1.38 m and 127 of 133 clear a 0.6 m upright bar. The six that do not are a
 pushup, a squat, a swim stroke, a crouch, a sneak and a meditation, all correctly
-low-posture. Converted clips are stamped `userData.basis = "canonical-rest-v1"`
-(`CLIP_BASIS`), so `needsRebase()` can tell a converted clip from a legacy one and
-nothing is ever rebased twice.
+low-posture. Clips converted this way were stamped
+`userData.basis = "canonical-rest-v1"`. That conversion fixed the legs only; the
+next section replaces it, and `CLIP_BASIS` is now `canonical-rest-v2`, so
+`needsRebase()` can tell a current clip from a legacy one and nothing is ever
+rebased twice.
+
+## The rest shape: arms and head (fixed 2026-09-18)
+
+The conversion above assumed the generator's rest has the same SHAPE as `cz`,
+just with identity rotations. It does not, and the legs were the only place
+the two agreed. The worker's Kabsch fit measures every joint against
+HumanML3D's `paramUtil.t2m_raw_offsets`, which are directions, not a posed
+human: the upper arm, forearm and hand hang straight down, the collars point
+straight out, and the head sits straight FORWARD of the neck. `cz` rests in a
+T-pose with the head above the neck. Rendered on the default rig on
+2026-09-18, every generated clip, including all 39 the repair pass had
+published, played with the head thrown back about 90 degrees and the arms
+raised where they should hang.
+
+`rebaseToCanonicalRest` now aligns the two rest shapes per joint. For joint
+`j`, `A_j` carries the `cz` rest directions of `j`'s children onto the source
+rest directions of the same children (shortest arc onto the primary child, then
+the twist that best places the others). A source world rotation `G_s` maps onto
+the target as `G_s * A_j * Wt_j`, which puts every child exactly where the
+source put it:
+
+    q_t = (Wt_p^-1 * A_p^-1) * q_s * (A_j * Wt_j)
+
+With every `A` at identity this is exactly the old conversion. A leaf the
+22-joint source never measures (hand, head, toe) inherits its parent's `A`, so it
+holds its `cz` rest relative to its parent. Converted clips are stamped
+`canonical-rest-v2`; a clip stamped with the old `canonical-rest-v1` is carried
+back to the source basis and forward again, which is exact because both
+conversions are fixed rotations. The offsets were verified by running source
+forward kinematics over a live idle take (head above neck, arms hanging, toes
+forward) and by rendering baked GLBs of every category in a real browser.
+
+The fix raised the honest accept rate, not just the look: in the old basis the
+toe pointed 25 degrees off, which skewed foot contact, and the thrown-back head
+and raised hands moved the witness joints the continuity rule watches. Re-gating
+the same 882 takes in the new basis took the accept rate from 47% to 71%, and
+`frame_discontinuity` rejects from 86 to 10.
+
+The same conversion now runs for on-demand generation: the `/api/forge-motion`
+poll returns the converted clip as `clip` next to the raw `clip_url`, and the
+Animation Studio plays `clip`.
+
+## Foot flicks: a second Kabsch artifact
+
+A foot has one child in the source skeleton, so its fitted rotation can land on
+the other solution for a frame or two, swinging the toe 8.6 cm and back while
+the ankle holds still to under half a centimetre. On screen that is a foot
+flicking; in the gate it reads as a planted toe skating across the floor.
+`despikeFootFlicks` finds excursions of at most three frames where the toe,
+measured relative to its own ankle, leaves the line between the good frames on
+either side by more than 3 cm, and slerps the foot and toe rotations across them.
+It is judged in world space, never on rotations, for the reason given under
+"Judge positions" below.
 
 ## Root drift: a constant the lane welds onto every clip
 
@@ -77,15 +134,35 @@ average walking speed, which integration turns into a straight ramp.
 `flattenRootDrift(clip)` fits the horizontal root track by least squares and
 subtracts the fitted line, keeping the residual, which is where the real signal
 lives (locomotion residual 0.0051 m against an emote's 0.0002 m), and never
-touching vertical travel. The library's convention is in-place clips: they play on
-an avatar standing where the page put it, and a game engine drives locomotion from
-its own character controller.
+touching vertical travel.
 
-**Run both before the gate, in this order: rebase, flatten, then close the seam.**
-The order is load-bearing. The foot-slide rule divides planted-foot slide by the
-stride the clip covers, and a fabricated one-metre stride makes that rule vacuous;
-the seam search hunts for the frame whose pose repeats frame 0, which a ramp
-guarantees no frame ever does.
+## Root travel from foot contact
+
+Flattening is right for a clip that stands still and wrong for one that walks.
+The authored library does NOT ship in-place locomotion (an earlier version of
+this doc said it did): measured on 2026-09-18, a Mixamo catwalk travels 1.23 m
+and a careful walk 1.32 m, with their planted feet sliding 0.09 m and 0.13 m. A
+generated walk with its root pinned is a treadmill whose planted foot is dragged
+under a body that goes nowhere, and every locomotion prompt in the first batch
+failed on exactly that.
+
+`lockRootToContacts` derives the travel from the one place the motion carries it,
+the feet: while a foot is planted it should stay put, so the body moves by the
+opposite of that foot's hips-relative motion. Gaps (a run's flight phase, a foot
+switch) are interpolated, and the velocity is smoothed over a third of a second,
+which keeps the gate honest: the root follows the average stride, so a foot that
+genuinely skates relative to a steady gait still reads as a skate. The derived
+root is only kept when at least 30% of frame pairs have a planted foot and the
+net speed reaches 0.2 m/s; below that a standing clip's centimetre of jitter would
+be integrated into a fake stride, so the flattened root stands.
+
+**The order is load-bearing: rebase, repair foot flicks, flatten, restore travel,
+close the seam, gate.** The foot-slide rule divides planted-foot slide by the
+stride the clip covers, so a fabricated stride makes it vacuous; a flick reads as
+a skating toe, so it is repaired before contact is measured; and the seam search
+hunts for the frame whose pose repeats frame 0, which a ramp guarantees no frame
+ever does. `deriveClip` in the runner and `libraryReadyClip` in `motion-seed.js`
+both apply this order.
 
 ## The gate
 
@@ -203,30 +280,71 @@ comparison too. That reading would have condemned a clip that was already fine.
 ## Running a batch
 
 ```bash
-# Measure quality without publishing. Needs no credentials.
-node scripts/gcp/seed-motion.mjs --count 20 --dry-run
+# Generate and gate, staging keepers locally. Publishes nothing.
+node scripts/gcp/seed-motion.mjs --limit=20
 
-# A real run, where R2 and DATABASE_URL live.
-node scripts/gcp/seed-motion.mjs --count 200 --concurrency 6
+# The 2026-09-18 run: up to six takes per prompt, stop a prompt at three keepers.
+node scripts/gcp/seed-motion.mjs --samples=6 --keep-per-prompt=3 --concurrency=4
+
+# Rebuild the generated manifest from the staged keepers, then list them for sale.
+node scripts/gcp/seed-motion.mjs --publish --keep-per-prompt=3
+node scripts/gcp/seed-motion.mjs --list --keep-per-prompt=3
+
+# Re-derive every staged clip from its source after the pipeline changes. No GPU.
+node scripts/gcp/seed-motion.mjs --regate
 ```
 
-Useful flags: `--categories locomotion,dance` to seed one slice, `--checkpoint PATH`
-to keep runs separate, `--price` and `--free-size` to set the listing terms.
+Useful flags: `--categories=locomotion,dance` to seed one slice, `--limit=N` for a
+smoke batch, `--retry-rejects` to re-roll past rejects, `--out=DIR` to keep a run's
+staging separate, `--price=<USDC>` to override the listing price, and `--report`
+to print the checkpoint's numbers. Staging lives in `animation-sources/.motion-clips/`
+(gitignored).
 
-**Use the in-process transport for anything bulk.** `/api/forge-motion` is a public
+**Use the direct transport for anything bulk.** `/api/forge-motion` is a public
 endpoint rate limited per IP: a 40-clip run through it generates two clips and then
-takes a 429 with a 49 minute `retry_after`. With `GCP_TEXT2MOTION_URL` set the runner
-calls the provider directly and no limiter applies. `--origin` forces the HTTP path,
-which is worth doing on a handful of clips to prove the deployed route works.
+takes a 429 with a 49 minute `retry_after`. With `GCP_TEXT2MOTION_URL` and
+`GCP_RECONSTRUCTION_KEY` in the environment the runner calls the worker through
+the platform's own GCP provider and no limiter applies; both live on the
+`three-ws-api` Cloud Run service (`node scripts/read-service-env.mjs '^NAME$' --raw`).
+`--origin` forces the HTTP path, which is worth doing on a handful of clips to prove
+the deployed route works. Poll misses that land on the other worker instance (task
+records are per instance) are retried inside the poll budget, not recorded as
+failures.
 
 The run is **resumable**: every prompt's outcome is written to the checkpoint as it
 lands, and a re-run skips anything already terminal, so killing the process costs at
 most the clips in flight.
 
 The run is **lane-asserted**. `/api/forge-motion` and the provider both return a job
-id that names the worker the job was dispatched to, and the runner decodes it and
-aborts the entire batch unless the host is our own `model-text2motion` Cloud Run
-service. Bulk generation must never fall through to a paid third party.
+id that names the worker the job was dispatched to, and the runner decodes it
+(`assertSelfHostedLane`) and aborts the entire batch unless the host is our own
+`model-text2motion` Cloud Run service. Bulk generation must never fall through to a
+paid third party.
+
+## Measured 2026-09-18: the generated collection
+
+| | |
+|---|---|
+| Takes generated | 843 new, on `model-text2motion` only (lane-asserted, zero paid calls) |
+| Accepted by the gate | 596 of 843, **70.7%**, plus 33 of the 39 repaired legacy clips |
+| Published | **469** (at most three takes per prompt), covering 175 of 180 prompts |
+| Library total | 3,343 clips, 469 of them `gen-*` |
+| Listed for sale | 469, at 0.01 USDC each, 12 free per week |
+| GPU | 3,805 lane-seconds (sum of per-job wall time, about 4.5 s a take) inside 18 minutes of batch wall time on at most two instances |
+| Cost | \$0.73 (two instances for the batch window) to \$1.27 (every lane-second billed) at \$1.20/hr, so **\$0.002 to \$0.003 per accepted clip** |
+
+Rejects: 229 foot slide, 11 off the ordered duration, 10 frame discontinuity, 4
+open loop seams, 1 implausible root speed. By category the accept rate runs from
+emotes, idles and interactions (the easiest for this lane) down to dance and
+traversal, where the five prompts with no keeper after six takes all sit
+(celebration spin, laugh, running jump, forward roll, crawl).
+
+What the gate cannot judge is whether a clip does what its prompt says. That is a
+vision-model question, and the vision lane (Gemini on Vertex) was unavailable
+during this run because of a billing hold on the project. A rendered spot check of
+one keeper per category on the default rig showed anatomically sound motion
+(upright, arms hanging, feet planted) with prompt fidelity that varies, which is
+the honest state of a text-to-motion model at this size.
 
 ## Repairing the published library
 
@@ -245,6 +363,13 @@ passes simply stops being served. Publishing needs the R2 credentials that live 
 the `three-ws-api` Cloud Run service (`S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
 `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_PUBLIC_DOMAIN`).
 
+The same shared pipeline now backs `--regate`, which re-derives every clip in
+the checkpoint from its source with no GPU time: a fresh take from the worker
+output it was built from (`clip_source_url`), a repaired clip from its staged
+copy, carried back to the source basis first. Names never change, so a following
+`--publish` replaces each clip in place and a clip that no longer passes stops
+being served.
+
 **Measured 2026-09-09: 39 of 133 survive, 29%.** The 94 drops are 91 for foot
 sliding and 7 for frame discontinuity. That number is the first honest accept rate
 the generated library has had, and it is far below the "10 of 10" recorded on
@@ -257,17 +382,36 @@ calibrated and it is the lane's output that is failing it.
 
 ## Pricing and the rotating free subset
 
-**Not shipped, and deliberately so.** The pricing policy below is decided and its
-mechanism is written and tested, but nothing lists generated clips for sale yet:
-`api/marketplace/animations.js` serves creator listings out of `animation_clips`
-and no generated clip has a row. Wiring it is held until the repair pass above has
-run, because 94 of the 133 clips currently live do not meet the platform's own
-quality bar and selling them would be selling a defect. The order is repair,
-republish, then list.
+**Shipped 2026-09-18.** `seed-motion.mjs --list` bakes every published keeper and
+upserts one `animation_clips` row per clip, owned by the platform account
+(`three-ws@users.three.ws.local`, the same account that owns the platform's own
+agents) and tagged `generated`. The rows surface in
+`GET /api/marketplace/animations` and sell through the existing x402 route,
+`GET /api/x402/animation-download?id=<uuid>`. No migration was needed: the
+rotation is computed at read time, so the stored price never changes.
 
-The policy, when it is wired: generated clips are listed under the platform
-creator and are paid by default, and a fixed-size subset is free for one epoch at
-a time.
+- **Price:** the Animation Bazaar's advertised price, 0.01 USDC (10,000 atomic
+  units, `X402_PRICE_ANIMATION_DOWNLOAD` overrides it), which is the number the
+  route's 402 challenge and `/.well-known/x402.json` already quote. `--price`
+  overrides it per run.
+- **Free rotation:** a listing counts as generated only when it is owned by the
+  platform account AND tagged `generated`, so no creator listing and nothing the
+  platform lists by hand is ever given away. The feed reports a rotating listing
+  as `free: true` with `free_rotation: { regular_price, until }`, the `?price=`
+  filter and the price sorts treat it as free, the marketplace card reads "Free
+  this week", and the download route hands it over without payment. If the
+  rotation cannot be read, the feed shows stored prices and the download charges
+  them: failing closed on a paid product.
+- **Keys:** the object store serves its whole bucket on a public domain and every
+  clip name is in the free manifest, so each GLB is stored under a random key kept
+  in its row, never under the clip name.
+- **Idempotent:** a re-run re-bakes in place (purchase and play counts survive),
+  numbers repeat takes of one prompt ("Wave Hello (take 2)"), and delists a clip
+  that is no longer published rather than deleting its row, so a buyer's SIWX
+  re-download grant still resolves.
+
+The policy: generated clips are listed under the platform creator and are paid by
+default, and a fixed-size subset is free for one epoch at a time.
 
 The sellable artifact is **not** the clip JSON. That is already public and free,
 it drives every avatar on the site, and it is useless outside three.ws. It is the

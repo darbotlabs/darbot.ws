@@ -1,14 +1,25 @@
 {
-	"generated_at": "2026-09-18T20:01:50.539Z",
+	"generated_at": "2026-09-18T22:08:45.183Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3709,
+	"total": 3711,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "469 generated animations in the library, and for sale as rigged GLBs",
+			"summary": "The animation library now carries 469 clips generated on our own motion model, covering 175 prompts across walks, idles, gestures, dance, combat, sport, reactions and more. Every one passed the quality gate that checks for sliding feet, sudden jumps and broken loops, and fewer than three in ten takes were thrown away. While checking them on a real avatar we found that every generated clip, including the ones already live, played with the head thrown back and the arms raised, because the model describes its skeleton with the arms hanging and the head in front of the neck. That is fixed, walks now travel instead of skating in place, and a foot flicker is smoothed out. The same fix applies when you generate a motion from a prompt in the Animation Studio. Each clip is also listed in the marketplace as a GLB on the three.ws rig that opens in Blender, Unity or Unreal, for 0.01 USDC through the x402 download, and a rotating set of twelve is free each week.",
+			"link": "/animations",
+			"tags": [
+				"feature",
+				"fix"
+			]
+		},
 		{
 			"date": "2026-09-18",
 			"type": "update",
@@ -62,6 +73,17 @@
 			"tags": [
 				"feature",
 				"sdk"
+			]
+		},
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "Text avatars now wear what you describe",
+			"summary": "Typing a description on /genesis (or sending a prompt to the avatar API) used to produce the same template body with a face pasted onto it, so an explorer in a teal flight jacket came back in someone else's clothes. Text avatars are now built from your words head to toe: the prompt is painted as a full-body character, sculpted into a textured 3D model on our own GPU, and given a skeleton so it animates immediately. Selfies still use the face pipeline, which is what a likeness needs. The free 3D generator behind the forge_avatar tool also stopped failing when the community GPU spaces were out of quota: it now moves the job onto our own worker instead of giving up.",
+			"link": "/genesis",
+			"tags": [
+				"fix",
+				"improvement"
 			]
 		},
 		{
@@ -1596,28 +1618,6 @@
 			"link": "/forge",
 			"tags": [
 				"fix"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Launch Studio reads in light mode, and a recipe's reward routing now reaches the launch",
-			"summary": "Launch Studio, the catalog of 50 coin-launch recipes, was written entirely in white text and never flipped for the light theme, so on a light background its title, its recipe cards and its preview drawer were white on white with a dark strip painted across the top. The whole surface now draws from the site's colour system and reads in both themes. The bigger fix sits behind the Launch this coin button: every reward recipe promises that a coin's creator fees route to its subject, and that choice was being dropped the moment you left the studio, so the launch form opened with no recipient at all. The routing now travels with the coin, shows on the launch form before you mint, and opens the fee split pre-filled with that recipient the moment the coin is live, ready to review and sign. Two planner options no launch could ever apply were removed rather than left promising a payout. The preview drawer also behaves as a real dialog now: focus moves into it, Tab stays inside it, and closing it returns you to the card you opened.",
-			"link": "/launch-studio",
-			"tags": [
-				"fix",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "Pages stop jumping around while they load",
-			"summary": "Three separate things were shifting the layout under you. The marketplace hero rotates through featured avatars every few seconds and wrote each one's name and description into boxes sized to whatever the previous one had been, so the buttons, the dots and the entire grid below moved on every rotation, forever; both boxes now hold the same space whichever avatar is showing. The helper cards that float in the bottom-right corner slid themselves up and out of the way by animating their position, which the browser counts as the page moving even though nothing on the page did; they glide now instead. And the prompt tip under the forge box appeared a moment after the page did, pushing the quality options and the Generate button down; it is there from the first frame.",
-			"link": "/marketplace",
-			"tags": [
-				"fix",
-				"improvement"
 			]
 		}
 	]
