@@ -63,7 +63,7 @@
 	"items": [
 		{
 			"id": "genesis",
-			"status": "review",
+			"status": "paused",
 			"kind": "post",
 			"lane": "community",
 			"pattern": "mechanism",
