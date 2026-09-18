@@ -16,7 +16,7 @@ The Granite Guardian integration was written against watsonx.ai, and with no IBM
 ```bash
 gcloud builds submit --config workers/granite-guardian/cloudbuild.yaml \
   --region europe-west4 --project aerial-vehicle-466722-p5 \
-  --substitutions=SHORT_SHA=manual$(date +%s) --no-source
+  --no-source
 ```
 
 The build stages the pinned weights into `gs://three-ws-model-weights/granite-guardian-3.3-8b/` on first run (about 16 GB; later runs skip it when `REVISION` matches), mirrors the vLLM image, and deploys. Then point the API at it:

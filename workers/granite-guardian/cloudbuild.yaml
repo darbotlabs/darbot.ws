@@ -8,7 +8,7 @@
 #
 #   gcloud builds submit --config workers/granite-guardian/cloudbuild.yaml \
 #     --region europe-west4 --project aerial-vehicle-466722-p5 \
-#     --substitutions=SHORT_SHA=manual$(date +%s) --no-source
+#     --no-source
 #
 # Region: europe-west4 holds an L4 grant nothing else uses, so a warm pin here
 # does not starve the 3D lanes in us-central1 (see docs/ops/gcp-credits-plan.md).
