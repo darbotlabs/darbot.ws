@@ -86,8 +86,13 @@ describe('no page ships a raw /src module that imports CSS', () => {
 	});
 
 	it('a bundled page is promoted out of dist/public/ into its serving path', () => {
+		// The config used to list one [from, to] pair per page, and this test pinned
+		// two of those lines. It now promotes every bundled page under dist/public/
+		// with one recursive rule, so what is pinned is that the rule is still there
+		// and still walks the whole mirror rather than a hand-kept list.
 		const cfg = readFileSync(resolve(root, 'vite.config.js'), 'utf8');
-		expect(cfg).toContain("['dist/public/characters.html', 'dist/characters.html']");
-		expect(cfg).toContain("['dist/public/character.html', 'dist/character.html']");
+		expect(cfg).toContain("name: 'promote-bundled-public-html'");
+		expect(cfg).toMatch(/const promote = \(dir\) =>/);
+		expect(cfg).toMatch(/if \(existsSync\(mirrorRoot\)\) promote\(mirrorRoot\)/);
 	});
 });
