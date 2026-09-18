@@ -685,6 +685,9 @@ export class AnimationLibrary {
 			if (token !== this._genToken) return null;
 			const res = await fetch(`/api/forge-motion?job=${encodeURIComponent(sub.job_id)}`);
 			const data = await res.json().catch(() => ({}));
+			// The server hands back the clip already converted to the library's
+			// basis; the raw worker URL is the fallback when that step failed.
+			if (data.status === 'done' && data.clip) return data.clip;
 			if (data.status === 'done' && data.clip_url) {
 				const cr = await fetch(data.clip_url);
 				if (!cr.ok) throw new Error(`Couldn’t fetch the generated clip (HTTP ${cr.status}).`);

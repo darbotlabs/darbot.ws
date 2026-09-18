@@ -39,13 +39,14 @@
 // clip's per-bone position and scale channels describe the SOURCE rig's bone
 // lengths, and writing them onto another skeleton overwrites its proportions.
 //
-// ROOT DRIFT is removed before the bake by default. The published generated
-// clips predate flattenRootDrift (api/_lib/motion-seed.js) and still carry the
-// lane's constant forward ramp, so a GLB baked straight from one walks a metre
-// forward while it applauds. The sellable artifact is the thing a buyer opens in
-// Blender, so it gets the corrected motion whether or not the clip JSON behind
-// it has been republished yet. Pass `flatten: false` to bake a clip exactly as
-// given, which is what the round-trip tests do.
+// ROOT DRIFT is removed before the bake for a clip that has not been through
+// the library pipeline yet (one not stamped with CLIP_BASIS): such a clip still
+// carries the lane's constant forward ramp, so a GLB baked straight from it
+// walks a metre forward while it applauds. A clip already in the library basis
+// is left alone, because that pipeline has removed the drift AND given a
+// travelling clip back the root motion its feet imply (lockRootToContacts);
+// flattening it again would turn a walk back into a treadmill. Pass `flatten`
+// explicitly to override either way, which is what the round-trip tests do.
 //
 // Spec: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 
@@ -262,7 +263,7 @@ export function restBasisFromGltf(gltf) {
  * }} input
  * @returns {{ glb: Buffer, channels: number, droppedTracks: string[], hipScale: number, duration: number, driftRemoved: number, coverage: number }}
  */
-export function bakeMotionGlb({ rig, clip: input, name, flatten = true, retarget = true }) {
+export function bakeMotionGlb({ rig, clip: input, name, flatten = needsRebase(input), retarget = true }) {
 	if (!input || !Array.isArray(input.tracks) || input.tracks.length === 0) {
 		throw new Error('clip has no tracks');
 	}

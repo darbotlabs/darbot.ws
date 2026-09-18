@@ -42,8 +42,9 @@ import {
 	lockRootToContacts,
 	forwardKinematicsFrame,
 	ROOT_LOCK,
+	LEGACY_CLIP_BASIS,
 } from '../api/_lib/motion-seed.js';
-import { CANONICAL_REST } from '../src/animation-canonical-rest.js';
+import { CANONICAL_REST, CANONICAL_REST_WORLD, CANONICAL_PARENT } from '../src/animation-canonical-rest.js';
 
 const BODY_BONES = [
 	'Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
@@ -714,5 +715,89 @@ describe('root travel from foot contact', () => {
 		const locked = lockRootToContacts(clip);
 		expect(locked.applied).toBe(false);
 		expect(locked.contactShare).toBeLessThan(ROOT_LOCK.MIN_CONTACT_SHARE);
+	});
+});
+
+describe('source rest shape', () => {
+	// The lane's rest is HumanML3D's raw offsets: arms hanging, collars out, the
+	// head straight FORWARD of the neck. A standing pose in that basis is identity
+	// everywhere except the neck, which turns "forward" into "up".
+	const SOURCE_BONES = [
+		'Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
+		'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand',
+		'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand',
+		'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase',
+		'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase',
+	];
+	const NECK_UP = quatX(-Math.PI / 2); // carries +z (forward) onto +y (up)
+
+	function standingSourceClip(frames = 4) {
+		const times = Array.from({ length: frames }, (_, i) => i / 30);
+		const tracks = SOURCE_BONES.map((bone) => ({
+			type: 'quaternion',
+			name: `${bone}.quaternion`,
+			times: [...times],
+			values: times.flatMap(() => (bone === 'Neck' ? NECK_UP : [0, 0, 0, 1])),
+		}));
+		tracks.push({ type: 'vector', name: 'Hips.position', times: [...times], values: times.flatMap(() => [0, 0.98, 0]) });
+		return { name: 'standing', duration: (frames - 1) / 30, tracks };
+	}
+
+	it('stands a source-basis pose up with the head over the neck and the arms hanging', () => {
+		const clip = rebaseToCanonicalRest(standingSourceClip()).clip;
+		const w = forwardKinematicsFrame(clip, 0);
+		// Head directly above the neck, not thrown back or forward.
+		expect(w.Head[1] - w.Neck[1]).toBeGreaterThan(0.1);
+		expect(Math.hypot(w.Head[0] - w.Neck[0], w.Head[2] - w.Neck[2])).toBeLessThan(0.05);
+		// Arms hang: each hand well below its shoulder, not out in a T-pose.
+		for (const side of ['Left', 'Right']) {
+			expect(w[`${side}Arm`][1] - w[`${side}Hand`][1]).toBeGreaterThan(0.4);
+			expect(Math.abs(w[`${side}Hand`][0] - w[`${side}Arm`][0])).toBeLessThan(0.15);
+		}
+		// Legs down, toes forward of the ankles.
+		expect(w.LeftUpLeg[1] - w.LeftFoot[1]).toBeGreaterThan(0.7);
+		expect(w.LeftToeBase[2]).toBeGreaterThan(w.LeftFoot[2]);
+	});
+
+	it('converts a legacy v1 clip exactly as if it had come straight from the source', () => {
+		const source = buildClip({ swing: 0.3 });
+		// The v1 conversion: q1 = Wt_parent^-1 * q_s * Wt_bone.
+		const conj = (q) => [-q[0], -q[1], -q[2], q[3]];
+		const v1 = {
+			...source,
+			userData: { basis: LEGACY_CLIP_BASIS },
+			tracks: source.tracks.map((track) => {
+				if (!track.name.endsWith('.quaternion')) return track;
+				const bone = track.name.slice(0, track.name.lastIndexOf('.'));
+				const parent = CANONICAL_PARENT[bone];
+				const Wp = parent ? CANONICAL_REST_WORLD[parent] : [0, 0, 0, 1];
+				const values = Array.from(track.values);
+				for (let i = 0; i < values.length; i += 4) {
+					const q = quatMul(quatMul(conj(Wp), values.slice(i, i + 4)), CANONICAL_REST_WORLD[bone]);
+					values.splice(i, 4, ...q);
+				}
+				return { ...track, values };
+			}),
+		};
+		expect(needsRebase(v1)).toBe(true);
+		const direct = rebaseToCanonicalRest(source).clip;
+		const viaLegacy = rebaseToCanonicalRest(v1).clip;
+		expect(viaLegacy.userData.basis).toBeUndefined();
+		for (let t = 0; t < direct.tracks.length; t += 1) {
+			if (!direct.tracks[t].name.endsWith('.quaternion')) continue;
+			const a = direct.tracks[t].values;
+			const b = viaLegacy.tracks[t].values;
+			for (let i = 0; i < a.length; i += 4) {
+				// q and -q are the same rotation.
+				const d = Math.abs(a[i] * b[i] + a[i + 1] * b[i + 1] + a[i + 2] * b[i + 2] + a[i + 3] * b[i + 3]);
+				expect(d, direct.tracks[t].name).toBeCloseTo(1, 6);
+			}
+		}
+	});
+
+	it('marks the current basis as v2', () => {
+		expect(CLIP_BASIS).toBe('canonical-rest-v2');
+		expect(needsRebase({ userData: { basis: CLIP_BASIS } })).toBe(false);
+		expect(needsRebase({ userData: { basis: LEGACY_CLIP_BASIS } })).toBe(true);
 	});
 });

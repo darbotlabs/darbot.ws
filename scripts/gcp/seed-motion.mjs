@@ -25,6 +25,7 @@
  *   node scripts/gcp/seed-motion.mjs --report              # checkpoint stats only
  *   node scripts/gcp/seed-motion.mjs --repair --publish    # fix the live library
  *   node scripts/gcp/seed-motion.mjs --list                # list the keepers for sale
+ *   node scripts/gcp/seed-motion.mjs --regate --publish    # re-derive every clip, no GPU
  *
  * REPAIRING THE PUBLISHED SET. --repair reads every generated clip already live
  * in the library, converts it out of the generator's identity rest basis into the
@@ -59,7 +60,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -101,6 +102,7 @@ const PUBLISH = !!args.publish;
 const REPORT_ONLY = !!args.report;
 const REPAIR = !!args.repair;
 const LIST = !!args.list;
+const REGATE = !!args.regate;
 // Independent samples to draw per prompt. The sampler is stochastic, so the
 // same prompt yields a different take every time; several takes per prompt is
 // how a 137-prompt library grows into several hundred clips while the gate
@@ -298,11 +300,30 @@ async function runPrompt(prompt) {
 	const clipUrl = DIRECT ? await awaitClipDirect(jobId) : await awaitClip(jobId);
 	const worker = await fetchClip(clipUrl);
 	const elapsedSeconds = Math.round((Date.now() - started) / 1000);
+	const derived = deriveClip(worker, prompt);
+	// The clip is named from its body once, at generation, and keeps that name
+	// through every later re-derivation, so the published object never moves.
+	const name = clipName(prompt, JSON.stringify({ ...derived.raw, name: 'pending' }));
+	return stageRecord(derived, prompt, {
+		name,
+		taskId: assertSelfHostedLane(jobId).taskId,
+		lane,
+		clipSourceUrl: clipUrl,
+		elapsedSeconds,
+	});
+}
 
-	// The lane writes rotations in the HumanML3D skeleton's identity rest basis,
-	// not the library's canonical one (see rebaseToCanonicalRest). Converted
-	// first, because every later step, and every viewer, reads the clip in the
-	// library's basis. Played unconverted, the legs fold up over the body.
+/**
+ * Turn a clip as the worker wrote it into the clip the library serves, and gate
+ * it. Pure: no GPU, no network, so a published set can be re-derived from its
+ * sources whenever this pipeline improves (--regate).
+ */
+function deriveClip(worker, prompt) {
+	// The lane writes rotations against the HumanML3D skeleton's raw rest
+	// directions, not the library's canonical rest (see rebaseToCanonicalRest).
+	// Converted first, because every later step, and every viewer, reads the clip
+	// in the library's basis. A clip stamped with the legacy v1 basis is carried
+	// back to the source basis and forward again inside the same call.
 	const rebased = needsRebase(worker) ? rebaseToCanonicalRest(worker).clip : worker;
 
 	// The lane's foot rotation flips to its other Kabsch solution for a frame or
@@ -310,16 +331,15 @@ async function runPrompt(prompt) {
 	// before anything measures contact, because every flick reads as a planted
 	// toe skating across the floor.
 	const flicks = despikeFootFlicks(rebased);
-	const fetched = flicks.clip;
 
 	// The lane's root channel is a constant forward ramp carrying no prompt
-	// signal (see ROOT_DRIFT in api/_lib/motion-seed.js), so it is removed first,
-	// before anything else reads the clip. Order matters twice over: the gate's
+	// signal (see ROOT_DRIFT in api/_lib/motion-seed.js), so it is removed before
+	// anything else reads the clip. Order matters twice over: the gate's
 	// foot-slide rule divides planted-foot slide by the stride the clip covers,
 	// and a fake one-metre stride makes that rule vacuous, and the seam search
 	// below is hunting for the frame whose pose repeats frame 0, which a ramp
 	// guarantees no frame ever does.
-	const flattened = flattenRootDrift(fetched);
+	const flattened = flattenRootDrift(flicks.clip);
 
 	// Then give the body back the travel its own feet imply. A flattened walk is a
 	// treadmill whose planted foot is dragged under a stationary body; the authored
@@ -336,20 +356,20 @@ async function runPrompt(prompt) {
 	const seam = prompt.loop === true ? closeLoopSeam(locked.clip) : null;
 	const raw = seam ? seam.clip : locked.clip;
 
-	const verdict = gateWithBasis(raw, prompt);
+	return { raw, verdict: gateWithBasis(raw, prompt), flicks, flattened, locked, seam };
+}
 
-	// The clip is renamed to its library identity before it is written, so the
-	// staged file, the manifest entry and the published object always agree.
+/** Write a derived clip to staging (keepers) or the reject pile, and return its checkpoint record. */
+function stageRecord(derived, prompt, { name, taskId, lane, clipSourceUrl = null, elapsedSeconds = 0 }) {
+	const { raw, verdict, flicks, flattened, locked, seam } = derived;
 	// toLibraryClip stamps the basis, so no later pass ever rebases it twice.
-	const body = JSON.stringify({ ...raw, name: 'pending' });
-	const name = clipName(prompt, body);
 	const clip = toLibraryClip(raw, {
 		name,
 		promptId: prompt.id,
-		prompt: prompt.prompt,
+		prompt: prompt.prompt ?? '',
 		category: prompt.category,
 		loop: prompt.loop === true,
-		taskId: assertSelfHostedLane(jobId).taskId,
+		taskId,
 	});
 	const serialized = JSON.stringify(clip);
 
@@ -362,9 +382,10 @@ async function runPrompt(prompt) {
 		loop: prompt.loop === true,
 		name,
 		lane,
-		clip_source_url: clipUrl,
+		clip_source_url: clipSourceUrl,
 		elapsed_seconds: elapsedSeconds,
 		gate_version: verdict.gateVersion,
+		basis: clip.userData.basis,
 		loop_seam: seam
 			? { before: seam.seamBefore, after: seam.seamAfter, trimmed_frames: seam.trimmedFrames, kept_original: seam.rejected || null }
 			: null,
@@ -386,14 +407,15 @@ async function runPrompt(prompt) {
 		decided_at: new Date().toISOString(),
 	};
 
+	const keeper = join(CLIPS_DIR, `${name}.json`);
+	const reject = join(REJECTS_DIR, `${name}.json`);
 	if (verdict.pass) {
-		writeFileSync(join(CLIPS_DIR, `${name}.json`), serialized);
+		writeFileSync(keeper, serialized);
+		if (existsSync(reject)) unlinkSync(reject);
 		record.bytes = Buffer.byteLength(serialized);
 	} else {
-		writeFileSync(
-			join(REJECTS_DIR, `${name}.json`),
-			JSON.stringify({ record, explanations: explainMotionGate(verdict.reasons), clip }, null, 1),
-		);
+		writeFileSync(reject, JSON.stringify({ record, explanations: explainMotionGate(verdict.reasons), clip }, null, 1));
+		if (existsSync(keeper)) unlinkSync(keeper);
 	}
 	return record;
 }
@@ -602,10 +624,9 @@ async function listForSale(state) {
 	let listed = 0;
 	for (const entry of entries) {
 		const clip = JSON.parse(readFileSync(join(CLIPS_DIR, `${entry.name}.json`), 'utf8'));
-		// A clip already in the library basis has had its drift removed and, for
-		// a travelling clip, its real root motion restored; flattening it again
-		// would turn a walk back into a treadmill. Only a legacy clip is flattened.
-		const { glb } = bakeMotionGlb({ rig, clip, name: entry.label || entry.name, flatten: needsRebase(clip) });
+		// Staged clips are in the library basis, so the bake leaves their root
+		// alone (see bakeMotionGlb): a walk keeps the travel its feet imply.
+		const { glb } = bakeMotionGlb({ rig, clip, name: entry.label || entry.name });
 		const artifactKey = `${market.GENERATED_GLB_PREFIX}/${entry.name}.glb`;
 		await client.send(
 			new PutObjectCommand({
@@ -678,73 +699,105 @@ async function repair(state) {
 	log('');
 
 	const prompts = new Map(loadPrompts().map((p) => [p.id, p]));
-	let kept = 0;
-	let dropped = 0;
-	const tally = {};
-
+	const outcome = { kept: 0, dropped: 0, tally: {} };
 	for (const entry of live) {
 		const source = await (await fetch(entry.url)).json();
 		// promptIdOf: gen-<prompt id>-<12 hex>. The hash is fixed width, so the id
 		// is everything between the prefix and the last dash.
 		const stem = entry.name.slice(CLIP_NAME_PREFIX.length);
 		const promptId = stem.slice(0, stem.lastIndexOf('-'));
-		const prompt = prompts.get(promptId);
-		const loop = prompt ? prompt.loop === true : entry.loop === true;
-
-		const rebased = needsRebase(source) ? rebaseToCanonicalRest(source).clip : source;
-		const flattened = flattenRootDrift(rebased);
-		const seam = loop ? closeLoopSeam(flattened.clip) : null;
-		const repaired = seam ? seam.clip : flattened.clip;
-
-		const verdict = gateWithBasis(repaired, { loop, duration_seconds: prompt?.duration_seconds });
-
-		const clip = toLibraryClip(repaired, {
+		const prompt = promptFor(prompts, promptId, entry);
+		const record = stageRecord(deriveClip(source, prompt), prompt, {
 			name: entry.name,
-			promptId,
-			prompt: prompt?.prompt ?? '',
-			category: entry.category ?? prompt?.category ?? 'emote',
-			loop,
-			taskId: entry.name,
-		});
-		const serialized = JSON.stringify(clip);
-
-		const record = {
-			prompt_id: promptId,
-			label: entry.label ?? prompt?.label ?? promptId,
-			category: clip.userData.category,
-			icon: entry.icon || prompt?.icon || '🎬',
-			loop,
-			name: entry.name,
+			taskId: source.userData?.task_id ?? entry.name,
 			lane: 'repair',
-			elapsed_seconds: 0,
-			gate_version: verdict.gateVersion,
-			root_drift: {
-				speed_m_s: Number(flattened.speed.toFixed(4)),
-				removed_m: Number(flattened.removed.toFixed(4)),
-				residual_m: Number(flattened.residual.toFixed(4)),
-			},
-			status: verdict.pass ? 'accepted' : 'rejected',
-			reasons: verdict.reasons,
-			detail: verdict.detail || '',
-			metrics: verdict.metrics,
-			bytes: Buffer.byteLength(serialized),
-			decided_at: new Date().toISOString(),
-		};
+		});
 		state.prompts[promptId] = record;
-
-		if (verdict.pass) {
-			writeFileSync(join(CLIPS_DIR, `${entry.name}.json`), serialized);
-			kept++;
-			log(`  keep   ${entry.name}`);
-		} else {
-			writeFileSync(join(REJECTS_DIR, `${entry.name}.json`), JSON.stringify(record, null, 2));
-			dropped++;
-			for (const reason of verdict.reasons) tally[reason.split(':')[0]] = (tally[reason.split(':')[0]] || 0) + 1;
-			log(`  drop   ${entry.name}  ${verdict.reasons.join(',')}`);
-		}
+		tallyOutcome(outcome, record);
 		saveCheckpoint(state);
 	}
+	return summarize(outcome);
+}
 
+/**
+ * Re-derive every clip in the checkpoint from its source and re-gate it, with
+ * no GPU time. A fresh take is re-read from the worker output it was built from
+ * (clip_source_url); a clip that entered through --repair has no worker output
+ * on record, so its staged copy is carried back to the source basis instead,
+ * which is exact (see rebaseToCanonicalRest). Names never change, so a
+ * re-derived keeper replaces its published object in place on the next
+ * --publish, and one that no longer passes stops being served.
+ */
+async function regate(state) {
+	const prompts = new Map(loadPrompts().map((p) => [p.id, p]));
+	const keys = Object.keys(state.prompts).filter((k) => ['accepted', 'rejected'].includes(state.prompts[k].status));
+	log(`Re-deriving ${keys.length} clips from their sources`);
+	const outcome = { kept: 0, dropped: 0, tally: {} };
+	let index = 0;
+	const worker = async () => {
+		while (index < keys.length) {
+			const key = keys[index++];
+			const previous = state.prompts[key];
+			const source = previous.clip_source_url ? await fetchClip(previous.clip_source_url) : stagedSource(previous);
+			if (!source) {
+				log(`  skip   ${key}: no source on record and no staged copy`);
+				continue;
+			}
+			const prompt = { ...promptFor(prompts, previous.prompt_id, previous), sample: previous.sample ?? 0 };
+			const record = stageRecord(deriveClip(source, prompt), prompt, {
+				name: previous.name,
+				taskId: source.userData?.task_id ?? previous.name,
+				lane: previous.lane,
+				clipSourceUrl: previous.clip_source_url ?? null,
+				elapsedSeconds: previous.elapsed_seconds ?? 0,
+			});
+			if (record.status !== previous.status) {
+				log(`  ${record.status === 'accepted' ? 'now keep' : 'now drop'} ${key}  ${record.reasons.join(',')}`);
+			}
+			state.prompts[key] = record;
+			tallyOutcome(outcome, record);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(CONCURRENCY * 2, keys.length) }, worker));
+	saveCheckpoint(state);
+	return summarize(outcome);
+}
+
+/** The staged copy of a clip with no worker output on record (a --repair clip). */
+function stagedSource(record) {
+	const keeper = join(CLIPS_DIR, `${record.name}.json`);
+	if (existsSync(keeper)) return JSON.parse(readFileSync(keeper, 'utf8'));
+	const reject = join(REJECTS_DIR, `${record.name}.json`);
+	if (!existsSync(reject)) return null;
+	const parsed = JSON.parse(readFileSync(reject, 'utf8'));
+	return parsed.clip ?? null;
+}
+
+/** The library prompt for an id, or a stand-in built from what the record knows. */
+function promptFor(prompts, promptId, fallback) {
+	const prompt = prompts.get(promptId);
+	if (prompt) return prompt;
+	return {
+		id: promptId,
+		label: fallback.label ?? promptId,
+		category: fallback.category ?? 'emote',
+		icon: fallback.icon,
+		loop: fallback.loop === true,
+		prompt: '',
+		duration_seconds: undefined,
+	};
+}
+
+function tallyOutcome(outcome, record) {
+	if (record.status === 'accepted') {
+		outcome.kept++;
+		return;
+	}
+	outcome.dropped++;
+	for (const reason of record.reasons) outcome.tally[reason] = (outcome.tally[reason] || 0) + 1;
+}
+
+function summarize({ kept, dropped, tally }) {
 	log('');
 	log(`  kept    ${kept}`);
 	log(`  dropped ${dropped}`);
@@ -765,6 +818,15 @@ async function main() {
 
 	if (LIST && !PUBLISH && !REPAIR && !args.limit && !args.categories && !args.samples) {
 		await listForSale(state);
+		return;
+	}
+
+	if (REGATE) {
+		const outcome = await regate(state);
+		report(state);
+		if (PUBLISH) await publish(state);
+		if (LIST) await listForSale(state);
+		if (outcome.kept === 0) process.exitCode = 4;
 		return;
 	}
 

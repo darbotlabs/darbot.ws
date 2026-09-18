@@ -24,6 +24,8 @@
 import { cors, json, method, readJson, wrap, rateLimited } from './_lib/http.js';
 import { limits, clientIp } from './_lib/rate-limit.js';
 import { createRegenProvider } from './_providers/gcp.js';
+import { fetchUpstream } from './_lib/upstream-fetch.js';
+import { libraryReadyClip } from './_lib/motion-seed.js';
 
 // Provider job ids are base64url JSON envelopes (packJobId in _providers/gcp.js)
 // and run several hundred chars — a 64-char cap 400s every poll.
@@ -107,14 +109,33 @@ async function pollJob(req, res, jobId) {
 	}
 
 	const result = await provider.status(jobId);
+	const clip = result.status === 'done' && result.resultClipUrl ? await convertedClip(result.resultClipUrl) : null;
 	return json(res, 200, {
 		job_id: jobId,
 		status: result.status,
 		clip_url: result.resultClipUrl || null,
+		// The clip in the library's basis, ready to play. The worker writes its
+		// rotations against HumanML3D's raw rest directions (arms hanging, head
+		// forward of the neck), and played as-is that throws the head back and
+		// raises the arms on every rig. `clip_url` stays for callers that convert
+		// themselves; `clip` is null only when the conversion could not run.
+		clip,
 		frames: typeof result.frames === 'number' ? result.frames : null,
 		fps: typeof result.fps === 'number' ? result.fps : null,
 		error: result.error || null,
 	});
+}
+
+// A failed conversion degrades to the raw clip URL rather than failing a
+// generation the GPU already paid for.
+async function convertedClip(url) {
+	try {
+		const res = await fetchUpstream(url, {}, { name: 'lane:motion-clip', timeoutMs: 15_000, attempts: 2 });
+		return libraryReadyClip(await res.json());
+	} catch (err) {
+		console.warn('[forge-motion] clip conversion failed', err?.message || err);
+		return null;
+	}
 }
 
 export default wrap(async (req, res) => {

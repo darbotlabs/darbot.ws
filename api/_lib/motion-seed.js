@@ -868,10 +868,175 @@ function slerp(a, b, t) {
 // pushup, a squat, a swim stroke, a crouch, a sneak and a meditation, which are
 // low-posture by definition and correct as they are.
 
+// ── The source skeleton's rest SHAPE (added 2026-09-18) ─────────────────────
+//
+// Treating the generator's rest as "identity, in the same shape as cz" fixed the
+// legs and nothing else, and it was measured, not guessed: rendered on the
+// default rig on 2026-09-18, every generated clip, including all 39 published by
+// the repair pass, played with the head thrown back about 90 degrees and the
+// arms raised where they should hang. The legs were right because the one thing
+// the two skeletons agree on is that legs point down.
+//
+// The Kabsch fit in mdm_sampler.py measures each joint's rotation against
+// HumanML3D's `paramUtil.t2m_raw_offsets`, and those are directions, not a
+// posed human: the upper arm, forearm and hand hang STRAIGHT DOWN, the collars
+// point straight out, and the head sits straight FORWARD of the neck. The cz rig
+// rests in a T-pose with the head above the neck. So a clip whose arms hang at
+// the sides carries identity on the arms, which the identity-shape conversion
+// played as a T-pose, and a clip whose head is upright carries a 90 degree
+// rotation on the neck that turns "forward" into "up", which it played on top
+// of a neck that already points up.
+//
+// The general conversion aligns the two rest shapes per joint. For joint j, A_j
+// is the rotation that carries the cz rest directions of j's children onto the
+// source's rest directions of the same children. Then a source world rotation
+// G_s maps onto the target as G_t = G_s * A_j * Wt_j, which puts every child
+// exactly where the source put it, and in local terms:
+//
+//   q_t = (Wt_p^-1 * A_p^-1) * q_s * (A_j * Wt_j)
+//
+// With A = identity this is exactly the old conversion, which is why it was
+// right for the legs. A leaf joint (hand, head, toe) has no children in the
+// 22-joint source, so it carries identity there and inherits its parent's A,
+// which leaves it at its cz rest relative to its parent: the only honest pose
+// for a joint the source never measured.
+
+// t2m_raw_offsets from HumanML3D's paramUtil, keyed by the cz bone each SMPL
+// joint maps to (workers/model-text2motion/smpl_to_clip.py SMPL_TO_WOLF3D):
+// the direction from the parent joint to this joint in the source's rest.
+// Verified 2026-09-18 by running source forward kinematics over a live idle
+// take with these offsets: head above neck, arms hanging, toes forward.
+export const HUMANML3D_REST_DIRECTION = Object.freeze({
+	Spine: [0, 1, 0],
+	Spine1: [0, 1, 0],
+	Spine2: [0, 1, 0],
+	Neck: [0, 1, 0],
+	Head: [0, 0, 1],
+	LeftShoulder: [1, 0, 0],
+	RightShoulder: [-1, 0, 0],
+	LeftArm: [0, -1, 0],
+	RightArm: [0, -1, 0],
+	LeftForeArm: [0, -1, 0],
+	RightForeArm: [0, -1, 0],
+	LeftHand: [0, -1, 0],
+	RightHand: [0, -1, 0],
+	LeftUpLeg: [1, 0, 0],
+	RightUpLeg: [-1, 0, 0],
+	LeftLeg: [0, -1, 0],
+	RightLeg: [0, -1, 0],
+	LeftFoot: [0, -1, 0],
+	RightFoot: [0, -1, 0],
+	LeftToeBase: [0, 0, 1],
+	RightToeBase: [0, 0, 1],
+});
+
+// For a joint with several children, the child whose direction is matched
+// exactly; the others only settle the twist about it.
+const PRIMARY_CHILD = Object.freeze({ Hips: 'Spine', Spine2: 'Neck' });
+
+function normalize(v) {
+	const len = Math.hypot(v[0], v[1], v[2]) || 1;
+	return [v[0] / len, v[1] / len, v[2] / len];
+}
+
+function cross(a, b) {
+	return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+function dot(a, b) {
+	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+/** Shortest-arc rotation carrying unit vector a onto unit vector b. */
+function arcBetween(a, b) {
+	const d = dot(a, b);
+	if (d < -0.999999) {
+		// Opposite vectors: any perpendicular axis is a valid half turn.
+		const axis = normalize(Math.abs(a[0]) < 0.9 ? cross(a, [1, 0, 0]) : cross(a, [0, 1, 0]));
+		return [axis[0], axis[1], axis[2], 0];
+	}
+	const c = cross(a, b);
+	const q = [c[0], c[1], c[2], 1 + d];
+	const len = Math.hypot(...q);
+	return q.map((v) => v / len);
+}
+
+/** Rotation of `angle` radians about unit axis. */
+function axisAngle(axis, angle) {
+	const s = Math.sin(angle / 2);
+	return [axis[0] * s, axis[1] * s, axis[2] * s, Math.cos(angle / 2)];
+}
+
+// A_j for every joint the source animates, computed once from the two rest
+// skeletons. Parents are resolved before children (FK_ORDER), so a leaf can
+// inherit its parent's alignment.
+const REST_ALIGNMENT = (() => {
+	const mapped = new Set(['Hips', ...Object.keys(HUMANML3D_REST_DIRECTION)]);
+	const out = {};
+	for (const bone of FK_ORDER) {
+		if (!mapped.has(bone)) continue;
+		const here = CANONICAL_REST_POSITION[bone];
+		const kids = Object.keys(CANONICAL_PARENT).filter((b) => CANONICAL_PARENT[b] === bone && mapped.has(b));
+		if (kids.length === 0) {
+			out[bone] = out[CANONICAL_PARENT[bone]] ?? [0, 0, 0, 1];
+			continue;
+		}
+		const cz = (b) => normalize(CANONICAL_REST_POSITION[b].map((v, k) => v - here[k]));
+		const src = (b) => normalize(HUMANML3D_REST_DIRECTION[b]);
+		const primary = PRIMARY_CHILD[bone] ?? kids[0];
+		let align = arcBetween(cz(primary), src(primary));
+		const others = kids.filter((b) => b !== primary);
+		if (others.length) {
+			// Twist about the primary direction so the other children land as close
+			// to their source directions as a rotation about that axis allows.
+			const axis = src(primary);
+			let sinSum = 0;
+			let cosSum = 0;
+			for (const b of others) {
+				const moved = quatApply(align, cz(b));
+				const target = src(b);
+				const u = normalize(moved.map((v, k) => v - axis[k] * dot(moved, axis)));
+				const w = normalize(target.map((v, k) => v - axis[k] * dot(target, axis)));
+				sinSum += dot(cross(u, w), axis);
+				cosSum += dot(u, w);
+			}
+			align = quatMul(axisAngle(axis, Math.atan2(sinSum, cosSum)), align);
+		}
+		out[bone] = align;
+	}
+	return Object.freeze(out);
+})();
+
+// Stamped on every clip written in the library's basis, so a repair pass can
+// tell a converted clip from one that predates the conversion and never
+// rebases the same clip twice. v1 is the identity-shape conversion (legs right,
+// arms and head wrong); a v1 clip is converted back to the source basis and
+// forward again, which is exact because both conversions are fixed rotations.
+export const CLIP_BASIS = 'canonical-rest-v2';
+export const LEGACY_CLIP_BASIS = 'canonical-rest-v1';
+
+function corrections(bone) {
+	const parent = CANONICAL_PARENT[bone];
+	const restWorld = CANONICAL_REST_WORLD[bone];
+	const align = REST_ALIGNMENT[bone];
+	if (!restWorld || !align) return null;
+	const parentWorld = parent ? CANONICAL_REST_WORLD[parent] ?? [0, 0, 0, 1] : [0, 0, 0, 1];
+	const parentAlign = parent ? REST_ALIGNMENT[parent] ?? [0, 0, 0, 1] : [0, 0, 0, 1];
+	return {
+		// q_t = L * q_s * R
+		L: quatMul(quatConjugate(parentWorld), quatConjugate(parentAlign)),
+		R: quatMul(align, restWorld),
+		// The v1 conversion, q1 = Wt_p^-1 * q_s * Wt_j, undone: q_s = Wt_p * q1 * Wt_j^-1.
+		undoL: parentWorld,
+		undoR: quatConjugate(restWorld),
+	};
+}
+
 /**
- * Rewrite a clip's rotations from the generator's identity-rest basis into the
+ * Rewrite a clip's rotations from the generator's HumanML3D basis into the
  * library's canonical (cz) rest basis, so it composes correctly with every other
- * library clip. Returns a NEW clip; the input is not modified.
+ * library clip. A clip stamped with the legacy v1 basis is converted back first.
+ * Returns a NEW clip; the input is not modified.
  *
  * @param {any} clip
  * @returns {{ clip: any, rebasedTracks: number }}
@@ -879,23 +1044,19 @@ function slerp(a, b, t) {
 export function rebaseToCanonicalRest(clip) {
 	const source = clip?.tracks;
 	if (!Array.isArray(source)) return { clip, rebasedTracks: 0 };
+	const legacy = clip?.userData?.basis === LEGACY_CLIP_BASIS;
 
 	let rebasedTracks = 0;
 	const tracks = source.map((track) => {
 		const name = String(track?.name || '');
 		if (!name.endsWith('.quaternion')) return track;
-		const bone = name.slice(0, name.lastIndexOf('.'));
-		const restLocal = CANONICAL_REST[bone];
-		const restWorld = CANONICAL_REST_WORLD[bone];
-		if (!restLocal || !restWorld) return track;
-
-		// L = Rt * Wt^-1, R = Wt.
-		const L = quatMul(restLocal, quatConjugate(restWorld));
-		const R = restWorld;
+		const c = corrections(name.slice(0, name.lastIndexOf('.')));
+		if (!c) return track;
 		const values = Array.from(track.values ?? []);
 		for (let i = 0; i + 3 < values.length; i += 4) {
-			const q = [values[i], values[i + 1], values[i + 2], values[i + 3]];
-			const out = quatMul(quatMul(L, q), R);
+			let q = [values[i], values[i + 1], values[i + 2], values[i + 3]];
+			if (legacy) q = quatMul(quatMul(c.undoL, q), c.undoR);
+			const out = quatMul(quatMul(c.L, q), c.R);
 			values[i] = out[0];
 			values[i + 1] = out[1];
 			values[i + 2] = out[2];
@@ -905,15 +1066,12 @@ export function rebaseToCanonicalRest(clip) {
 		return { ...track, values };
 	});
 
-	return { clip: { ...clip, tracks }, rebasedTracks };
+	const userData = clip.userData && typeof clip.userData === 'object' ? { ...clip.userData } : undefined;
+	if (userData && legacy) delete userData.basis;
+	return { clip: { ...clip, tracks, ...(userData ? { userData } : {}) }, rebasedTracks };
 }
 
-// Stamped on every clip written in the library's basis, so a repair pass can
-// tell a converted clip from one of the 133 that predate the conversion and
-// never rebases the same clip twice.
-export const CLIP_BASIS = 'canonical-rest-v1';
-
-/** True when a clip still carries the generator's identity-rest basis. */
+/** True when a clip is not yet in the current library basis. */
 export function needsRebase(clip) {
 	return clip?.userData?.basis !== CLIP_BASIS;
 }
@@ -1497,3 +1655,24 @@ function rebuildWithBlend(clip, keep, blendFrames, fps) {
 	return { ...clip, duration: (keep - 1) / fps, tracks };
 }
 
+
+// ── Library-ready conversion for a single clip ──────────────────────────────
+
+/**
+ * Convert one clip exactly as the worker wrote it into a clip that plays
+ * correctly on the library's rig: the rest-shape rebase, the foot-flick repair,
+ * the drift removal and the root travel from foot contact, in the order the
+ * batch runner applies them (scripts/gcp/seed-motion.mjs deriveClip). This is
+ * what POST /api/forge-motion's poll hands a browser, so a clip generated on
+ * demand plays the same way a published one does. No gate: an on-demand clip
+ * is the user's to judge.
+ *
+ * @param {any} workerClip
+ * @returns {any} a NEW clip stamped with CLIP_BASIS
+ */
+export function libraryReadyClip(workerClip) {
+	const rebased = needsRebase(workerClip) ? rebaseToCanonicalRest(workerClip).clip : workerClip;
+	const flattened = flattenRootDrift(despikeFootFlicks(rebased).clip).clip;
+	const clip = lockRootToContacts(flattened).clip;
+	return { ...clip, userData: { ...(clip.userData || {}), basis: CLIP_BASIS } };
+}

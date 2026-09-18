@@ -29,6 +29,40 @@ vi.mock('../../api/_providers/gcp.js', () => ({
 	}),
 }));
 
+// The worker's clip, as the lane writes it: every bone at the source rest
+// (identity) except the neck, which turns HumanML3D's "head forward" into "up".
+const SOURCE_BONES = [
+	'Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
+	'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand',
+	'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand',
+	'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase',
+	'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase',
+];
+const workerClip = () => {
+	const times = [0, 1 / 30, 2 / 30];
+	const neck = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+	return {
+		name: 'waving',
+		duration: 2 / 30,
+		tracks: [
+			...SOURCE_BONES.map((bone) => ({
+				type: 'quaternion',
+				name: `${bone}.quaternion`,
+				times,
+				values: times.flatMap(() => (bone === 'Neck' ? neck : [0, 0, 0, 1])),
+			})),
+			{ type: 'vector', name: 'Hips.position', times, values: times.flatMap(() => [0, 0.98, 0]) },
+		],
+	};
+};
+let clipFetchFails = false;
+vi.mock('../../api/_lib/upstream-fetch.js', () => ({
+	fetchUpstream: vi.fn(async () => {
+		if (clipFetchFails) throw new Error('storage unreachable');
+		return { ok: true, json: async () => workerClip() };
+	}),
+}));
+
 vi.mock('../../api/_lib/rate-limit.js', async (importActual) => {
 	const actual = await importActual();
 	return {
@@ -117,6 +151,32 @@ describe('GET /api/forge-motion?job=', () => {
 		expect(body.clip_url).toMatch(/motion-clips\/mdm/);
 		expect(body.frames).toBe(120);
 		expect(body.fps).toBe(30);
+	});
+
+	it('hands back the clip already converted to the library basis', async () => {
+		const res = makeRes();
+		await handler(makeReq({ method: 'GET', url: `/api/forge-motion?job=${'a'.repeat(24)}` }), res);
+		const body = JSON.parse(res.body);
+		expect(body.clip.userData.basis).toBe('canonical-rest-v2');
+		const { forwardKinematicsFrame } = await import('../../api/_lib/motion-seed.js');
+		const w = forwardKinematicsFrame(body.clip, 0);
+		// Head over the neck and arms hanging, not thrown back and raised.
+		expect(w.Head[1] - w.Neck[1]).toBeGreaterThan(0.1);
+		expect(w.LeftArm[1] - w.LeftHand[1]).toBeGreaterThan(0.4);
+	});
+
+	it('falls back to the raw clip URL when the conversion cannot run', async () => {
+		clipFetchFails = true;
+		try {
+			const res = makeRes();
+			await handler(makeReq({ method: 'GET', url: `/api/forge-motion?job=${'a'.repeat(24)}` }), res);
+			const body = JSON.parse(res.body);
+			expect(res.statusCode).toBe(200);
+			expect(body.clip).toBeNull();
+			expect(body.clip_url).toMatch(/motion-clips\/mdm/);
+		} finally {
+			clipFetchFails = false;
+		}
 	});
 
 	it('400s without a job id', async () => {
