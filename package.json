@@ -603,7 +603,7 @@
 		"fast-xml-parser": "^5.7.3",
 		"fflate": "^0.8.3",
 		"gltf-validator": "^2.0.0-dev.3.10",
-		"helius-sdk": "^3.0.0",
+		"helius-sdk": "^3.2.0",
 		"idb-keyval": "^6.3.0",
 		"imapflow": "^2.0.2",
 		"jose": "^5.9.6",
