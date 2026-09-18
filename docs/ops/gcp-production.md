@@ -268,6 +268,27 @@ npm run db:check     # what deploy:gcp and deploy:gcp:submit run: exits 4 if any
   behind the code by exactly that list until the failing file is fixed with a
   NEW migration and the run drains the rest.
 
+**Dependency and import gates.** `deploy:gcp:submit` runs two more checks after
+`db:check`, both added after the 2026-09-18 outage, when two merged dependency
+bumps took the paid x402 surface down on import:
+
+```bash
+npm run audit:deploy        # includes: installed node_modules must match package-lock.json
+npm run check:api-imports   # imports every module under api/, fails on any that throws while loading
+```
+
+- The image installs from `package-lock.json`, but local tests and every deploy
+  worktree (which hardlinks `node_modules`) run whatever is on disk. If the two
+  differ, a green `npm test` says nothing about what production will boot. When
+  `audit:deploy` reports drift, run `npm install`, then `npm test`.
+- The server imports a handler the first time its route is hit, so a module
+  that throws while loading is not a build error. It is a 500 on every request
+  to that route. `check:api-imports` needs no environment and groups failures
+  by error, so one broken shared module reads as one finding. Scope it with a
+  path while debugging: `node scripts/check-api-imports.mjs api/x402`.
+- A dependency bump that changes an API is fixed in code or pinned back in
+  `package.json` and held in `.github/dependabot.yml`. It is never waved through.
+
 - Lockfile unchanged → layer cache skips the workspace `npm ci`: **~3–5 min**.
 - Lockfile changed → full install: **~12 min**.
 - If the pipeline's deploy step fails on IAM (see above), deploy the pushed
