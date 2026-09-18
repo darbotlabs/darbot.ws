@@ -1,17 +1,17 @@
 {
 	"generated": "scripts/audit-upstreams.mjs",
 	"summary": {
-		"total": 233,
+		"total": 236,
 		"grades": {
 			"A": 0,
 			"B": 54,
-			"C": 99,
-			"D": 80,
+			"C": 101,
+			"D": 81,
 			"F": 0
 		},
 		"protections": {
-			"deadline": 233,
-			"retry": 104,
+			"deadline": 236,
+			"retry": 106,
 			"failover": 49,
 			"lastGood": 5,
 			"breaker": 95
@@ -201,6 +201,8 @@
 		"api/_lib/globe-sources.js::www.gdacs.org::fetchUpstreamJson": "C",
 		"api/_lib/globe-sources.js::api.ioda.inetintel.cc.gatech.edu::fetchUpstreamJson": "C",
 		"api/_lib/globe-sources.js::api.worldbank.org::fetchUpstreamJson": "C",
-		"api/_lib/token-metadata.js::lite-api.jup.ag::fetchUpstreamJson": "C"
+		"api/_lib/token-metadata.js::lite-api.jup.ag::fetchUpstreamJson": "C",
+		"api/pump/token-stats.js::api.dexscreener.com::pumpFetchJson": "C",
+		"src/shared/chart-embeds.js::api.geckoterminal.com::fetch": "D"
 	}
 }
