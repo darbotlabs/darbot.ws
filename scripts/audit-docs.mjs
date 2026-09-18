@@ -336,6 +336,7 @@ const UNPUBLISHED_DOCS = new Map([
 	['ibm-community-blog-meetup-jessica', 'internal: source draft of an IBM Community post'],
 	['ibm-community-thread', 'internal: source draft of an IBM Community post'],
 	['ibm-next-event', 'internal: partner event proposal, prize budget and engineering plan'],
+	['ibm-event-offer-map', 'internal: partner event inventory naming readiness gaps and unsent asks'],
 	['ibm-visibility-map', 'internal: outreach map naming unsent asks and unclaimed Partner Plus benefits'],
 	['issue-resolution-2026-09-15', 'internal: point-in-time repository and production incident record'],
 	['launch-usecases', 'owner-gated: names a crypto project other than $THREE'],

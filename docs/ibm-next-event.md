@@ -18,6 +18,9 @@ needs re-checking before it is used in IBM copy: `api/_lib/publish-safety.js` no
 NVIDIA NemoGuard classifier, not Granite Guardian, so the responsible-AI argument under Option A
 no longer matches the code.
 
+**The full inventory of what the platform can offer an IBM audience**, with each surface's
+verified state and a 27-format menu, is [ibm-event-offer-map.md](./ibm-event-offer-map.md).
+
 **The goal is not another audience. It is usage.** A webinar is measured in registrations
 and a recording. This event is measured in how many people typed something into three.ws
 who never had before, and how many of them came back the next day. Everything below is
