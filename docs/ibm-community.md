@@ -4,13 +4,13 @@ This is the running catalog of everything published in the [Three.ws User Group]
 
 Dates marked "approx." are derived from the site's relative timestamps ("17 days ago") on the snapshot date; blog dates come from their URLs and are exact.
 
-## Group snapshot (2026-09-10)
+## Group snapshot (2026-09-18)
 
 | Metric | Value |
 | ------ | ----- |
-| Members | 17 |
-| Discussion threads | 8 catalogued below; the group header tallies 10 |
-| Blog posts | 5 (the fifth is the USC post below, not yet catalogued in full) |
+| Members | 18 |
+| Discussion threads | 8 catalogued below; the group header tallies 11 |
+| Blog posts | 7 (posts 5 and 6, both by Jessica Swanson on 2026-08-22 and 2026-09-11, are not yet catalogued in full) |
 | Library entries | 2 (the attachments on the BOWYER and SperaxOS threads) |
 | Upcoming events | 0 |
 | Past events | 2 (the in-world meetup, and "Live build: text prompt to embedded 3D agent in 30 minutes") |
@@ -19,7 +19,7 @@ The group header counts threads as 10 while the digest viewer lists 8. The
 header's tally is the one to distrust: the digest viewer is the per-thread
 listing this catalog is built from, and it is explicit about its own total.
 
-The 2026-09-10 figures come from the group home page rather than the digest
+The 2026-09-18 figures come from the group home page rather than the digest
 viewer, so the thread count is the header's and carries the caveat above.
 Re-run the per-thread pass against the digest viewer to confirm it.
 
@@ -108,6 +108,15 @@ summary). Note for whoever does: the title names IBM alongside three.ws and a
 university, so check it against the framing rules in [ibm.md](./ibm.md) and flag
 anything that reads as an IBM partnership deliverable.
 
+### 7. When an agent can open your front door, governance stops being paperwork
+
+- **Author:** nich (nich8)
+- **Published:** 2026-09-18
+- **Activity:** 0 comments at posting
+- **URL:** [community.ibm.com/.../when-an-agent-can-open-your-front-door-governance](https://community.ibm.com/community/user/blogs/10058/2026/09/18/when-an-agent-can-open-your-front-door-governance)
+
+The quarter's long technical write-up. Argues that once agents can act on a house through Home Assistant, ride in a car, and order a manufactured object, a system prompt is not a control, and shows the policy layer that is: Granite Guardian (`ibm/granite-guardian-3-8b` on watsonx.ai) as an allow / review / block veto on proposed actions, a per-period spend cap behind the same gate, a SHA-256 hash-chained verdict ledger anyone can re-verify, and a `503` instead of a fabricated verdict when watsonx is unconfigured. Then the Home Assistant gate that refuses physical actions outright over stdio MCP, the five-role household model enforced server-side, the full watsonx.ai endpoint map with runnable `curl`s, a five-step build-it-yourself walkthrough, the quarter's other ships, a note on metering Granite for callers with no IBM Cloud account, and an invitation to shape the group's second event. The draft lives in [ibm-community-governed-agents-post.md](./ibm-community-governed-agents-post.md); its companion discussion thread is drafted in [ibm-community-governed-agents-thread.md](./ibm-community-governed-agents-thread.md).
+
 ## Discussion threads
 
 Newest first, matching the digest viewer's order.
@@ -190,10 +199,10 @@ A first-run walkthrough of the Forge from a user's perspective, no account, wall
 
 | Draft | Subject |
 |---|---|
-| [ibm-community-governed-agents-post.md](./ibm-community-governed-agents-post.md) | Granite Guardian as an action veto once agents can control a home, ride in a car, and order a manufactured object; the watsonx.ai surface map; the quarter's shipping recap; and the group's next event question |
+| [ibm-community-governed-agents-thread.md](./ibm-community-governed-agents-thread.md) | Short companion thread for blog post 7: the four governance decisions in bullets, one runnable Granite Guardian `curl`, and an open question to the group on how they gate agent actions |
 | [ibm-community-defi-3d-sperax.md](./ibm-community-defi-3d-sperax.md) | Written for Jessica to publish in her own voice. Section 0 answers "why is an IBM employee writing about two crypto companies" as her own practitioner case (her field is decision integrity, this is the best material on it she has read) rather than as IBM partnership strategy, which she does not own. Then the triangle of three relationships (Sperax with three.ws, both as IBM Business Partners, and the three.ws runtime on Granite through watsonx.ai) split as body / DeFi domain / brain, with an explicit subsection denying that IBM commissioned or endorsed the integration itself, and framed through her decision-management day job. Section 1 makes DeFi a real subject rather than a backdrop (the four properties that break a chat box, the tool catalog, the approve-before-acting execution model): the two ways to embed an embodied agent in a host application (standalone manifest vs native component), the continuous emotion blend that replaced a state machine, why grounding the avatar in verified reads mattered more than the rendering, honest failure when a probe is bot-challenged, the hash-chained action ledger, the code that moved in both directions, what is planned, and AR flagged as the next surface rather than a shipped one. Carries four diagrams rendered by [scripts/render-ibm-sperax-diagrams.mjs](../scripts/render-ibm-sperax-diagrams.mjs) into [media/](./media), plus [ibm-community-defi-3d-sperax-post.md](./ibm-community-defi-3d-sperax-post.md) and its styled `-post.html` twin, both generated by [scripts/build-ibm-community-post.mjs](../scripts/build-ibm-community-post.mjs) with the frontmatter and editor notes stripped. Edit the draft, never the generated trio. Form values, the permalink slug, the meta description, and the image-placement sequence are in [ibm-community-defi-3d-sperax-publishing-kit.md](./ibm-community-defi-3d-sperax-publishing-kit.md). **Open question before posting:** the draft states that Sperax is also an IBM Business Partner, which came from the owner and is not evidenced anywhere in this repo; confirm the wording Sperax uses for its own partner status first |
 
-Both drafts carry the framing rules from [ibm.md](./ibm.md) in their frontmatter, including which section to cut first if the group's no-crypto-cluster rule is applied strictly.
+The drafts carry the framing rules from [ibm.md](./ibm.md) in their frontmatter, including which section to cut first if the group's no-crypto-cluster rule is applied strictly.
 
 ## Keeping this catalog current
 

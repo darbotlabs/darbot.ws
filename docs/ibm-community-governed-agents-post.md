@@ -3,7 +3,8 @@ title: "When an agent can open your front door, governance stops being paperwork
 venue: IBM Community, Three.ws User Group (blog post)
 account: nich (nich8)
 description: "A long technical write-up for IBM developers: how a governance model built on Granite Guardian became load-bearing once three.ws agents could control a home, ride in a car, and order a physically manufactured object, plus a full tour of the watsonx.ai surfaces, a build-it-yourself walkthrough, and everything that shipped this quarter."
-status: draft, not yet posted
+status: posted 2026-09-18
+url: https://community.ibm.com/community/user/blogs/10058/2026/09/18/when-an-agent-can-open-your-front-door-governance
 framing_notes: |
   Every framing rule in docs/ibm.md applies to this draft and must survive any edit:
   three.ws is an IBM Business Partner; the /api/ibm/* surfaces and the open-source
