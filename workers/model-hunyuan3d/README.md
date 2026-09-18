@@ -189,6 +189,7 @@ octree and per-view diffusion resolution up for sharper geometry and PBR maps.
 | `DINO_LOCAL_DIR` | no | `/tmp/dinov2-giant` | Local staging dir for DINOv2 |
 | `DINO_DIR` | no | `/weights/dinov2-giant` | FUSE-mount fallback for DINOv2 |
 | `MAX_CONCURRENT` | no | `1` | In-flight inferences; one L4 fits one |
+| `U2NET_HOME` | no | `~/.u2net` | Where rembg looks for `u2net.onnx`; the deploy configs point it at the staged copy on the FUSE mount (`/weights/u2net`) |
 
 **Weight staging.** The 2.1 shape DiT is a single 6.9 GiB `.ckpt` and the paint
 UNet a single 3.7 GiB `.bin`. Reading files that large over the Cloud Storage
@@ -216,6 +217,19 @@ gcloud storage rsync --recursive /tmp/dinov2-giant gs://three-ws-model-weights/d
 
 The RealESRGAN super-res checkpoint is fetched into the image at build time
 (`hy3dpaint/ckpt/RealESRGAN_x4plus.pth`).
+
+**rembg's `u2net.onnx` is staged too.** Left alone, rembg downloads the 176 MB
+matting model from GitHub on every cold boot, and one broken download is fatal:
+the pipeline load fails and the instance answers every job with `load_error`
+until it is replaced (production, 2026-09-18, after a restart). The deploy
+configs set `U2NET_HOME=/weights/u2net`, so rembg finds the staged copy and never
+touches the network. To (re)stage it:
+
+```bash
+curl -sSL -o /tmp/u2net.onnx https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx
+md5sum /tmp/u2net.onnx   # 60024c5c889badc19c04ad937298a77b, the hash rembg verifies
+gcloud storage cp /tmp/u2net.onnx gs://three-ws-model-weights/u2net/u2net.onnx
+```
 
 ## Deploy
 
