@@ -30,12 +30,21 @@ never invents a shortcut path; it orchestrates the real ones.
 - **Body.** The `text` and `selfie` modes both POST to `/api/avatars/reconstruct`
   (a prompt or a photo), then poll `/api/avatars/regenerate-status` with capped
   exponential backoff (1.5s first poll, 1.4x backoff, 12s ceiling, 8-minute
-  deadline). This is the identical rigged-avatar pipeline behind `/create/prompt`
-  and `/create/selfie`. The reconstruction model returns a textured mesh; when the
-  mesh has no skeleton and the active provider has a rig model configured, the
-  pipeline chains an auto-rig job (GCP UniRig / Hunyuan3D `generation_all`) and only
-  surfaces the avatar once it can be animated, so you never receive a T-posed
-  static mesh. The `remix` mode instead POSTs to `/api/avatars/fork`, forking a
+  deadline). The two inputs take different engines behind that one contract:
+  - **Text** builds the whole character from your words. The prompt is painted as
+    one full-body reference image (a single figure in a neutral A-pose, head to
+    feet in frame, plain background), reconstructed into a textured mesh on our
+    self-hosted Hunyuan3D-2.1 GPU worker, then auto-rigged with a humanoid
+    skeleton on our rig worker. Outfit, hair, build and style all come from the
+    prompt, so "a silver-haired explorer in a teal flight jacket and brown boots"
+    comes back wearing exactly that. If the Hunyuan3D worker is unavailable the
+    job fails over to self-hosted TRELLIS, then the external image-to-3D lanes,
+    then your own Meshy or Tripo key when you have one saved.
+  - **Selfie** runs the face pipeline: it reconstructs your face from the photo
+    and fits it to a rigged body, which is what a likeness needs.
+
+  Either way the avatar is only surfaced once it has a skeleton, so it animates
+  straight away. The `remix` mode instead POSTs to `/api/avatars/fork`, forking a
   public avatar into a fresh one you own.
 - **Agent and wallets.** Reconstruct and fork auto-provision the agent record.
   Genesis resolves it via `GET /api/agents?avatar_id=...`, then calls
@@ -127,8 +136,11 @@ curl -s -X POST "https://three.ws/api/agents/$AGENT_ID/wallet/provision" \
   so the rig is not limited to a curated allowlist.
 - **On-chain identity is optional and reversible in practice.** Skipping it leaves a
   fully working agent; you can bind an identity later.
-- **Selfie framing.** The reconstruction path is a face pipeline. A clean headshot
-  reconstructs far more reliably than a full-body photo.
+- **Selfie framing.** The selfie path is a face pipeline. A clean headshot
+  reconstructs far more reliably than a full-body photo. Text prompts never use it.
+- **Text prompts describe one humanoid.** The text path frames a single standing
+  figure for rigging, so a prompt for an object or a crowd will not produce a
+  useful avatar. Use [/forge](https://three.ws/forge) for props and scenes.
 - **Ownership.** The agent, both wallets, and the identity are yours. Remix forks a
   public avatar into a new agent you own; it never mutates the source.
 

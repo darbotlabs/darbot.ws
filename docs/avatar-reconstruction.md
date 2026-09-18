@@ -1,7 +1,13 @@
 # Selfie → Avatar Reconstruction
 
-This is the subsystem that turns a **user's photo** (or a text→image reference)
-into a rigged, animation-ready 3D avatar. It is distinct from the Forge
+This is the subsystem that turns a **user's photo** into a rigged,
+animation-ready 3D avatar. A **text prompt** sent to the same endpoint does NOT
+use this pipeline: fitting a face onto a template body ignores everything a
+prompt says about outfit, build, and style, so prompts run the full-body lane
+instead (a full-body reference image, reconstructed on the self-hosted Hunyuan3D
+worker, then auto-rigged). The lane plan lives in
+[`api/_lib/prompt-avatar.js`](../api/_lib/prompt-avatar.js); both inputs share
+the job contract, the status poll, and the finalize tail described below. It is distinct from the Forge
 generation lane in the [Avatar Pipeline](avatar-pipeline.md): the Forge generates
 an *arbitrary* mesh from a prompt, whereas reconstruction fits a *specific
 person* onto a fixed, pre-rigged template — the same architecture Avaturn and
@@ -10,7 +16,7 @@ blendshapes instead of a bare mesh that still needs auto-rigging.
 
 - **Worker:** [`workers/avatar-reconstruction/`](../workers/avatar-reconstruction) — FastAPI on a Cloud Run L4 GPU.
 - **Backend provider:** [`api/_providers/gcp.js`](../api/_providers/gcp.js), selected by `AVATAR_REGEN_PROVIDER=gcp` (see [`api/_lib/regen-provider.js`](../api/_lib/regen-provider.js)).
-- **User entry points:** the selfie/upload flow and text→avatar prompt flow in [`api/avatars/_actions.js`](../api/avatars/_actions.js) (`POST /api/avatars/reconstruct`).
+- **User entry points:** the selfie/upload flow (and, via the full-body lane, the text→avatar prompt flow) in [`api/avatars/_actions.js`](../api/avatars/_actions.js) (`POST /api/avatars/reconstruct`).
 - **Completion:** normally driven by the browser polling `/api/avatars/regenerate-status`, which runs the finalize stages inline. [`api/cron/reconstruct-sweep.js`](../api/cron/reconstruct-sweep.js) is the server-side backstop for when it isn't — see below.
 
 ## Who finishes the job

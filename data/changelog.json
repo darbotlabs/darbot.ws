@@ -28390,6 +28390,16 @@
 				"improvement"
 			],
 			"link": "/docs/freshness"
+		},
+		{
+			"date": "2026-09-18",
+			"title": "Text avatars now wear what you describe",
+			"summary": "Typing a description on /genesis (or sending a prompt to the avatar API) used to produce the same template body with a face pasted onto it, so an explorer in a teal flight jacket came back in someone else's clothes. Text avatars are now built from your words head to toe: the prompt is painted as a full-body character, sculpted into a textured 3D model on our own GPU, and given a skeleton so it animates immediately. Selfies still use the face pipeline, which is what a likeness needs. The free 3D generator behind the forge_avatar tool also stopped failing when the community GPU spaces were out of quota: it now moves the job onto our own worker instead of giving up.",
+			"tags": [
+				"fix",
+				"improvement"
+			],
+			"link": "/genesis"
 		}
 	]
 }
