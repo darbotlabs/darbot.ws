@@ -21,6 +21,8 @@ import { finalizeReconstructStage, pollRiggingStage } from '../_lib/reconstruct-
 import { finalizeAutoRigStage } from '../_lib/auto-rig.js';
 import { isAllowedProviderResultUrl } from '../_lib/provider-result-url.js';
 import { textToImage } from '../_mcp3d/text-to-image.js';
+import { planPromptAvatarLanes, promptAvatarImagePrompt } from '../_lib/prompt-avatar.js';
+import { laneHealthSnapshot } from '../_lib/forge-lane-health.js';
 
 // ── provider error masking ──────────────────────────────────────────────────────
 // The regen adapters (Replicate, GCP, and the BYOK Meshy/Tripo) attach a stable
@@ -1081,9 +1083,10 @@ const reconstructSchema = z
 		name: z.string().trim().min(1).max(120),
 		description: z.string().trim().max(500).optional(),
 		photos: z.array(photoUrlOrDataUri).min(1).max(6).optional(),
-		// Text → avatar: a prompt is turned into a clean frontal reference image
-		// (Flux), which then feeds the exact same reconstruct → auto-rig pipeline
-		// as a selfie. One of `photos` or `prompt` is required.
+		// Text → avatar: a prompt is painted as one full-body reference image,
+		// reconstructed on a full-figure image→3D engine (self-hosted Hunyuan3D
+		// first), then auto-rigged by the same finalize tail as a selfie. See
+		// _lib/prompt-avatar.js. One of `photos` or `prompt` is required.
 		prompt: z.string().trim().min(3).max(600).optional(),
 		visibility: z.enum(['private', 'unlisted', 'public']).optional(),
 		params: z.record(z.unknown()).optional(),
@@ -1096,22 +1099,6 @@ const reconstructSchema = z
 		message: 'provide either photos or a prompt',
 		path: ['photos'],
 	});
-
-// Steer Flux toward a single, evenly-lit, front-facing subject on a plain
-// background — without overriding the user's own subject description.
-//
-// Framing is FACE-FORWARD, not full-body, and that is deliberate: the production
-// reconstruct lane (gcp) is a face-texture-transfer pipeline — it detects the
-// face in the render, warps it onto a TEMPLATE body, and discards the render's
-// own body geometry entirely. A full-figure "head to feet" render therefore
-// shrinks the face to a small fraction of the frame, and the face detector fails
-// on it — which it did at scale: text→avatar reconstructs ran ~15% success vs
-// ~82% for face-prominent selfie photos, almost all the failures logged as
-// "no face detected in any of the provided photos". A head-and-shoulders portrait
-// makes the face large and unambiguous, which is exactly what the pipeline needs
-// (the body is templated regardless). See handleReconstruct's prompt branch.
-const AVATAR_PROMPT_SUFFIX =
-	', head and shoulders portrait, face large and centered and clearly visible, looking directly at the camera, sharp focus on the face, neutral expression, plain neutral studio background, soft even lighting, single subject, high detail, photorealistic';
 
 const handleReconstruct = wrap(async (req, res) => {
 	if (cors(req, res, { methods: 'POST,OPTIONS', credentials: true })) return;
@@ -1150,7 +1137,19 @@ const handleReconstruct = wrap(async (req, res) => {
 	// stored) backstop them — so a single provider outage, throttle, or credit
 	// exhaustion fails over to the next instead of dead-ending the job. Each
 	// entry is { name, instance }; names are de-duplicated.
-	const candidates = await resolveReconstructCandidates(req, body);
+	const reconstructCandidates = await resolveReconstructCandidates(req, body);
+
+	// A prompt with no photos never goes to the face pipeline: it runs the
+	// full-body lane plan (see _lib/prompt-avatar.js). Each entry carries the
+	// adapter mode to run, so one provider (gcp) can offer several engines.
+	const fromPrompt = !(Array.isArray(body.photos) && body.photos.length);
+	const candidates = fromPrompt
+		? planPromptAvatarLanes({
+			platform: reconstructCandidates.filter((c) => !BYOK_REGEN_PROVIDERS.includes(c.name)),
+			byok: reconstructCandidates.filter((c) => BYOK_REGEN_PROVIDERS.includes(c.name)),
+			health: await promptLaneHealth(),
+		})
+		: reconstructCandidates.map((c) => ({ ...c, mode: 'reconstruct', lane: c.name, params: {} }));
 
 	// Nothing configured anywhere — tell the client which BYOK providers are
 	// accepted (unchanged 402 contract the client branches on).
@@ -1164,14 +1163,14 @@ const handleReconstruct = wrap(async (req, res) => {
 		});
 	}
 
-	// Text → avatar: turn the prompt into a frontal reference image, then treat
-	// it exactly like a selfie. Done only once the reconstruct backend is known
-	// to be live, so a configuration gap never burns a Flux generation.
+	// Text → avatar: paint the prompt as one full-body reference image for the
+	// image→3D engine. Done only once a backend is known to be live, so a
+	// configuration gap never burns an image generation.
 	let photos = body.photos ?? null;
 	let referenceImageUrl = null;
-	if (!photos || !photos.length) {
+	if (fromPrompt) {
 		try {
-			const generated = await textToImage(`${body.prompt}${AVATAR_PROMPT_SUFFIX}`, {
+			const generated = await textToImage(promptAvatarImagePrompt(body.prompt), {
 				aspectRatio: '2:3',
 			});
 			referenceImageUrl = generated.imageUrl;
@@ -1234,18 +1233,18 @@ const handleReconstruct = wrap(async (req, res) => {
 		try {
 			submission = await submitWithTransientRetry(provider.instance, {
 				userId,
-				mode: 'reconstruct',
-				params: { ...(body.params ?? {}), images: photos, name: body.name },
+				mode: provider.mode,
+				params: { ...(body.params ?? {}), ...provider.params, images: photos, name: body.name },
 				sourceUrl: photos[0],
 			});
 			usedProvider = provider;
 			break;
 		} catch (err) {
 			const classified = classifyProviderError(err);
-			attempts.push(`${provider.name}:${err?.code || err?.status || classified.code}`);
+			attempts.push(`${provider.lane}:${err?.code || err?.status || classified.code}`);
 			console.warn(
 				'[avatars] reconstruct submit failed on',
-				provider.name,
+				provider.lane,
 				'—',
 				err?.code || err?.status || 'unknown',
 				'-',
@@ -1275,8 +1274,8 @@ const handleReconstruct = wrap(async (req, res) => {
 		// Same rule as POST /api/avatars: an explicit choice wins, silence falls
 		// back to the owner's default from /settings.
 		visibility: body.visibility ?? (await defaultAvatarVisibilityFor(userId, 'private')),
-		...(body.prompt
-			? { source: 'prompt', prompt: body.prompt, referenceImageUrl }
+		...(fromPrompt
+			? { source: 'prompt', prompt: body.prompt, referenceImageUrl, engine: usedProvider.lane }
 			: {}),
 	};
 	await sql`
@@ -1293,6 +1292,18 @@ const handleReconstruct = wrap(async (req, res) => {
 		provider: usedProvider.name,
 	});
 });
+
+// Liveness of the self-host image→3D lanes the prompt plan leads with, so a
+// worker whose model failed to load is tried last instead of accepting the job
+// and failing it minutes later. Best-effort: no telemetry keeps the plan order.
+async function promptLaneHealth() {
+	try {
+		return (await laneHealthSnapshot(['hunyuan3d', 'trellis_selfhost'])).byId;
+	} catch (err) {
+		console.warn('[avatars] prompt lane health skipped:', err?.message);
+		return {};
+	}
+}
 
 // Assemble the ordered provider candidate list for a reconstruct submit:
 // configured platform providers (primary first) followed by the caller's BYOK
