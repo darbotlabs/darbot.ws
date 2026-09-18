@@ -22,8 +22,11 @@ export function loadQueue(root, path = QUEUE_PATH) {
 	return JSON.parse(readFileSync(resolve(root, path), 'utf8'));
 }
 
+export const EXTERNAL_PATH = 'data/x-content/external.json';
+
 // Every post @trythreews has published that we hold a copy of: the scraped
-// archives plus the texts this pipeline recorded when it published.
+// archives, the posts made by hand since (EXTERNAL_PATH), and the texts this
+// pipeline recorded when it published.
 export function loadHistory(root, state = null) {
 	const texts = [];
 	const dir = resolve(root, 'data/archives');
@@ -37,6 +40,8 @@ export function loadHistory(root, state = null) {
 			}
 		}
 	}
+	const external = resolve(root, EXTERNAL_PATH);
+	if (existsSync(external)) for (const row of JSON.parse(readFileSync(external, 'utf8')).posts || []) if (row.text) texts.push(String(row.text));
 	for (const row of state?.published || []) if (row.text) texts.push(row.text);
 	return texts;
 }

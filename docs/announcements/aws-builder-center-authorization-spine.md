@@ -2,7 +2,7 @@
 
 **Surface:** [the article on the AWS Builder Center](https://builder.aws.com/content/3JAVvvItd3ZSVjYCDb4qjj5VBb9/budgets-entitlements-and-the-dollarthree-token-layer-how-we-authorize-autonomous-agent-spending-or-threews-an-aws-partner)
 · **Ledger key:** `aws-builder-center` · **Stage:** drafted
-· **Published:** 2026-09-11 · **Announced externally:** never
+· **Published:** 2026-09-11 · **Announced externally:** @trythreews, 2026-09-10 (by hand)
 
 Written against [the announcement voice](../announce-voice.md). The surface here is not a three.ws
 route: it is a 34,000-character engineering article on Amazon's own builder platform, under the
