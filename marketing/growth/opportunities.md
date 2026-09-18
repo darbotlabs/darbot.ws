@@ -308,7 +308,7 @@ tutorials. `cursor.directory` answered 429 and stays unverified.
 
 ## The wide sweep (2026-09-18)
 
-The same day, a wider sweep covered launch platforms, AI and MCP directories, newsletters,
+The same day, a wider sweep covered 52 verified awesome and curated lists, launch platforms, AI and MCP directories, newsletters,
 podcasts, guest-post programs, app stores, events and CFPs, standards bodies, and the Solana
 and crypto ecosystem. Its full evidence and dropped lists live in
 [sweep-2026-09-18.md](./sweep-2026-09-18.md); the dated rows that need an owner action are in
