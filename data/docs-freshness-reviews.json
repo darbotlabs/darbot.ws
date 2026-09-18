@@ -188,6 +188,12 @@
 			"by": "agent",
 			"note": "full sweep: read against the drifted commits and corrected where wrong"
 		},
+		"docs/doc-freshness.md": {
+			"commit": "302d0ae31",
+			"kind": "verified",
+			"by": "agent",
+			"note": "re-read against the exclusion change"
+		},
 		"docs/economy-master.md": {
 			"commit": "53f2a200f",
 			"kind": "verified",

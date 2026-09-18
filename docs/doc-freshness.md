@@ -28,7 +28,9 @@ Two refinements keep the ranking honest:
   busy one.
 - **Ignore generated output.** The changelog gaining an entry is not evidence that a tutorial
   went wrong, so build artifacts and the machine-translated locale tree are excluded from the
-  dependency graph entirely.
+  dependency graph entirely. The system's own bookkeeping is excluded for the same reason: the
+  review store and the budget are rewritten by every sweep, and counting them would make this
+  very page go stale every time anyone records a review.
 
 ## The five statuses
 
