@@ -8,6 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { laneHealthSnapshot, resetLaneHealthCache, laneCooldownKey } from '../../api/_lib/forge-lane-health.js';
+import { resolveBackendIdWithHealth } from '../../api/_lib/forge-tiers.js';
 
 const VARS = ['MODEL_TRELLIS_URL', 'GCP_HUNYUAN3D_URL', 'GCP_RECONSTRUCTION_KEY', 'HF_TOKEN'];
 const saved = {};
@@ -139,5 +140,43 @@ describe('laneHealthSnapshot — self-host worker probing', () => {
 	it('exposes a distinct cooldown key namespace per lane', () => {
 		expect(laneCooldownKey('trellis_selfhost')).toBe('forge-lane:trellis_selfhost');
 		expect(laneCooldownKey('triposg')).toBe('forge-lane:triposg');
+	});
+
+	// The exact body the self-hosted TRELLIS worker served on 2026-09-17/18 after
+	// a torch.hub GitHub probe 403'd its model load: HTTP 200, ok:true, and the
+	// failure only visible in load_error. trellis_selfhost is the named default
+	// for draft/standard image requests, so routing must read this as down and
+	// hand the request to the next free lane instead of submitting to a corpse.
+	it('reads a latched TRELLIS load failure served as HTTP 200 ok:true as down, and routes past it', async () => {
+		process.env.MODEL_TRELLIS_URL = 'https://trellis.example.run.app';
+		process.env.GCP_HUNYUAN3D_URL = 'https://hunyuan.example.run.app';
+		process.env.GCP_RECONSTRUCTION_KEY = 'secret';
+		globalThis.fetch = vi.fn(async (url) => {
+			if (String(url).startsWith('https://trellis.example.run.app')) {
+				return new Response(
+					JSON.stringify({
+						ok: true,
+						model: 'trellis-image-large',
+						gpu_available: true,
+						gpu_name: 'NVIDIA L4',
+						pipeline_loaded: false,
+						ready: false,
+						load_error: 'internal error (ref 6eddca0af4eb)',
+					}),
+					{ status: 200 },
+				);
+			}
+			return new Response(JSON.stringify({ ok: true, pipeline_loaded: true, ready: true, load_error: null }), {
+				status: 200,
+			});
+		});
+
+		const snap = await laneHealthSnapshot(['trellis_selfhost', 'hunyuan3d']);
+		expect(snap.statusMap.trellis_selfhost).toBe('down');
+		expect(snap.statusMap.hunyuan3d).toBe('ok');
+		for (const tier of ['draft', 'standard']) {
+			const chosen = resolveBackendIdWithHealth({ path: 'image', tier, health: snap.statusMap });
+			expect(chosen).not.toBe('trellis_selfhost');
+		}
 	});
 });
