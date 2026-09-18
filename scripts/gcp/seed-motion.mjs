@@ -18,7 +18,8 @@
  *   node scripts/gcp/seed-motion.mjs --limit=12            # smoke batch
  *   node scripts/gcp/seed-motion.mjs --categories=idle,emote
  *   node scripts/gcp/seed-motion.mjs --concurrency=4
- *   node scripts/gcp/seed-motion.mjs --samples=4           # four takes per prompt
+ *   node scripts/gcp/seed-motion.mjs --samples=4           # up to four takes per prompt
+ *   node scripts/gcp/seed-motion.mjs --keep-per-prompt=2   # stop a prompt at two keepers
  *   node scripts/gcp/seed-motion.mjs --retry-rejects       # re-roll past rejects
  *   node scripts/gcp/seed-motion.mjs --publish             # upload + manifest
  *   node scripts/gcp/seed-motion.mjs --report              # checkpoint stats only
@@ -56,6 +57,7 @@ import { gateMotionClip, explainMotionGate, MOTION_GATE_VERSION } from '../../ap
 import {
 	assertSelfHostedLane,
 	closeLoopSeam,
+	despikeFootFlicks,
 	flattenRootDrift,
 	gateMotionClip as gateRestBasis,
 	lockRootToContacts,
@@ -93,6 +95,9 @@ const REPAIR = !!args.repair;
 // how a 137-prompt library grows into several hundred clips while the gate
 // keeps only the takes that hold up.
 const SAMPLES = Math.max(1, Math.min(Number(args.samples) || 1, 12));
+// Stop drawing takes of a prompt once it has this many keepers. Past that the
+// library gains near-duplicates of one prompt instead of range across prompts.
+const KEEP_PER_PROMPT = Math.max(1, Number(args['keep-per-prompt']) || 3);
 // Direct transport: call the text2motion worker through the platform's own GCP
 // provider, with no public endpoint and so no per-IP rate limit in the way.
 // Needs GCP_TEXT2MOTION_URL and GCP_RECONSTRUCTION_KEY (both on the three-ws-api
@@ -287,7 +292,14 @@ async function runPrompt(prompt) {
 	// not the library's canonical one (see rebaseToCanonicalRest). Converted
 	// first, because every later step, and every viewer, reads the clip in the
 	// library's basis. Played unconverted, the legs fold up over the body.
-	const fetched = needsRebase(worker) ? rebaseToCanonicalRest(worker).clip : worker;
+	const rebased = needsRebase(worker) ? rebaseToCanonicalRest(worker).clip : worker;
+
+	// The lane's foot rotation flips to its other Kabsch solution for a frame or
+	// two at a time, flicking the toe 8 cm and back (see FOOT_FLICK). Repaired
+	// before anything measures contact, because every flick reads as a planted
+	// toe skating across the floor.
+	const flicks = despikeFootFlicks(rebased);
+	const fetched = flicks.clip;
 
 	// The lane's root channel is a constant forward ramp carrying no prompt
 	// signal (see ROOT_DRIFT in api/_lib/motion-seed.js), so it is removed first,
@@ -350,6 +362,7 @@ async function runPrompt(prompt) {
 			removed_m: Number(flattened.removed.toFixed(4)),
 			residual_m: Number(flattened.residual.toFixed(4)),
 		},
+		foot_flicks_repaired: flicks.repaired,
 		root_lock: {
 			applied: locked.applied,
 			contact_share: Number(locked.contactShare.toFixed(3)),
@@ -645,7 +658,13 @@ async function main() {
 		// partial run covers the whole library before it deepens any one prompt.
 		const takes = [];
 		for (let sample = 0; sample < SAMPLES; sample++) for (const p of prompts) takes.push({ ...p, sample });
-		const queue = takes.filter((p) => shouldRun(state.prompts[sampleKey(p)])).slice(0, LIMIT);
+		const keepers = {};
+		for (const record of Object.values(state.prompts)) {
+			if (record.status === 'accepted') keepers[record.prompt_id] = (keepers[record.prompt_id] || 0) + 1;
+		}
+		const queue = takes
+			.filter((p) => (keepers[p.id] || 0) < KEEP_PER_PROMPT && shouldRun(state.prompts[sampleKey(p)]))
+			.slice(0, LIMIT);
 
 		log(`Seeding motion from ${PROMPTS_PATH.replace(`${ROOT}/`, '')}`);
 		log(`  transport   ${DIRECT ? 'direct (GCP provider, no public rate limit)' : ORIGIN}`);
