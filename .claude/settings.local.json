@@ -5,8 +5,16 @@
     "atelier"
   ],
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit"
     ]
   }
 }
