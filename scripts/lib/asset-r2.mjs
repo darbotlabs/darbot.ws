@@ -23,7 +23,7 @@ export function loadEnvVar(key) {
 	return null;
 }
 
-export const S3_ENDPOINT = loadEnvVar('S3_ENDPOINT') ||
+export const S3_ENDPOINT = loadEnvVar('S3_ENDPOINT') || loadEnvVar('R2_ENDPOINT') ||
 	(loadEnvVar('R2_ACCOUNT_ID') ? `https://${loadEnvVar('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com` : null);
 export const S3_ACCESS_KEY_ID = loadEnvVar('S3_ACCESS_KEY_ID') || loadEnvVar('R2_ACCESS_KEY_ID');
 export const S3_SECRET_ACCESS_KEY = loadEnvVar('S3_SECRET_ACCESS_KEY') || loadEnvVar('R2_SECRET_ACCESS_KEY');
