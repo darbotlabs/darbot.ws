@@ -212,6 +212,7 @@
 		"guard:esbuild:all": "node scripts/guard-esbuild-bundles.mjs --all",
 		"verify:solana": "node scripts/verify-solana-parity.mjs",
 		"verify:onchain": "node scripts/verify-onchain-parity.mjs",
+		"x402:probe": "node scripts/probe-x402-live.mjs",
 		"verify:x402": "node scripts/build-x402-catalog.mjs --out=/tmp/x402-catalog.json && node scripts/verify-x402-discovery.mjs --file=/tmp/x402-catalog.json",
 		"smoke:x402-facilitator": "node scripts/x402-facilitator-smoke-test.mjs",
 		"preview:x402scan-registration": "node scripts/x402scan-registration-gap.mjs",

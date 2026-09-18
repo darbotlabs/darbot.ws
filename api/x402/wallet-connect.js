@@ -136,7 +136,7 @@ const OUTPUT_EXAMPLE = {
 const BAZAAR = {
 	discoverable: true,
 	info: {
-		input: { type: 'http', method: 'POST', bodySchema: INPUT_SCHEMA },
+		input: { type: 'http', method: 'POST', bodyType: 'json', body: { mode: 'health' } },
 		output: { type: 'json', example: OUTPUT_EXAMPLE },
 	},
 	schema: buildBazaarSchema({ method: 'POST', bodySchema: INPUT_SCHEMA, outputSchema: OUTPUT_SCHEMA }),

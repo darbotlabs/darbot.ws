@@ -70,6 +70,7 @@ import {
 } from './x402/payment-identifier-server.js';
 import { authenticateSiwx, declareSiwxExtensionFor, recordSiwxPayment } from './siwx-server.js';
 import { normalizeAddress } from './siwx-storage.js';
+import { normalizeBazaarEntry } from './x402/bazaar-helpers.js';
 import { buildOffersExtension, buildReceiptExtension } from './x402/offer-receipt-server.js';
 import { signReceipt } from './x402-offer-receipt.js';
 import { recordReceipt } from './x402/receipt-storage.js';
@@ -418,6 +419,9 @@ export function paidEndpoint(spec) {
 	if (!route) throw new Error('paidEndpoint: route is required');
 	if (!description) throw new Error('paidEndpoint: description is required');
 	if (!bazaar) throw new Error('paidEndpoint: bazaar discovery extension is required');
+	// Legacy flat blocks become the v2 `{ info, schema }` entry here, once, so the
+	// live 402 matches what the discovery document already advertises.
+	const bazaarEntry = normalizeBazaarEntry(bazaar, { method });
 	if (typeof handler !== 'function') throw new Error('paidEndpoint: handler must be a function');
 	if (accessControl != null && typeof accessControl !== 'function') {
 		throw new Error('paidEndpoint: accessControl must be a function when provided');
@@ -619,7 +623,7 @@ export function paidEndpoint(spec) {
 			accepts: requirements,
 			description,
 			mimeType,
-			bazaar,
+			bazaar: bazaarEntry,
 			extensions: extraExtensions,
 			...(service?.serviceName ? { serviceName: service.serviceName } : {}),
 			...(Array.isArray(service?.tags) && service.tags.length ? { tags: service.tags } : {}),

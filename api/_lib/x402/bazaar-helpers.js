@@ -22,6 +22,8 @@
 // Spec: /tmp/x402-docs/specs/extensions/bazaar.md
 //       /tmp/x402-docs/docs/extensions/bazaar.mdx
 
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import { declareDiscoveryExtension } from '@x402/extensions';
 
 import { buildBazaarSchema } from '../x402-spec.js';
@@ -123,16 +125,21 @@ export function declareHttpDiscovery({
 	// `additionalProperties` placement — running through buildBazaarSchema
 	// guarantees the exact shape that has been validated against the CDP
 	// Bazaar's discovery probe.
+	const info = sdkInner?.info || {};
+	const inputInfo = info.input || {};
+
+	// The meta-schema closes `input` to additional properties, so it has to
+	// describe `queryParams` whenever info carries them. A route that gives
+	// example params but no param schema used to get an info block its own
+	// schema rejected, which is the mismatch CDP drops a listing for.
+	const queryParamsSchema = inputSchema || (inputInfo.queryParams !== undefined ? {} : undefined);
 	const schema = buildBazaarSchema({
 		method: upper,
-		queryParamsSchema: isBody ? undefined : inputSchema,
+		queryParamsSchema: isBody ? undefined : queryParamsSchema,
 		bodyType: isBody ? bodyType || 'json' : undefined,
 		bodySchema: isBody ? inputSchema : undefined,
 		outputSchema: output?.schema,
 	});
-
-	const info = sdkInner?.info || {};
-	const inputInfo = info.input || {};
 
 	// Surface the response example/schema in the same shape buildBazaarSchema
 	// expects. The SDK already nests these under info.output but only when an
@@ -202,6 +209,65 @@ export function declareMcpDiscovery({
 	// row is silently skipped by the discovery crawler. declareHttpDiscovery sets
 	// the same flag for REST routes; this keeps MCP rows at parity.
 	return { ...sdkInner, discoverable: true };
+}
+
+// Bring whatever a route passed as `bazaar` to a canonical v2 entry,
+// `{ discoverable, info: { input, output }, schema }`, whose info validates
+// against its own schema. That self-validation is the strict check CDP runs
+// before it catalogs a resource, and marketplace validators read it off the
+// live 402, so it is the pass-through test here too.
+//
+// Three shapes reach this point that fail it:
+//   - flat, pre-v2: `{ description, useCases, input: { type: 'query' | 'json',
+//     example, schema }, output }`, with no `info` block at all;
+//   - hybrid: an `info` wrapper around that same legacy input;
+//   - v2 by hand, but drifted from its schema (no `bodyType`, stray keys).
+// paidEndpoint() used to forward all of them verbatim. The discovery document
+// rebuilds its own entries and looked fine, which hid it. Each is rebuilt from
+// its parts through declareHttpDiscovery; a valid entry, and any MCP entry
+// (built by declareMcpDiscovery), passes through untouched.
+const bazaarAjv = new Ajv2020({ allErrors: false, strict: false });
+addFormats(bazaarAjv);
+
+function infoMatchesSchema(entry) {
+	if (!entry?.info?.input || !entry.schema) return false;
+	try {
+		return bazaarAjv.compile(entry.schema)(entry.info) === true;
+	} catch {
+		return false;
+	}
+}
+
+export function normalizeBazaarEntry(bazaar, { method = 'GET' } = {}) {
+	const entry = bazaar || {};
+	const input = entry.info?.input ?? entry.input ?? {};
+	if (input.type === 'mcp' || infoMatchesSchema(entry)) return entry;
+
+	const upper = String(input.method || method).toUpperCase();
+	const isBody = ['POST', 'PUT', 'PATCH'].includes(upper);
+	const isV2Input = input.type === 'http';
+	const part = isBody ? 'body' : 'queryParams';
+	// Some hand-written blocks carry the example as `bodyExample`, a key the v2
+	// schema does not define, so it counts as the example rather than as drift.
+	const example = isV2Input ? input[part] ?? input.bodyExample ?? input.example : input.example;
+	const inputSchema = isV2Input ? entry.schema?.properties?.input?.properties?.[part] : input.schema;
+	const hasExample = example && typeof example === 'object' && Object.keys(example).length > 0;
+
+	const declaredOutput = entry.info?.output ?? entry.output;
+	const outputSchema = isV2Input ? undefined : declaredOutput?.schema;
+	const output =
+		declaredOutput && (declaredOutput.example !== undefined || outputSchema)
+			? { example: declaredOutput.example, schema: outputSchema }
+			: undefined;
+
+	const rebuilt = declareHttpDiscovery({
+		method: upper,
+		input: hasExample || isBody ? example : undefined,
+		inputSchema,
+		output,
+		bodyType: isBody ? input.bodyType || 'json' : undefined,
+	});
+	return entry.discoverable === false ? { ...rebuilt, discoverable: false } : rebuilt;
 }
 
 // Convenience: returns the full extensions block `{ bazaar: <inner> }` for

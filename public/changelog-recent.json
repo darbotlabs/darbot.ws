@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-18T07:13:35.035Z",
+	"generated_at": "2026-09-18T07:48:36.343Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3703,
+	"total": 3704,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -18,6 +18,17 @@
 			"tags": [
 				"fix",
 				"infra"
+			]
+		},
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "Paid endpoints now describe themselves the way marketplaces expect",
+			"summary": "When an agent or a marketplace asks one of our paid endpoints what it costs, the answer also explains how to call it and what comes back. Around sixty endpoints were sending that explanation in an older layout, or in one that did not match its own rules, which is enough for a marketplace to skip the listing without saying why. Every paid endpoint now sends it in the current standard layout, checked against its own rules. We also added a tool that tests our endpoints with the same checklist a marketplace validator uses, so a listing problem shows up on our side first.",
+			"link": "/docs/x402-dev-tools",
+			"tags": [
+				"improvement",
+				"fix"
 			]
 		},
 		{
@@ -1608,17 +1619,6 @@
 			"tags": [
 				"fix",
 				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The agent vitals endpoint answers again, and eight documented API examples now say what they really return",
-			"summary": "GET /api/agents/vitals, the operator view that reports whether each autonomous agent can actually act, had been unreachable: a broader routing rule for agent profiles was catching the request first and answering with an agent lookup instead. It resolves to its own handler again. Separately, every runnable curl sample in the documentation was replayed against the live API, and the ones whose example used a placeholder id or needed a signed-in session now say so above the snippet rather than looking like a call that should have worked.",
-			"link": "/docs/agent-vitals",
-			"tags": [
-				"fix",
-				"docs"
 			]
 		}
 	]

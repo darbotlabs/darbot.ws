@@ -81,7 +81,7 @@ const OUTPUT_EXAMPLE = {
 	announced: true,
 	importance: 74,
 	paid: '$0.05',
-	receipt_url: 'https://three.ws/api/knock/reply?id=c1b0a2d4-7e33-4f01-9a55-2b7c1d0e9f4a&token=…',
+	receipt_url: 'https://three.ws/api/knock/reply?id=c1b0a2d4-7e33-4f01-9a55-2b7c1d0e9f4a&token=THREEsyntheticReplyToken',
 	duplicate: false,
 };
 

@@ -197,6 +197,54 @@ implementation against a live server.
 4. After a successful call, `POST /api/x402/verify-receipt` to confirm the
    attestation and settlement.
 
+## Checking our own endpoints the way a marketplace does
+
+The tools above debug a buyer's call. This one checks the seller side: whether
+the paid routes three.ws lists would pass the checklist a marketplace validator
+(Agentic Market's Seller Tools, the CDP Bazaar crawler) runs before it catalogs
+a resource. It sends the same unpaid request an indexer sends, so it costs
+nothing.
+
+```bash
+npm run x402:probe                                    # every listed route on https://three.ws
+npm run x402:probe -- --only=/api/x402/forge          # routes whose path contains the text
+npm run x402:probe -- --base=http://localhost:8080    # a local or preview server
+npm run x402:probe -- --url=https://three.ws/api/x402/model-check
+npm run x402:probe -- --json                          # machine-readable report
+```
+
+It reads `/.well-known/x402.json`, takes one sample per route (the datapoint
+catalog lists thousands of parameterised URLs behind a few handlers), and fails
+a route when any of these is false:
+
+| Group | Checks |
+|---|---|
+| Transport | HTTPS, reachable, body at most 65,536 bytes, HTTP 402, valid JSON, `resource` object present |
+| Payment | `x402Version` 2, a `PAYMENT-REQUIRED` header that decodes, `accepts[]` present and well formed, known scheme, CAIP-2 network, asset, USDC price at least $0.001, `payTo`, `maxTimeoutSeconds` |
+| Bazaar | extension present, `info` block, input type and method, `schema`, and `info` validating against that `schema` |
+
+Two readings to know:
+
+- **"No x402 setup detected" with a body over 65,536 bytes** means the URL is
+  not a paid route. A page or the discovery document answers 200 with a large
+  body, the validator truncates it, and every later check is skipped. Validate a
+  route from the catalog, with the method the catalog lists for it.
+- **HTTP 500 on every route** is a handler that throws while loading, not a
+  payment problem. `npm run check:api-imports` finds it locally in under a
+  minute, and it gates `deploy:gcp:submit`.
+
+With `--base`, catalog URLs are rebased onto that host, so a local run never
+quietly tests production. A local server without the production settlement
+configuration advertises fewer payment options than production does; an empty
+`accepts[]` there is a local artifact, so confirm it with `--url` against
+production before treating it as a defect.
+
+Every route's Bazaar block is normalized in one place,
+`normalizeBazaarEntry` in `api/_lib/x402/bazaar-helpers.js`, which
+`paidEndpoint()` applies to whatever a handler declares. A handler may still
+declare the older flat `{ input: { type, example, schema }, output }` block; the
+live 402 carries the v2 `{ info, schema }` entry either way.
+
 ## Related
 
 - [x402 Protocol](/docs/x402) - the challenge / verify / settle mechanics.

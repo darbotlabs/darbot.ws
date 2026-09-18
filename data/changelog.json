@@ -3,6 +3,16 @@
 	"entries": [
 		{
 			"date": "2026-09-18",
+			"title": "Paid endpoints now describe themselves the way marketplaces expect",
+			"summary": "When an agent or a marketplace asks one of our paid endpoints what it costs, the answer also explains how to call it and what comes back. Around sixty endpoints were sending that explanation in an older layout, or in one that did not match its own rules, which is enough for a marketplace to skip the listing without saying why. Every paid endpoint now sends it in the current standard layout, checked against its own rules. We also added a tool that tests our endpoints with the same checklist a marketplace validator uses, so a listing problem shows up on our side first.",
+			"tags": [
+				"improvement",
+				"fix"
+			],
+			"link": "/docs/x402-dev-tools"
+		},
+		{
+			"date": "2026-09-18",
 			"title": "Paid x402 endpoints are answering again",
 			"summary": "For several hours on September 18, nearly every paid endpoint on three.ws, the x402 discovery document at /.well-known/x402, the payment facilitator and the MCP server answered with a server error instead of a price. A routine update to the library behind wallet sign-in changed what it needs at startup, and our code tripped over it the moment it loaded, before any request could be served. Agents and marketplace validators that probed us saw a broken seller. The sign-in code now supplies what the library expects, returning buyers can sign back in to what they already paid for exactly as before, and the deploy checks now refuse to ship when the tested dependencies differ from the ones the live site will run, which is how this got past us.",
 			"tags": [
