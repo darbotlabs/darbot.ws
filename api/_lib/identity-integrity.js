@@ -15,13 +15,17 @@
 //   2. Granite Guardian screens the identity *content* (name + bio + persona) for
 //      harm / social bias / sexual content before it can go public.
 //
-// The verdict is advisory by default and best-effort: when watsonx is not
-// configured the check reports `configured: false` and never blocks, so identity
-// creation degrades cleanly rather than failing closed.
+// The verdict is advisory by default and best-effort. Granite embeddings lead;
+// without watsonx the comparison runs on the platform's embedding chain, whose
+// vectors the Granite-calibrated thresholds below do not fit, so those neighbours
+// are reported but never produce a similarity verdict. Granite Guardian runs on
+// watsonx or on the self-hosted lane. With neither an embedder nor Guardian the
+// check reports `configured: false` and never blocks, so identity creation
+// degrades cleanly rather than failing closed.
 
 import { sql } from './db.js';
-import { watsonxConfig, watsonxEmbed } from './watsonx.js';
-import { readAgentVectors, agentEmbedText } from './agent-embeddings.js';
+import { watsonxConfig } from './watsonx.js';
+import { readAgentVectors, agentEmbedText, agentEmbedders } from './agent-embeddings.js';
 import { cosineSimilarity } from './embedding-math.js';
 import { guardianConfig, assess, decide, RISKS } from './granite-guardian.js';
 
@@ -106,9 +110,10 @@ export async function checkIdentityIntegrity(candidate, opts = {}) {
 		model: { embed: null, guardian: null },
 	};
 
-	const cfg = watsonxConfig();
-	if (!cfg.configured) {
-		base.reasons.push('IBM watsonx.ai is not configured; identity integrity check skipped.');
+	const embedders = agentEmbedders(watsonxConfig());
+	const guardianReady = withGuardian && guardianConfig().configured;
+	if (!embedders.length && !guardianReady) {
+		base.reasons.push('No embedding lane or Granite Guardian lane is configured; identity integrity check skipped.');
 		return base;
 	}
 	if (!text) {
@@ -116,11 +121,13 @@ export async function checkIdentityIntegrity(candidate, opts = {}) {
 		return { ...base, configured: true, status: 'clear', uniqueness: 1, reasons: ['No identity text to evaluate.'] };
 	}
 
-	// Run the semantic comparison and the content screen concurrently — they're
-	// independent and both hit watsonx.
+	// Run the semantic comparison and the content screen concurrently: they are
+	// independent calls.
 	const [similarity, guardian] = await Promise.all([
-		compareSemantically({ cfg, text, userId, excludeAgentId, signal }),
-		withGuardian ? screenContent({ text, risks, signal }) : Promise.resolve(null),
+		embedders.length
+			? compareSemantically({ embedders, text, userId, excludeAgentId })
+			: Promise.resolve({ model: null, calibrated: false, similar: [] }),
+		guardianReady ? screenContent({ text, risks, signal }) : Promise.resolve(null),
 	]);
 
 	const reasons = [];
@@ -133,8 +140,12 @@ export async function checkIdentityIntegrity(candidate, opts = {}) {
 	) || null;
 	const enoughSignal = text.length >= MIN_TEXT_FOR_BLOCK;
 
+	// Neighbours from a non-Granite embedder are still listed, but the thresholds
+	// were calibrated on Granite vectors, so only Granite similarity sets a verdict.
 	let duplicateOf = null;
-	if (impersonation && enoughSignal) {
+	if (!similarity.calibrated) {
+		// Reported via `similarityScored: false` below.
+	} else if (impersonation && enoughSignal) {
 		status = 'block';
 		duplicateOf = { id: impersonation.id, name: impersonation.name, score: impersonation.score };
 		reasons.push(
@@ -161,13 +172,18 @@ export async function checkIdentityIntegrity(candidate, opts = {}) {
 
 	const uniqueness = top ? round(Math.max(0, 1 - top.score)) : 1;
 	if (status === 'clear' && !reasons.length) {
-		reasons.push('Identity is distinct from existing agents and passed content screening.');
+		reasons.push(
+			similarity.calibrated
+				? 'Identity is distinct from existing agents and passed content screening.'
+				: 'Identity passed content screening. Similar agents are listed for reference; similarity is only scored on Granite embeddings.',
+		);
 	}
 
 	return {
 		configured: true,
 		status,
-		uniqueness,
+		uniqueness: similarity.calibrated ? uniqueness : null,
+		similarityScored: similarity.calibrated,
 		reasons,
 		similar: similarity.similar,
 		duplicateOf,
@@ -178,23 +194,34 @@ export async function checkIdentityIntegrity(candidate, opts = {}) {
 	};
 }
 
-// Embed the candidate and rank it against cached public/own agent vectors.
-async function compareSemantically({ cfg, text, userId, excludeAgentId, signal }) {
+// Embed the candidate and rank it against the cached public/own agent vectors
+// written by the same embedder. Walks the embedder chain (watsonx Granite first)
+// until one answers; `calibrated` is true only when Granite served.
+async function compareSemantically({ embedders, text, userId, excludeAgentId }) {
 	const rows = await selectComparableAgents({ userId, excludeAgentId });
 	const usable = rows.filter((a) => agentEmbedText(a));
-	if (!usable.length) {
-		const { vectors, model } = await watsonxEmbed(cfg, { inputs: [text], signal });
-		return { model: model || cfg.embedModel, similar: [], candidateDims: vectors[0]?.length || 0 };
-	}
-
 	const ids = usable.map((a) => a.id);
-	const [vectorMap, embed] = await Promise.all([
-		readAgentVectors(ids, { model: cfg.embedModel }),
-		watsonxEmbed(cfg, { inputs: [text], signal }),
-	]);
-	const qvec = embed.vectors?.[0];
-	if (!qvec?.length) throw new Error('watsonx returned no candidate embedding');
+	let lastErr = null;
+	for (const embedder of embedders) {
+		try {
+			const [vectorMap, qvec] = await Promise.all([
+				ids.length ? readAgentVectors(ids, { model: embedder.model }) : Promise.resolve(new Map()),
+				embedder.embedQuery(text),
+			]);
+			if (!qvec?.length) throw new Error(`${embedder.model} returned no candidate embedding`);
+			return {
+				model: embedder.model,
+				calibrated: embedder.provider === 'watsonx',
+				similar: rankNeighbours({ qvec, vectorMap, usable, userId }),
+			};
+		} catch (err) {
+			lastErr = err;
+		}
+	}
+	throw lastErr;
+}
 
+function rankNeighbours({ qvec, vectorMap, usable, userId }) {
 	const byId = new Map(usable.map((a) => [a.id, a]));
 	const ranked = [];
 	for (const [id, vec] of vectorMap) {
@@ -209,7 +236,7 @@ async function compareSemantically({ cfg, text, userId, excludeAgentId, signal }
 		});
 	}
 	ranked.sort((a, b) => b.score - a.score);
-	return { model: embed.model || cfg.embedModel, similar: ranked.slice(0, 8) };
+	return ranked.slice(0, 8);
 }
 
 // Screen identity text through Granite Guardian. Returns a decide() verdict, or
@@ -224,6 +251,6 @@ async function screenContent({ text, risks, signal }) {
 		decision: d.decision,
 		flagged: d.flagged,
 		reasons: (d.reasons || []).map((r) => ({ risk: r.risk, label: r.label, probability: round(r.probability) })),
-		model: gcfg.model,
+		model: verdicts[0]?.model || gcfg.model,
 	};
 }

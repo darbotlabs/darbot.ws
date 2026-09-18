@@ -123,6 +123,14 @@ Set these as environment variables (locally in `.env`, in production on the Clou
 | `WATSONX_API_VERSION`       | `2024-05-31`                                                                                  |
 | `WATSONX_TS_API_VERSION`    | `2025-02-11`                                                                                  |
 
+**Optional: self-hosted Granite Guardian lane.** Granite Guardian is open-weight, so the governance surfaces do not depend on watsonx alone. [workers/granite-guardian](../workers/granite-guardian/README.md) serves `ibm-granite/granite-guardian-3.3-8b` with vLLM on our own GPU; watsonx stays the lead lane when configured, and this one answers when watsonx is absent or failing. Every verdict reports the `model` and `provider` (`watsonx` or `self-hosted`) that actually produced it.
+
+| Variable                    | Notes                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `GRANITE_GUARDIAN_URL`      | Base URL of the worker. Setting it, with a key, turns the lane on.                      |
+| `GRANITE_GUARDIAN_API_KEY`  | Bearer key. Optional: falls back to the GPU fleet's `GCP_RECONSTRUCTION_KEY`.            |
+| `GRANITE_GUARDIAN_MODEL_ID` | Served model name. Default `ibm-granite/granite-guardian-3.3-8b`.                      |
+
 **For on-chain attestation (Granite Proof):** `AVATAR_WALLET_SECRET` — a Solana keypair used to notarize a governed forecast on-chain.
 
 To bypass Guardian gating in `/api/chat` during local development, set `GUARDIAN_DISABLE=true`. The gate is best-effort: if a Guardian call fails at runtime the local dollar spend cap is still enforced on its own.
@@ -154,6 +162,7 @@ curl -s https://three.ws/api/guardian/assess \
 ```json
 {
 	"model": "ibm/granite-guardian-3-8b",
+	"provider": "watsonx",
 	"decision": "block",
 	"flagged": true,
 	"topRisk": "jailbreak",
@@ -168,7 +177,7 @@ curl -s https://three.ws/api/guardian/assess \
 
 For autonomous sends, `governSend()` additionally enforces a per-period USD spend cap, so a request can be vetoed either for risk content **or** for exceeding the cap.
 
-**Errors.** Every failure is JSON, never HTML: `400 bad_request` (missing or malformed `text`/`messages`/`risks`/`action`), `405 method_not_allowed`, `413 bad_request` (body over 100 KB), `415 bad_request` (content-type is not `application/json`), `429 rate_limited` (30 requests/min per IP, plus an hourly platform-wide ceiling on watsonx inference that only real assessments charge), `503 guardian_unconfigured` (no `WATSONX_API_KEY` + `WATSONX_PROJECT_ID`, so no verdict is fabricated), and `502 guardian_failed` when watsonx itself fails.
+**Errors.** Every failure is JSON, never HTML: `400 bad_request` (missing or malformed `text`/`messages`/`risks`/`action`), `405 method_not_allowed`, `413 bad_request` (body over 100 KB), `415 bad_request` (content-type is not `application/json`), `429 rate_limited` (30 requests/min per IP, plus an hourly platform-wide ceiling on watsonx inference that only real assessments charge), `503 guardian_unconfigured` (neither watsonx credentials nor the self-hosted `GRANITE_GUARDIAN_URL` lane, so no verdict is fabricated), and `502 guardian_failed` when every configured lane fails. A `200` carries `model` and `provider`, naming the lane that actually answered.
 
 ---
 

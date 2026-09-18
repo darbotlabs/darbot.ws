@@ -17,9 +17,12 @@
 // Response: { model, decision, flagged, reasons, topRisk, risks[], record, … }
 //   decision ∈ allow | review | block. `record.hash` chains to `record.prev`.
 //
-// No mock path. When watsonx is unconfigured the endpoint returns 503
-// `guardian_unconfigured` so the caller renders an honest state instead of a
-// fabricated verdict. Every score is a real Granite Guardian classifier pass.
+// No mock path. watsonx.ai leads; the self-hosted Granite Guardian lane
+// (workers/granite-guardian) serves when watsonx is absent or failing, and
+// `model` / `provider` name whichever actually answered. With neither lane the
+// endpoint returns 503 `guardian_unconfigured` so the caller renders an honest
+// state instead of a fabricated verdict. Every score is a real Granite Guardian
+// classifier pass.
 
 import { cors, method, readJson, error, json, wrap, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
@@ -134,7 +137,7 @@ export default wrap(async function handler(req, res) {
 			res,
 			503,
 			'guardian_unconfigured',
-			'IBM watsonx is not configured. Set WATSONX_API_KEY and WATSONX_PROJECT_ID to enable Granite Guardian governance.',
+			'Granite Guardian is not configured. Set WATSONX_API_KEY and WATSONX_PROJECT_ID, or GRANITE_GUARDIAN_URL for the self-hosted lane.',
 		);
 	}
 
@@ -169,9 +172,12 @@ export default wrap(async function handler(req, res) {
 		return error(res, 502, 'guardian_failed', `Granite Guardian assessment failed: ${e.message}`);
 	}
 
+	// The lane that actually answered, not the one we would have preferred.
+	const model = verdicts[0]?.model || cfg.model;
+	const provider = verdicts[0]?.provider || 'watsonx';
 	const record = buildAuditRecord({
 		prev: body.prev,
-		model: cfg.model,
+		model,
 		content: parsed.summary,
 		action,
 		decision,
@@ -182,10 +188,10 @@ export default wrap(async function handler(req, res) {
 	recordEvent({
 		clientId: ip,
 		kind: 'guardian',
-		tool: cfg.model,
+		tool: model,
 		latencyMs,
 		meta: {
-			provider: 'watsonx',
+			provider,
 			decision: decision.decision,
 			risks_scored: verdicts.length,
 			flagged: decision.flagged,
@@ -194,7 +200,8 @@ export default wrap(async function handler(req, res) {
 	});
 
 	return json(res, 200, {
-		model: cfg.model,
+		model,
+		provider,
 		decision: decision.decision,
 		flagged: decision.flagged,
 		reasons: decision.reasons,

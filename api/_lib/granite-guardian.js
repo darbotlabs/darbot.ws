@@ -20,9 +20,14 @@
 // the equivalent safety-agent framing as a system message and read the label
 // (and a real probability, when watsonx returns logprobs) back out.
 //
-// No mock path. When watsonx credentials are absent guardianConfig().configured
-// is false so callers fall through (assessment is best-effort, never fabricated);
-// any IAM/upstream failure throws so the real cause surfaces.
+// Two lanes, both real Granite Guardian. watsonx.ai leads. The second lane is
+// the same open-weight model family (ibm-granite/granite-guardian-3.3-8b) served
+// by vLLM on our own GPU (workers/granite-guardian), used when watsonx is not
+// configured or fails. Every verdict names the model and lane that produced it.
+//
+// No mock path. When neither lane is configured guardianConfig().configured is
+// false so callers fall through (assessment is best-effort, never fabricated);
+// any upstream failure throws so the real cause surfaces.
 
 import { createHash } from 'node:crypto';
 import { watsonxConfig, watsonxToken } from './watsonx.js';
@@ -111,14 +116,32 @@ export const RISK_NAMES = Object.keys(RISKS);
 // matter when a user is trying to steer an avatar that holds a wallet.
 export const AGENT_INPUT_RISKS = ['jailbreak', 'harm', 'violence', 'unethical_behavior', 'social_bias'];
 
-// Granite Guardian on watsonx.ai. Defaults to the 8B classifier (the size IBM's
+// Granite Guardian on watsonx.ai defaults to the 8B classifier (the size IBM's
 // watsonx usage docs reference); override per deployment with WATSONX_GUARDIAN_MODEL_ID.
+// The self-hosted lane is an OpenAI-compatible vLLM server: GRANITE_GUARDIAN_URL,
+// authenticated with GRANITE_GUARDIAN_API_KEY, or the GPU worker fleet's shared
+// GCP_RECONSTRUCTION_KEY when that is unset.
 export function guardianConfig(env = process.env) {
 	const wx = watsonxConfig(env);
+	const wxModel = env.WATSONX_GUARDIAN_MODEL_ID?.trim() || 'ibm/granite-guardian-3-8b';
+	const local = selfHostedGuardianConfig(env);
 	return {
-		configured: wx.configured,
+		configured: wx.configured || local.configured,
 		wx,
-		model: env.WATSONX_GUARDIAN_MODEL_ID?.trim() || 'ibm/granite-guardian-3-8b',
+		wxModel,
+		local,
+		model: wx.configured ? wxModel : local.model,
+	};
+}
+
+function selfHostedGuardianConfig(env) {
+	const url = env.GRANITE_GUARDIAN_URL?.trim().replace(/\/+$/, '') || '';
+	const apiKey = env.GRANITE_GUARDIAN_API_KEY?.trim() || env.GCP_RECONSTRUCTION_KEY?.trim() || '';
+	return {
+		configured: Boolean(url && apiKey),
+		url,
+		apiKey,
+		model: env.GRANITE_GUARDIAN_MODEL_ID?.trim() || 'ibm-granite/granite-guardian-3.3-8b',
 	};
 }
 
@@ -160,15 +183,22 @@ function toMessages(input) {
 	return [];
 }
 
-// Recover the probability of the unsafe ("Yes") class from watsonx's OpenAI-shaped
-// logprobs, when present. Granite Guardian's first generated token is the verdict,
-// so we read that position's alternatives and softmax Yes vs No. Returns null when
-// the upstream didn't return logprobs (the caller then falls back to the label).
+// Recover the probability of the unsafe ("Yes") class from OpenAI-shaped
+// logprobs, when present. Granite Guardian 3.0 answers with the bare verdict as
+// its first token; 3.3 wraps it as "<score> yes </score>", so the verdict slot is
+// the first generated token that reads yes or no. We softmax that position's
+// Yes vs No alternatives. Returns null when the upstream didn't return logprobs
+// (the caller then falls back to the label).
+function isVerdictToken(token) {
+	const t = String(token || '').trim().toLowerCase();
+	return t === 'yes' || t === 'no';
+}
+
 function probabilityFromLogprobs(choice) {
 	const content = choice?.logprobs?.content;
 	if (!Array.isArray(content) || !content.length) return null;
-	// The verdict token is the first non-whitespace generated token.
-	const slot = content.find((c) => c?.token && c.token.trim()) || content[0];
+	const slot =
+		content.find((c) => isVerdictToken(c?.token)) || content.find((c) => c?.token && c.token.trim()) || content[0];
 	const candidates = [{ token: slot.token, logprob: slot.logprob }, ...(slot.top_logprobs || [])];
 	let lpYes = -Infinity;
 	let lpNo = -Infinity;
@@ -186,13 +216,16 @@ function probabilityFromLogprobs(choice) {
 }
 
 // Parse Granite Guardian's text output into a label and (optional) confidence.
-// The model emits "Yes"/"No"; with the confidence template it appends
-// <confidence>High|Low</confidence>.
+// 3.0 emits "Yes"/"No", with <confidence>High|Low</confidence> appended by the
+// confidence template; 3.3 emits "<score> yes </score>".
 function parseVerdict(text) {
 	const raw = String(text || '').trim();
 	const confMatch = raw.match(/<confidence>\s*(high|low)\s*<\/confidence>/i);
 	const confidence = confMatch ? confMatch[1].toLowerCase() : null;
-	const head = raw.replace(/<confidence>.*?<\/confidence>/is, '').trim().toLowerCase();
+	const scoreMatch = raw.match(/<score>\s*(yes|no)\s*<\/score>/i);
+	const head = scoreMatch
+		? scoreMatch[1].toLowerCase()
+		: raw.replace(/<confidence>.*?<\/confidence>/is, '').trim().toLowerCase();
 	let label = null;
 	if (head.startsWith('yes')) label = 'Yes';
 	else if (head.startsWith('no')) label = 'No';
@@ -202,16 +235,100 @@ function parseVerdict(text) {
 // Assess a single risk over a conversation. Returns a structured verdict — never
 // throws for an ambiguous model reply (label falls back to 'No' only when the
 // model genuinely didn't classify; flagged is then false). Network/auth failures
-// DO throw so the caller can surface or swallow them per context.
+// DO throw so the caller can surface or swallow them per context. watsonx.ai
+// leads; the self-hosted Granite Guardian serves when watsonx is absent or fails.
 export async function assessRisk(cfg, { risk, input, signal } = {}) {
 	const riskKey = RISKS[risk] ? risk : 'harm';
 	const messages = toMessages(input);
 	if (!messages.length) throw new Error('granite-guardian: empty conversation');
 
+	if (cfg.wx?.configured) {
+		try {
+			return await assessRiskWatsonx(cfg, { riskKey, messages, signal });
+		} catch (err) {
+			if (!cfg.local?.configured) throw err;
+			console.warn(`[granite-guardian] watsonx failed, using self-hosted lane: ${err.message}`);
+		}
+	}
+	if (cfg.local?.configured) return assessRiskSelfHosted(cfg.local, { riskKey, messages, signal });
+	throw new Error('granite-guardian: no Granite Guardian lane is configured');
+}
+
+// Turn the model's label and logprobs into the verdict every caller consumes.
+function toVerdict({ riskKey, choice, model, provider }) {
+	const { label, confidence } = parseVerdict(choice?.message?.content);
+	let probability = probabilityFromLogprobs(choice);
+	// Fallback when the upstream omitted logprobs: derive a coarse-but-honest
+	// score from the model's own confidence tag, else from the discrete label.
+	// Marked `estimated` so consumers can distinguish it from a true logprob reading.
+	let estimated = false;
+	if (probability == null) {
+		estimated = true;
+		if (label === 'Yes') probability = confidence === 'low' ? 0.65 : 0.9;
+		else if (label === 'No') probability = confidence === 'low' ? 0.35 : 0.1;
+		else probability = 0.5;
+	}
+	return {
+		risk: riskKey,
+		label: label || 'No',
+		flagged: label === 'Yes',
+		probability,
+		confidence,
+		estimated,
+		model,
+		provider,
+	};
+}
+
+// Self-hosted lane: Granite Guardian 3.3 behind vLLM's OpenAI-compatible API.
+// The model's own chat template renders the judge prompt from guardian_config,
+// so the risk goes in as criteria_id and the conversation goes in unmodified;
+// retrieved context rides as documents, which is where the template expects it.
+async function assessRiskSelfHosted(local, { riskKey, messages, signal }) {
+	const documents = messages
+		.filter((m) => m.role === 'context')
+		.map((m, i) => ({ doc_id: String(i), text: m.content }));
+	const turns = messages.filter((m) => m.role !== 'context');
+	if (!turns.length) throw new Error('granite-guardian: conversation has no user or assistant turn');
+	const body = {
+		model: local.model,
+		messages: turns,
+		chat_template_kwargs: { guardian_config: { criteria_id: riskKey }, think: false },
+		...(documents.length ? { documents } : {}),
+		// "<score> yes </score>" is a handful of tokens.
+		max_tokens: 20,
+		temperature: 0,
+		logprobs: true,
+		top_logprobs: 5,
+	};
+	const res = await fetchUpstream(`${local.url}/v1/chat/completions`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${local.apiKey}`,
+			'Content-Type': 'application/json',
+			Accept: 'application/json',
+		},
+		body: JSON.stringify(body),
+		signal,
+	}, { timeoutMs: 20_000, attempts: 2, retryUnsafe: true, okWhen: () => true, label: 'granite-guardian-self-hosted' });
+	const textBody = await res.text();
+	if (!res.ok) {
+		throw new Error(`granite-guardian ${riskKey} failed on the self-hosted lane (${res.status}): ${textBody.slice(0, 300)}`);
+	}
+	let data;
+	try {
+		data = JSON.parse(textBody);
+	} catch {
+		throw new Error(`granite-guardian ${riskKey}: unparseable self-hosted response`);
+	}
+	return toVerdict({ riskKey, choice: data.choices?.[0], model: data.model || local.model, provider: 'self-hosted' });
+}
+
+async function assessRiskWatsonx(cfg, { riskKey, messages, signal }) {
 	const token = await watsonxToken(cfg.wx);
 	const scope = cfg.wx.projectId ? { project_id: cfg.wx.projectId } : { space_id: cfg.wx.spaceId };
 	const body = {
-		model_id: cfg.model,
+		model_id: cfg.wxModel || cfg.model,
 		...scope,
 		messages: [{ role: 'system', content: guardianSystemPrompt(riskKey) }, ...messages],
 		// Classifier output is one short token plus an optional confidence tag.
@@ -248,29 +365,12 @@ export async function assessRisk(cfg, { risk, input, signal } = {}) {
 		throw new Error(`granite-guardian ${riskKey}: unparseable response`);
 	}
 
-	const choice = data.choices?.[0];
-	const { label, confidence } = parseVerdict(choice?.message?.content);
-	let probability = probabilityFromLogprobs(choice);
-	// Fallback when watsonx omitted logprobs: derive a coarse-but-honest score
-	// from the model's own confidence tag, else from the discrete label. Marked
-	// `estimated` so consumers can distinguish it from a true logprob reading.
-	let estimated = false;
-	if (probability == null) {
-		estimated = true;
-		if (label === 'Yes') probability = confidence === 'low' ? 0.65 : 0.9;
-		else if (label === 'No') probability = confidence === 'low' ? 0.35 : 0.1;
-		else probability = 0.5;
-	}
-
-	return {
-		risk: riskKey,
-		label: label || 'No',
-		flagged: label === 'Yes',
-		probability,
-		confidence,
-		estimated,
-		model: data.model_id || cfg.model,
-	};
+	return toVerdict({
+		riskKey,
+		choice: data.choices?.[0],
+		model: data.model_id || cfg.wxModel || cfg.model,
+		provider: 'watsonx',
+	});
 }
 
 // Assess several risks over the same conversation, concurrently. Each risk is an
