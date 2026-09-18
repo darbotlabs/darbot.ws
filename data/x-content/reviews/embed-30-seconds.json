@@ -1,0 +1,151 @@
+{
+	"id": "embed-30-seconds",
+	"contentHash": "be90c1dfc0897669bbe988d32d5920da1cf5b78427ffe49f4acd45a41f850d19",
+	"reviewedAt": "2026-09-18T08:48:05.659Z",
+	"passed": false,
+	"blockers": [
+		"editor verdict is revise"
+	],
+	"texts": [
+		"Put a living 3D agent on your website in 30 seconds.\n\nTwo lines of HTML. No build step, no npm install.\n\nPaste, refresh, and a 3D character is standing in the corner of your page, greeting visitors and answering questions.\n\nAs easy as embedding a video.\n\nthree.ws/tutorials/embed-in-30-seconds",
+		"How it works:\n\nBuild your agent at three.ws/create. Pick a character, give it a name and a personality.\n\nCopy its ID into the two lines, and refresh your page.\n\nIt animates, greets and chats out of the box. Works in plain HTML, React and Next.js."
+	],
+	"lint": [],
+	"verification": {
+		"ok": true,
+		"checks": [
+			{
+				"claim": "in 30 seconds",
+				"kind": "evidence:page",
+				"target": "https://three.ws/tutorials/embed-in-30-seconds",
+				"ok": true,
+				"detail": "live page shows \"Embed in 30 seconds\""
+			},
+			{
+				"claim": "Two lines of HTML",
+				"kind": "evidence:file",
+				"target": "docs/tutorials/embed-in-30-seconds.md",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"claim": "Two lines of HTML",
+				"kind": "evidence:file",
+				"target": "docs/tutorials/embed-in-30-seconds.md",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"claim": "No build step, no npm install",
+				"kind": "evidence:file",
+				"target": "docs/tutorials/embed-in-30-seconds.md",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"claim": "Works in plain HTML, React and Next.js",
+				"kind": "evidence:page",
+				"target": "https://three.ws/tutorials/embed-on-website",
+				"ok": true,
+				"detail": "live page shows \"Next.js\""
+			},
+			{
+				"claim": "Works in plain HTML, React and Next.js",
+				"kind": "evidence:page",
+				"target": "https://three.ws/tutorials/embed-on-website",
+				"ok": true,
+				"detail": "live page shows \"React\""
+			},
+			{
+				"claim": "Works in plain HTML, React and Next.js",
+				"kind": "evidence:file",
+				"target": "docs/tutorials/embed-on-website.md",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"claim": "It animates, greets and chats out of the box",
+				"kind": "evidence:file",
+				"target": "docs/tutorials/embed-in-30-seconds.md",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the embed runtime is served",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the tutorial page is live",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
+				"kind": "link",
+				"target": "https://three.ws/tutorials/embed-in-30-seconds",
+				"ok": true,
+				"detail": "HTTP 200"
+			},
+			{
+				"kind": "link",
+				"target": "https://three.ws/create",
+				"ok": true,
+				"detail": "HTTP 200"
+			}
+		]
+	},
+	"editor": {
+		"verdict": "revise",
+		"scores": {
+			"accuracy": 4,
+			"clarity": 5,
+			"specificity": 4,
+			"voice": 4,
+			"professionalism": 5,
+			"visual": 3
+		},
+		"issues": [
+			{
+				"severity": "major",
+				"area": "visual",
+				"quote": "free and open source",
+				"problem": "The image footer states 'No build step · no npm install · free and open source'. Nothing in the verification results or the live page text quoted by a passing check supports 'free and open source'. A claim that appears only inside the image is still a claim, and it is unverified.",
+				"fix": "Recapture the card with the footer reading 'No build step · no npm install' only, or keep 'free and open source' only if a passing check verifies it (e.g. a probes/docs page stating the embed runtime is open source)."
+			},
+			{
+				"severity": "minor",
+				"area": "specificity",
+				"quote": "living 3D agent",
+				"problem": "'Living' is an adjective, not a mechanism; the same post already proves the claim with 'Two lines of HTML', which is stronger.",
+				"fix": "Replace with 'Put a 3D agent on your website in 30 seconds.' The mechanism carries the line on its own."
+			},
+			{
+				"severity": "minor",
+				"area": "voice",
+				"quote": "As easy as embedding a video.",
+				"problem": "A standalone simile line drifts toward copywriting; the measurable fact (two lines, no build step) is already stated.",
+				"fix": "Drop the line or fold it into the prior sentence as 'Paste, refresh, and a 3D character is standing in the corner of your page, greeting visitors and answering questions.' The post survives without it."
+			}
+		],
+		"rewrite": {
+			"posts": [
+				"Put a 3D agent on your website in 30 seconds.\n\nTwo lines of HTML. No build step, no npm install.\n\nPaste, refresh, and a 3D character is standing in the corner of your page, greeting visitors and answering questions.\n\nthree.ws/tutorials/embed-in-30-seconds",
+				"How it works:\n\nBuild your agent at three.ws/create. Pick a character, give it a name and a personality.\n\nCopy its ID into the two lines, and refresh your page.\n\nIt animates, greets and chats out of the box. Works in plain HTML, React and Next.js."
+			],
+			"altText": [
+				"A three.ws card reading 'A 3D agent on your website. Two lines.' above the two HTML tags that do it, beside a browser window showing a bookshop's site with a 3D character standing in the bottom corner offering to say hi"
+			]
+		},
+		"summary": "The copy is accurate, verified, in voice, and within length; every factual line traces to a passing check. The one real problem is the image footer claiming 'free and open source' with no verification behind it: recapture the card with that footer trimmed (or verify the claim) before shipping.",
+		"model": "nvidia:moonshotai/kimi-k3",
+		"fallbacks": [
+			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",
+			"openrouter 402: {\"error\":{\"message\":\"Insufficient credits. Add more using https://openrouter.ai/settings/credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits at https://openr",
+			"openai 429: {\n    \"error\": {\n        \"message\": \"Your account is not active, please check your billing details on our website.\",\n        \"type\": \"billing_not_active\",\n        \"param\": null,\n        \"code\": \"billi"
+		],
+		"rewriteFindings": []
+	},
+	"editorError": null
+}

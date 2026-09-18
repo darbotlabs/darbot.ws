@@ -500,6 +500,118 @@
 			],
 			"mentions": {},
 			"tier": 2
+		},
+		{
+			"id": "embed-30-seconds",
+			"status": "review",
+			"kind": "post",
+			"tier": 2,
+			"lane": "tutorial",
+			"pattern": "how-to",
+			"notBefore": "2026-09-18T08:00:00Z",
+			"source": {
+				"path": "docs/tutorials/embed-in-30-seconds.md"
+			},
+			"posts": [
+				{
+					"text": "Put a living 3D agent on your website in 30 seconds.\n\nTwo lines of HTML. No build step, no npm install.\n\nPaste, refresh, and a 3D character is standing in the corner of your page, greeting visitors and answering questions.\n\nAs easy as embedding a video.\n\nthree.ws/tutorials/embed-in-30-seconds",
+					"textFrom": "docs/announcements/embed-30-seconds.post.txt",
+					"media": [
+						{
+							"path": "public/x-media/embed-30-seconds/card.png",
+							"alt": "A three.ws card reading 'A 3D agent on your website. Two lines.' above the two HTML tags that do it, beside a browser window showing a bookshop's site with a 3D character standing in the bottom corner offering to say hi"
+						}
+					]
+				},
+				{
+					"text": "How it works:\n\nBuild your agent at three.ws/create. Pick a character, give it a name and a personality.\n\nCopy its ID into the two lines, and refresh your page.\n\nIt animates, greets and chats out of the box. Works in plain HTML, React and Next.js."
+				}
+			],
+			"claims": [
+				{
+					"says": "in 30 seconds",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/tutorials/embed-in-30-seconds",
+							"contains": "Embed in 30 seconds"
+						}
+					]
+				},
+				{
+					"says": "Two lines of HTML",
+					"evidence": [
+						{
+							"type": "file",
+							"path": "docs/tutorials/embed-in-30-seconds.md",
+							"contains": "<agent-3d agent-id=\"YOUR_AGENT_ID\" mode=\"floating\"></agent-3d>"
+						},
+						{
+							"type": "file",
+							"path": "docs/tutorials/embed-in-30-seconds.md",
+							"contains": "One script tag, one `<agent-3d>` tag, one working 3D agent."
+						}
+					]
+				},
+				{
+					"says": "No build step, no npm install",
+					"evidence": [
+						{
+							"type": "file",
+							"path": "docs/tutorials/embed-in-30-seconds.md",
+							"contains": "No build step, no npm install, no framework adapter"
+						}
+					]
+				},
+				{
+					"says": "Works in plain HTML, React and Next.js",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/tutorials/embed-on-website",
+							"contains": "Next.js"
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/tutorials/embed-on-website",
+							"contains": "React"
+						},
+						{
+							"type": "file",
+							"path": "docs/tutorials/embed-on-website.md",
+							"contains": "React"
+						}
+					]
+				},
+				{
+					"says": "It animates, greets and chats out of the box",
+					"evidence": [
+						{
+							"type": "file",
+							"path": "docs/tutorials/embed-in-30-seconds.md",
+							"contains": "A floating widget that animates, greets, and chats out of the box"
+						}
+					]
+				}
+			],
+			"probes": [
+				{
+					"type": "api",
+					"name": "the embed runtime is served",
+					"url": "https://three.ws/agent-3d/latest/agent-3d.js",
+					"expect": {
+						"status": 200
+					}
+				},
+				{
+					"type": "api",
+					"name": "the tutorial page is live",
+					"url": "https://three.ws/tutorials/embed-in-30-seconds",
+					"expect": {
+						"contains": "Embed in 30 seconds"
+					}
+				}
+			]
 		}
 	]
 }
