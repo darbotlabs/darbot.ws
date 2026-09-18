@@ -7,7 +7,7 @@
 		"  src=\"https://three.ws/agent-3d/latest/agent-3d.js\"></script>",
 		"<agent-3d agent-id=\"YOUR_AGENT_ID\" mode=\"floating\"></agent-3d>"
 	],
-	"foot": "No build step \u00b7 no npm install \u00b7 free and open source",
+	"foot": "No build step · no npm install · plain HTML, React, Next.js",
 	"frame": "browser",
 	"shot": "public/x-media/embed-30-seconds/demo-page.png",
 	"label": "yoursite.com"

@@ -303,7 +303,7 @@
 		},
 		{
 			"id": "three-token-mcp",
-			"status": "approved",
+			"status": "paused",
 			"kind": "post",
 			"lane": "token",
 			"pattern": "mechanism",
@@ -503,7 +503,7 @@
 		},
 		{
 			"id": "embed-30-seconds",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"tier": 2,
 			"lane": "tutorial",
