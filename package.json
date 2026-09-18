@@ -547,7 +547,7 @@
 		"@pump-fun/pump-sdk": "^2.0.0",
 		"@pump-fun/pump-swap-sdk": "^1.20.0",
 		"@pythnetwork/hermes-client": "^3.1.0",
-		"@ricky0123/vad-web": "^0.0.30",
+		"@ricky0123/vad-web": "^0.0.31",
 		"@scure/base": "^1.2.6",
 		"@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.3.0",
 		"@solana-program/compute-budget": "^0.15.0",
