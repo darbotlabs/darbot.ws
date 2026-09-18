@@ -61,11 +61,28 @@ def png_data_uri(color=(20, 20, 20, 255), size=(24, 24)) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+# Libraries the NVIDIA container runtime mounts into a GPU instance. The image
+# cannot ship them, so their absence on the CPU-only builder is expected.
+_GPU_DRIVER_LIBS = ("libcuda.so", "libnvidia", "libnvrtc")
+
+
+def _is_gpu_driver_absence(exc: BaseException) -> bool:
+    text = str(exc)
+    if "cannot open shared object file" in text:
+        return any(lib in text for lib in _GPU_DRIVER_LIBS)
+    lowered = text.lower()
+    return "cuda" in lowered or "nvidia driver" in lowered or "no gpu" in lowered
+
+
 def main() -> int:
     # 1. The vendored TRELLIS tree, including the FlexiCubes submodule the mesh
     #    extractor imports. A ModuleNotFoundError here is the packaging bug this
-    #    check exists for; any other exception is a GPU-less builder refusing to
-    #    initialize a CUDA-backed module, which is not what is under test.
+    #    check exists for, and so is a missing system shared library: on
+    #    2026-09-18 an unpinned open3d resolved to a wheel that dlopens
+    #    libusb-1.0 and libEGL, this gate filed the ImportError under "no GPU"
+    #    and skipped it, and the revision latched a load_error on every boot.
+    #    Only a failure that names the GPU driver itself (which the builder
+    #    genuinely lacks and Cloud Run injects at runtime) is skipped.
     try:
         from trellis.pipelines import TrellisImageTo3DPipeline  # noqa: F401
         from trellis.representations.mesh.flexicubes.flexicubes import FlexiCubes  # noqa: F401
@@ -73,8 +90,11 @@ def main() -> int:
         check("trellis import chain resolves", True)
     except ModuleNotFoundError as exc:
         check("trellis import chain resolves", False, str(exc))
-    except Exception as exc:  # noqa: BLE001 - no GPU on the builder, see above
-        print(f"skip  trellis import chain (no GPU on this host): {type(exc).__name__}: {exc}")
+    except Exception as exc:  # noqa: BLE001 - classified below
+        if _is_gpu_driver_absence(exc):
+            print(f"skip  trellis import chain (no GPU on this host): {type(exc).__name__}: {exc}")
+        else:
+            check("trellis import chain resolves", False, f"{type(exc).__name__}: {exc}")
 
     # 2. The service module itself.
     import main as app_module

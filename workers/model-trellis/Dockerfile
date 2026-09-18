@@ -27,10 +27,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # TRELLIS repo lives here and is imported off PYTHONPATH (not a pip package).
     PYTHONPATH=/app/TRELLIS
 
+# libusb-1.0-0 and libegl1: open3d (imported by TRELLIS's pipelines package)
+# dlopens both at import time. Without them the model load dies with
+# "libusb-1.0.so.0: cannot open shared object file" and the revision never serves.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.10 python3.10-dev python3-pip \
         git curl wget build-essential ninja-build \
         libgl1 libglib2.0-0 libgomp1 \
+        libusb-1.0-0 libegl1 \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.10 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.10 /usr/bin/python \
@@ -44,11 +48,13 @@ RUN pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.py
 # 2026-07-16 rebuild resolved a version whose CLIP modeling imports DTensor from
 # torch.distributed.tensor (public only since torch 2.5), so the pipeline failed
 # to load at boot and every inference on the revision failed. 4.46.3 is the
-# TRELLIS-era release verified against torch 2.4.0/cu121.
+# TRELLIS-era release verified against torch 2.4.0/cu121. open3d is pinned for
+# the same reason: an unpinned resolve on 2026-09-18 pulled a wheel with new
+# system-library needs (see the apt layer above) and the load failed at boot.
 RUN pip install \
         pillow imageio imageio-ffmpeg tqdm easydict opencv-python-headless \
-        scipy ninja rembg onnxruntime trimesh open3d xatlas pyvista pymeshfix \
-        igraph "transformers==4.46.3" \
+        scipy ninja rembg onnxruntime trimesh xatlas pyvista pymeshfix \
+        igraph "transformers==4.46.3" "open3d==0.20.0" \
     && pip install git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
 # ── 3. setup.sh --xformers / --spconv / --kaolin (prebuilt wheels) ────────────
