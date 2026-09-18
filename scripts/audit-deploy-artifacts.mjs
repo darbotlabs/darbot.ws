@@ -390,6 +390,9 @@ if (isMain) {
 			console.error(`  ${d.path}  locked ${d.locked}, ${d.kind === 'missing' ? 'not installed' : `installed ${d.installed}`}`);
 		}
 		if (drift.length > 15) console.error(`  ... and ${drift.length - 15} more`);
+		console.error(
+			'  In a deploy worktree node_modules is hardlinked to the shared tree, so do not run npm install or npm ci there: it writes through the links. The shared tree is what drifted (often another agent installing against an uncommitted lockfile). Restore a missing package in the worktree only: `npm pack <name>@<locked version> --pack-destination /tmp`, then untar it into node_modules/<name> with --strip-components=1.',
+		);
 	}
 
 	const elapsed = ((Date.now() - start) / 1000).toFixed(1);
