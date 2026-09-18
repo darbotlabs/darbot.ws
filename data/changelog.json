@@ -3,6 +3,16 @@
 	"entries": [
 		{
 			"date": "2026-09-18",
+			"title": "The embedded 3D agent is readable on light websites and quiet in the console",
+			"summary": "Two fixes for anyone who has put a three.ws agent on their own site with the two-line embed. The floating widget had no background of its own, so on a light page its white button labels and name vanished into the page; it now has its own dark panel, and the suggestion buttons carry a solid ground, so it reads the same on any site. You can still ask for a transparent or light panel with the background attribute. The embed also made two background requests that browsers blocked on every site but ours, logging errors in the host page's console; those requests now succeed, and only the public, signed-out answer is ever shared across sites.",
+			"tags": [
+				"fix",
+				"sdk"
+			],
+			"link": "/tutorials/embed-in-30-seconds"
+		},
+		{
+			"date": "2026-09-18",
 			"title": "Choose your chart everywhere a coin is charted, now including DEXTools",
 			"summary": "Every place three.ws draws a coin's price chart now lets you switch to the chart you trust. The Trade Terminal at /trades and Mission Control used to show only the platform's own live candles; both now have a source bar with DexScreener, Birdeye, GMGN, DEXTools and GeckoTerminal one click away, the same choice already offered on coin pages and launch pages. DEXTools is new on all four. Your pick is remembered and follows you from coin to coin, the bar works from the keyboard with the arrow keys, and each chart comes with a link that opens the same market on the provider's own site. If a provider cannot draw a coin yet, or its chart is blocked by your browser or network, you get a plain explanation with a retry and a working alternative instead of an empty box.",
 			"tags": [
