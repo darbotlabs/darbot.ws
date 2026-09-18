@@ -234,6 +234,78 @@ These fit the stack but offer no distribution, so they never outrank a row above
 | 1Password for Open Source | Limited to non-commercial projects |
 | Mem0 startup program | New users only, three months of Pro, no co-marketing; agent memory is self-hosted |
 
+## From the GitHub and npm sweep (2026-09-18)
+
+A read-only sweep of GitHub and npm for directories, upstream showcases, and integration
+registries that are **not** already tracked here, in [`opportunities.csv`](./opportunities.csv),
+[the submission kit](./submissions/README.md), or
+[the partnership pipeline](../../docs/partners/opportunities.md). Every row was checked on
+2026-09-18: three.ws and `nirholas` are absent from each target, and each intake is proved by
+a community pull request the maintainers merged recently.
+
+Two live facts decide which URL each submission uses:
+
+- `https://three.ws/api/mcp-studio` answers MCP `initialize` with 200 and needs no auth. Remote
+  directories get this URL. `https://three.ws/api/mcp` is OAuth-gated and answers 401 to an
+  anonymous probe.
+- `@three-ws/mcp-server` 1.2.3 (Apache-2.0) ships the `3d-agent-mcp` bin, so stdio and `npx`
+  directories get `npx -y @three-ws/mcp-server`.
+
+Keep every entry below to the free 3D lanes (Forge, `<agent-3d>`, Materialize). An entry that
+names a payment rail or token crosses the commit gate on other crypto projects and needs the
+owner's approval first.
+
+### Lists and directories (a pull request, no build)
+
+| Target | Size and activity | Proof the intake works | The entry |
+| --- | --- | --- | --- |
+| [TensorBlock/awesome-mcp-servers](https://github.com/TensorBlock/awesome-mcp-servers) | 856 stars, pushed 2026-09-17 | [#2463](https://github.com/TensorBlock/awesome-mcp-servers/pull/2463) merged 2026-09-17 | `@three-ws/mcp-server` in the 3D or creative category |
+| [toolsdk-ai/toolsdk-mcp-registry](https://github.com/toolsdk-ai/toolsdk-mcp-registry) | 186 stars, pushed 2026-09-15 | [#518](https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/518), a remote server, merged 2026-09-15 | JSON entry for the `mcp-studio` remote, per its `docs/CONTRIBUTING.md` |
+| [Docker MCP Catalog](https://github.com/docker/mcp-registry) | 554 stars, pushed 2026-09-18 | [#661](https://github.com/docker/mcp-registry/pull/661) merged 2026-04-03; recent merges are mostly updates | A remote-server `server.yaml` (no Dockerfile needed; Apache-2.0 qualifies). Reaches Docker Desktop MCP Toolkit users |
+| [Goose extensions directory](https://github.com/aaif-goose/goose) (`documentation/static/servers.json`; the repo moved from `block/goose`) | 54,416 stars, pushed 2026-09-18 | [#10638](https://github.com/aaif-goose/goose/pull/10638) added Glif, a generative-media MCP, on 2026-07-29 | `npx -y @three-ws/mcp-server` |
+| [kyrolabs/awesome-agents](https://github.com/kyrolabs/awesome-agents) | 2,823 stars, pushed 2026-09-18 | [#766](https://github.com/kyrolabs/awesome-agents/pull/766) merged 2026-09-13 | `<agent-3d>` under Frameworks or Tools |
+| [Jenqyang/Awesome-AI-Agents](https://github.com/Jenqyang/Awesome-AI-Agents) | 1,241 stars, pushed 2026-09-18 | [#498](https://github.com/Jenqyang/Awesome-AI-Agents/pull/498) merged 2026-09-18 | One line under Applications or Tools |
+| [DasterProkio/awesome-ai-companion](https://github.com/DasterProkio/awesome-ai-companion) | 705 stars, pushed 2026-09-18 | [#19](https://github.com/DasterProkio/awesome-ai-companion/pull/19) merged 2026-09-13 | `<agent-3d>` under "Visual Presence & VTuber-Style Companions", which is exactly an embodied avatar for an AI companion |
+| [caramaschiHG/awesome-ai-agents-2026](https://github.com/caramaschiHG/awesome-ai-agents-2026) | 1,830 stars, pushed 2026-06-10 | [#93](https://github.com/caramaschiHG/awesome-ai-agents-2026/pull/93) merged 2026-04-02; intake has slowed | One entry. Lower priority |
+| [YuzeHao2023/Awesome-MCP-Servers](https://github.com/YuzeHao2023/Awesome-MCP-Servers) | 1,065 stars, pushed 2026-08-07 | [#132](https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/132) merged 2026-04-01 | `@three-ws/mcp-server`. Lower priority |
+| [three.js forum Showcase](https://discourse.threejs.org/c/showcase/7) | 24 new showcase topics since 2026-09-01 | Open self-post; forum search for three.ws returns nothing | A Forge or `<agent-3d>` showcase thread. This is a post, so it is owner-gated |
+
+### Upstream dependencies that feature their users
+
+Both are libraries the product already runs in production, so the entry is a true statement
+about real use, and each README asks for exactly this pull request.
+
+| Dependency | Where we use it | The showcase | Proof |
+| --- | --- | --- | --- |
+| [`manifold-3d`](https://github.com/elalish/manifold) (2,279 stars) | `api/_lib/print/manifold-kernel.js`, the manifold check, volume, and repair behind `/materialize` | The README users table, next to Blender, Godot, and Babylon.js: "Please feel free to send a PR to update this list with your own project" | [#1768](https://github.com/elalish/manifold/pull/1768) merged 2026-07-02 |
+| [`@ricky0123/vad-web`](https://github.com/ricky0123/vad) (2,056 stars) | `src/voice/vad.js`, voice activity detection for talking to an avatar | "Cool projects using this library" has a single entry, so ours would be the second | Community PR [#263](https://github.com/ricky0123/vad/pull/263) merged 2026-09-11 |
+
+### Integration registries (build first, then submit)
+
+Each needs a small package or extension before the listing, and each has a same-shaped
+precedent that was accepted.
+
+| Registry | What to build | Precedent |
+| --- | --- | --- |
+| [Vercel AI SDK tools registry](https://github.com/vercel/ai) (`content/tools-registry/registry.ts`, 26,820 stars) | An AI SDK `tool()` export for the no-key Forge text-to-3D lane, then a PR per `contributing/add-new-tool-to-registry.md`. It lists on ai-sdk.dev | [#14992](https://github.com/vercel/ai/pull/14992) merged 2026-06-03 |
+| [LangChain JS tool integrations](https://github.com/langchain-ai/docs) | A `langchain-three-ws` npm package, then a docs PR (`packages.yml`, `integration_external_docs.yaml`, `tools/index.mdx`) | [#5632](https://github.com/langchain-ai/docs/pull/5632), a generative-media tool, merged 2026-09-02 |
+| [Zed MCP extensions](https://github.com/zed-industries/extensions) (1,890 stars) | A thin context-server extension that runs `npx @three-ws/mcp-server` | [#6945](https://github.com/zed-industries/extensions/pull/6945) merged 2026-07-27; `pollinations-mcp`, a generative-media analog, is already listed |
+| [Dify plugin marketplace](https://github.com/langgenius/dify-plugins) (553 stars) | A packaged Forge text-to-3D tool plugin. Dify also speaks MCP natively, so this is optional reach, not access | [#3112](https://github.com/langgenius/dify-plugins/pull/3112) merged 2026-09-18 |
+| [LiveKit Agents avatar plugins](https://github.com/livekit/agents) (14,250 stars) | **Design decision first.** We already ship `livekit-client` (`src/runtime/livekit-voice.js`), but every accepted avatar plugin publishes server-rendered video into the room and ours renders in the browser. Either a server render lane, or a docs ask to list client-rendered avatars. Pipecat's `community-integrations.mdx` has the same shape | [#7216](https://github.com/livekit/agents/pull/7216), Synthesia's avatar plugin, merged |
+| n8n verified community node | A node package in the Creator Portal. **Blocked by our own rule:** verification requires publishing through a GitHub Actions workflow with npm provenance, and this repo does not use GitHub Actions. An unverified node can still be self-installed. Owner decides or skips | Submission docs at `docs.n8n.io/integrations/creating-nodes/deploy/submit-community-nodes/` |
+
+### Checked and dropped
+
+`modelcontextprotocol/servers` retired its third-party list for the registry on 2026-04-14.
+`cline/mcp-marketplace` has over 1,000 open submissions, no visible approvals, and no push
+since 2025-06-24. `e2b-dev/awesome-ai-sdks` has merged no community entry since 2023,
+`mahseema/awesome-ai-tools` since 2025-08, `filipecalegario/awesome-generative-ai` since
+2025-12, and `aframevr/awesome-aframe` since 2017. The Colyseus showcase has added nothing
+since 2024. `moeru-ai/airi` takes VRM and Live2D only, and we have no VRM export. Mastra and
+the OpenAI Agents SDK have no community listing surface. glTF-Transform, three-mesh-bvh,
+Spark, and Rapier have no users showcase. `Shubhamsaboo/awesome-llm-apps` is owner-authored
+tutorials. `cursor.directory` answered 429 and stays unverified.
+
 ## High-value editorial routes
 
 These are earned after a measurable launch, not submitted as generic company profiles:

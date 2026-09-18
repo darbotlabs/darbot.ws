@@ -148,6 +148,9 @@ The full sweep of all 187 CloudCredits programs, run on 2026-09-18, is in the
 [opportunity register](./opportunities.md#from-the-cloudcredits-sweep-2026-09-18): five
 programs pass this filter (PostHog, Codex for Open Source, Microsoft for Startups, Cerebras,
 Deepgram), three are credit-only, and nine are ruled out with the reason recorded.
+The companion GitHub and npm sweep of the same day, covering MCP and agent directories,
+upstream showcases, and integration registries, is in the
+[same register](./opportunities.md#from-the-github-and-npm-sweep-2026-09-18).
 
 Do not migrate infrastructure to chase credits. Score the value of customer access,
 technical support, migration cost, lock-in, and engineering distraction separately.
