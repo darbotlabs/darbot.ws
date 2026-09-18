@@ -899,3 +899,208 @@ describe('okx_chat_bot subsystem identity fields', () => {
 		expect(s.hostDurable).toBeNull();
 	});
 });
+
+// ── single-writer lease ─────────────────────────────────────────────────────
+//
+// The bot identity must never have two writers, and Cloud Run's max-instances is
+// per revision, so a rollout overlaps the old and new instance. These pin the
+// lease that sequences that overlap. The store below reproduces the SQL
+// contract of sqlLeaseStore (conditional upsert on holder / released / expiry,
+// all against one clock) so the state machine is exercised against the same
+// semantics the database enforces.
+
+import { createLease, legacyWriterBlocks, sqlLeaseStore } from '../workers/okx-chat-bot/lease.js';
+
+function memoryLeaseStore(clock) {
+	let row = null;
+	let beat = null;
+	return {
+		setBeat(b) {
+			beat = b;
+		},
+		row: () => row,
+		async acquire(holder, ttlSec, meta) {
+			const free = !row || row.holder === holder || row.released || clock.now - row.at > ttlSec * 1000;
+			if (free) {
+				row = { ...meta, holder, at: clock.now, released: false };
+				return { acquired: true };
+			}
+			return { acquired: false, holder: row.holder, host: row.host, ageSec: (clock.now - row.at) / 1000 };
+		},
+		async renew(holder) {
+			if (!row || row.holder !== holder || row.released) return false;
+			row.at = clock.now;
+			return true;
+		},
+		async release(holder) {
+			if (row && row.holder === holder) row = { ...row, released: true, at: clock.now };
+		},
+		async hostBeat() {
+			return beat ? { ...beat, ageSec: (clock.now - beat.at) / 1000 } : null;
+		},
+	};
+}
+
+function leaseFor(store, clock, host, extra = {}) {
+	return createLease({
+		store,
+		host,
+		holder: `${host}#test`,
+		ttlMs: 120_000,
+		renewMs: 20_000,
+		pollMs: 5_000,
+		legacyStaleMs: 90_000,
+		now: () => clock.now,
+		// Waiting advances the shared clock, so a blocked acquire() observes time
+		// passing exactly as a real poll loop would.
+		sleep: async (ms) => {
+			clock.now += ms;
+			clock.onTick?.();
+		},
+		...extra,
+	});
+}
+
+describe('okx-chat-bot single-writer lease', () => {
+	it('lets the first host take a free lease immediately', async () => {
+		const clock = { now: 1_000_000 };
+		const store = memoryLeaseStore(clock);
+		const a = leaseFor(store, clock, 'cloudrun:okx-chat-bot (rev-2)');
+		expect(await a.acquire()).toBe(true);
+		expect(a.state.held).toBe(true);
+		expect(a.fresh()).toBe(true);
+	});
+
+	it('makes a rollout wait for the old instance, then hands over on release', async () => {
+		const clock = { now: 1_000_000 };
+		const store = memoryLeaseStore(clock);
+		const old = leaseFor(store, clock, 'cloudrun:okx-chat-bot (rev-1)');
+		await old.acquire();
+		const next = leaseFor(store, clock, 'cloudrun:okx-chat-bot (rev-2)');
+		const waits = [];
+		// The old instance keeps renewing for 60s, then shuts down and releases.
+		clock.onTick = () => {
+			if (clock.now - 1_000_000 < 60_000) void old.renewOnce();
+			else if (old.state.held) void old.release();
+		};
+		expect(await next.acquire({ onWait: (r) => waits.push(r) })).toBe(true);
+		expect(waits[0]).toMatch(/rev-1\) holds the lease/);
+		// Handed over on the release, well before the 120s TTL would have lapsed.
+		expect(clock.now - 1_000_000).toBeLessThan(120_000);
+		expect(store.row().holder).toBe('cloudrun:okx-chat-bot (rev-2)#test');
+	});
+
+	it('waits out the TTL for a host that died holding the lease', async () => {
+		const clock = { now: 1_000_000 };
+		const store = memoryLeaseStore(clock);
+		await leaseFor(store, clock, 'cloudrun:okx-chat-bot (rev-1)').acquire();
+		const next = leaseFor(store, clock, 'cloudrun:okx-chat-bot (rev-2)');
+		expect(await next.acquire()).toBe(true);
+		expect(clock.now - 1_000_000).toBeGreaterThan(120_000);
+	});
+
+	it('never lets two hosts hold it at once', async () => {
+		const clock = { now: 1_000_000 };
+		const store = memoryLeaseStore(clock);
+		const a = leaseFor(store, clock, 'host-a');
+		const b = leaseFor(store, clock, 'host-b');
+		await a.acquire();
+		const ctl = new AbortController();
+		clock.onTick = () => {
+			void a.renewOnce();
+			if (clock.now - 1_000_000 > 600_000) ctl.abort();
+		};
+		expect(await b.acquire({ signal: ctl.signal })).toBe(false);
+		expect(a.state.held).toBe(true);
+		expect(b.state.held).toBe(false);
+	});
+
+	it('waits for a host that predates the lease while its heartbeat is fresh', async () => {
+		const clock = { now: 1_000_000 };
+		const store = memoryLeaseStore(clock);
+		// The live revision today: beats every 30s, carries no leaseHolder.
+		store.setBeat({ host: 'cloudrun:okx-chat-bot (okx-chat-bot-00001-926)', leaseAware: false, at: clock.now });
+		const next = leaseFor(store, clock, 'cloudrun:okx-chat-bot (okx-chat-bot-00002-abc)');
+		const waits = [];
+		// It keeps beating for 45s, then Cloud Run stops it.
+		clock.onTick = () => {
+			if (clock.now - 1_000_000 < 45_000) store.setBeat({ host: 'cloudrun:okx-chat-bot (okx-chat-bot-00001-926)', leaseAware: false, at: clock.now });
+		};
+		expect(await next.acquire({ onWait: (r) => waits.push(r) })).toBe(true);
+		expect(waits[0]).toMatch(/00001-926\) predates the single-writer lease/);
+		// Its last beat landed at 40s; the lease is taken only once that is 90s stale.
+		expect(clock.now - 1_000_000).toBe(40_000 + 90_000);
+	});
+
+	it('ignores a heartbeat that cannot be a second writer', () => {
+		const opts = { selfHost: 'cloudrun:okx-chat-bot (rev-2)', staleSec: 90 };
+		expect(legacyWriterBlocks(null, opts)).toBeNull();
+		expect(legacyWriterBlocks({ host: 'cloudrun:okx-chat-bot (rev-1)', leaseAware: true, ageSec: 5 }, opts)).toBeNull();
+		expect(legacyWriterBlocks({ host: 'cloudrun:okx-chat-bot (rev-2)', leaseAware: false, ageSec: 5 }, opts)).toBeNull();
+		expect(legacyWriterBlocks({ host: 'cloudrun:okx-chat-bot (rev-1)', leaseAware: false, ageSec: 91 }, opts)).toBeNull();
+		expect(legacyWriterBlocks({ host: 'cloudrun:okx-chat-bot (rev-1)', leaseAware: false, ageSec: 30 }, opts)).toMatch(/predates/);
+	});
+
+	it('reports a lost lease once and stops calling itself fresh', async () => {
+		const clock = { now: 1_000_000 };
+		const store = memoryLeaseStore(clock);
+		const lost = [];
+		const a = leaseFor(store, clock, 'host-a', { onLost: (r) => lost.push(r) });
+		await a.acquire();
+		// Another host took it (the TTL lapsed while this one was frozen).
+		clock.now += 130_000;
+		await leaseFor(store, clock, 'host-b').acquire();
+		await a.renewOnce();
+		await a.renewOnce();
+		expect(lost).toEqual(['another host holds the lease']);
+		expect(a.fresh()).toBe(false);
+	});
+
+	it('fences itself before an unrenewable lease can expire under it', async () => {
+		const clock = { now: 1_000_000 };
+		const lost = [];
+		const store = memoryLeaseStore(clock);
+		const a = leaseFor(store, clock, 'host-a', { onLost: (r) => lost.push(r) });
+		await a.acquire();
+		store.renew = async () => {
+			throw new Error('database unreachable');
+		};
+		clock.now += 60_000;
+		await a.renewOnce();
+		expect(lost).toEqual([]);
+		// Not fresh any more once the fencing margin (ttl - renew) has passed.
+		clock.now += 40_000;
+		expect(a.fresh()).toBe(false);
+		await a.renewOnce();
+		expect(lost).toHaveLength(1);
+		expect(lost[0]).toMatch(/could not renew for 100s/);
+	});
+
+	it('refuses a renewal cadence that could let the lease lapse between renewals', () => {
+		const clock = { now: 0 };
+		expect(() => leaseFor(memoryLeaseStore(clock), clock, 'h', { renewMs: 70_000 })).toThrow(/under half/);
+	});
+
+	it('drives the lease with conditional statements against bot_heartbeat', async () => {
+		const calls = [];
+		const sql = async (strings, ...values) => {
+			calls.push({ text: strings.join('?'), values });
+			return calls.length === 1 ? [{ worker: 'okx-chat-bot:lease' }] : [];
+		};
+		const store = sqlLeaseStore(sql);
+		expect(await store.acquire('h#1', 120, { host: 'h' })).toEqual({ acquired: true });
+		expect(calls[0].text).toMatch(/ON CONFLICT \(worker\) DO UPDATE/);
+		expect(calls[0].text).toMatch(/meta->>'holder' = \?/);
+		expect(calls[0].text).toMatch(/meta->>'released' = 'true'/);
+		expect(calls[0].text).toMatch(/last_beat_at < now\(\)/);
+		expect(calls[0].values).toContain('okx-chat-bot:lease');
+		expect(JSON.parse(calls[0].values[1])).toEqual({ host: 'h', holder: 'h#1' });
+		expect(await store.renew('h#1')).toBe(false);
+		expect(calls[1].text).toMatch(/UPDATE bot_heartbeat SET last_beat_at = now\(\)/);
+	});
+
+	it('only requires the lease when state is shared through the bucket', () => {
+		expect(loadConfig({ OKX_BOT_STATE_BUCKET: 'three-ws-okx-bot-state' }).leaseRequired).toBe(true);
+		expect(loadConfig({}).leaseRequired).toBe(false);
+	});
+});

@@ -161,8 +161,12 @@ async function activeKeys(sql, userId) {
 async function secretState() {
 	try {
 		await gcloud(['secrets', 'describe', SECRET, '--format=value(name)']);
-	} catch {
-		return { exists: false, token: null };
+	} catch (err) {
+		// Only a NOT_FOUND means the secret is missing. Anything else (an expired
+		// gcloud login above all) means nobody could look, and reporting that as
+		// "missing" would send --apply off to create a secret that already exists.
+		if (/NOT_FOUND|not found/i.test(err?.stderr || err?.message || '')) return { exists: false, token: null };
+		return { exists: null, token: null, error: String(err?.message || err).split('\n')[0].slice(0, 200) };
 	}
 	try {
 		const { stdout } = await gcloud(['secrets', 'versions', 'access', 'latest', '--secret', SECRET]);
@@ -343,7 +347,8 @@ async function main() {
 	say(`  metering agent   ${agent ? `${agent.id} "${agent.name}"` : 'missing'}`);
 	say(`  model            ${MODEL}`);
 	say(`  api keys         ${keys.length} active`);
-	say(`  secret           ${SECRET}: ${!secret.exists ? 'missing' : secretKey ? `holds active key ${secretKey.prefix}...` : 'holds no active key'}`);
+	say(`  secret           ${SECRET}: ${secret.exists === null ? `unknown (${secret.error})` : !secret.exists ? 'missing' : secretKey ? `holds active key ${secretKey.prefix}...` : 'holds no active key'}`);
+	if (secret.exists === null && (APPLY || VERIFY_ONLY)) die('gcloud cannot read Secret Manager here: run `gcloud auth login`, then re-run');
 
 	if (!APPLY && !VERIFY_ONLY) {
 		say('\n  plan only: nothing was written. Re-run with --apply to provision, or --verify to prove an existing lane.\n');

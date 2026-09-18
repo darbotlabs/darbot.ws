@@ -29,11 +29,22 @@ import { electProvider, loginCodex } from './provider.js';
 import { classify, loginInstructions } from './session.js';
 import { restoreState, snapshotState } from './state.js';
 import { createSupervisor } from './supervisor.js';
+import { createLease, sqlLeaseStore } from './lease.js';
 import { buildWorkspace } from './workspace.js';
 import { log } from './log.js';
 
 const WORKER = 'okx-chat-bot';
 const BOOT_AT = new Date().toISOString();
+
+/**
+ * The single-writer lease (lease.js), or null on a host with no shared state.
+ * Held from before the state restore until after the final snapshot, so no two
+ * hosts ever restore, run or snapshot the bot's identity at the same time.
+ */
+let lease = null;
+
+/** May this host write the shared state right now? */
+const mayWrite = () => !lease || lease.fresh();
 
 /** Live health, refreshed by the session probe and read by the HTTP handlers. */
 const live = {
@@ -53,6 +64,8 @@ const live = {
 	// `providerProbe`; this is the whole picture, so a human reading /readyz can
 	// see which credential to fund rather than only that one of them was refused.
 	providerLanes: [],
+	// The single-writer lease's state (lease.js), null on a host without one.
+	lease: null,
 };
 
 async function heartbeat(cfg, supervisor) {
@@ -77,6 +90,9 @@ async function heartbeat(cfg, supervisor) {
 		providerChain: live.providerLanes.map((l) => ({ lane: l.lane, code: l.code })),
 		daemonRestarts: supervisor.stats().restarts,
 		checkedAt: live.checkedAt,
+		// Marks this host as lease-aware. A successor treats a beat WITHOUT this
+		// field as a host that predates the lease and waits it out (lease.js).
+		leaseHolder: lease?.state.holder ?? null,
 	};
 	try {
 		await sql`
@@ -242,6 +258,58 @@ async function main() {
 		});
 	}
 
+	// The health server comes up first, before the lease wait. Cloud Run's
+	// startup probe has to pass for a rollout to move traffic and SIGTERM the old
+	// instance, and the old instance releasing the lease is exactly what this one
+	// is waiting for: holding the probe behind the lease would deadlock the deploy.
+	const supervisor = createSupervisor(cfg, p);
+	const server = startHealthServer(cfg, live, supervisor, BOOT_AT);
+
+	// A SIGTERM that lands while waiting has nothing to save: this host never
+	// restored, ran or snapshotted anything.
+	const waitAbort = new AbortController();
+	const onEarlySignal = (signal) => {
+		log.info('shutdown before taking the lease', { signal });
+		waitAbort.abort();
+		server?.close();
+		process.exit(0);
+	};
+	process.once('SIGTERM', onEarlySignal);
+	process.once('SIGINT', onEarlySignal);
+
+	if (cfg.leaseRequired) {
+		lease = createLease({
+			store: sqlLeaseStore(sql),
+			host: cfg.host,
+			ttlMs: cfg.leaseTtlMs,
+			renewMs: cfg.leaseRenewMs,
+			pollMs: cfg.leasePollMs,
+			legacyStaleMs: cfg.legacyBeatStaleMs,
+			onLost: (reason) => void fence(cfg, supervisor, reason),
+		});
+		live.lease = lease.state;
+		live.verdict = {
+			status: 'unknown',
+			ready: false,
+			reason: 'lease_wait',
+			detail: 'waiting for the single-writer lease before restoring the bot identity',
+			needsHumanLogin: false,
+		};
+		const got = await lease.acquire({
+			signal: waitAbort.signal,
+			onWait: (reason) => {
+				live.verdict = { ...live.verdict, detail: `waiting for the single-writer lease: ${reason}` };
+			},
+		});
+		if (!got) return;
+		lease.start();
+		live.verdict = { status: 'unknown', ready: false, reason: 'booting', detail: 'lease held, restoring state', needsHumanLogin: false };
+	} else {
+		log.warn('no state bucket: running without the single-writer lease (fine for a local run, never for Cloud Run)');
+	}
+	process.off('SIGTERM', onEarlySignal);
+	process.off('SIGINT', onEarlySignal);
+
 	await mkdir(p.agentTask, { recursive: true });
 	live.stateRestore = await restoreState(cfg);
 	await mkdir(p.logs, { recursive: true });
@@ -261,9 +329,7 @@ async function main() {
 	const codexLogin = await loginCodex(cfg);
 	if (codexLogin.ran) log[codexLogin.ok ? 'info' : 'error']('codex login', codexLogin);
 
-	const supervisor = createSupervisor(cfg, p);
 	supervisor.start();
-	const server = startHealthServer(cfg, live, supervisor, BOOT_AT);
 
 	const probe = () => probeSession(cfg, supervisor).catch((err) => log.error('probe failed', { err: err?.message }));
 	const probeTimer = setInterval(probe, cfg.sessionProbeMs);
@@ -275,10 +341,10 @@ async function main() {
 		() => heartbeat(cfg, supervisor).catch((err) => log.warn('heartbeat failed', { err: err?.message })),
 		cfg.heartbeatMs,
 	);
-	const snapshotTimer = setInterval(
-		() => snapshotState(cfg, { reason: 'timer' }).catch(() => {}),
-		cfg.snapshotMs,
-	);
+	const snapshotTimer = setInterval(() => {
+		if (!mayWrite()) return log.warn('snapshot skipped: the single-writer lease is not fresh', {});
+		snapshotState(cfg, { reason: 'timer' }).catch(() => {});
+	}, cfg.snapshotMs);
 	const providerProbeTimer = setInterval(
 		() => electProviderLane(cfg, supervisor).catch((err) => log.warn('provider probe failed', { err: err?.message })),
 		cfg.providerProbeMs,
@@ -303,15 +369,40 @@ async function main() {
 		clearInterval(providerProbeTimer);
 		server?.close();
 		// Order matters: stop the daemon FIRST so its sqlite files are quiesced,
-		// then snapshot. A live-copy snapshot can tear; this one cannot.
+		// then snapshot. A live-copy snapshot can tear; this one cannot. The
+		// snapshot is written only while the lease is still ours, and the lease is
+		// released only after it, so the successor restores exactly this state.
 		await supervisor.stop();
-		await snapshotState(cfg, { reason: signal });
+		if (mayWrite()) await snapshotState(cfg, { reason: signal });
+		else log.error('final snapshot skipped: the single-writer lease is not held', { signal });
+		await lease?.release();
 		log.info('bye', {});
 		process.exit(0);
 	};
 	process.on('SIGINT', () => shutdown('SIGINT'));
 	process.on('SIGTERM', () => shutdown('SIGTERM'));
 	process.on('unhandledRejection', (err) => log.error('unhandledRejection', { err: err?.message }));
+}
+
+/**
+ * The lease is gone (another host took it, or it could not be renewed before it
+ * would expire). Another host may already be writing the identity, so this one
+ * stops its daemon and exits WITHOUT a snapshot: writing one now is exactly the
+ * clobber the lease exists to prevent. Cloud Run restarts the container, and the
+ * fresh process waits for the lease like any other.
+ */
+let fencing = false;
+async function fence(cfg, supervisor, reason) {
+	if (fencing) return;
+	fencing = true;
+	live.verdict = { status: 'down', ready: false, reason: 'lease_lost', detail: `single-writer lease lost: ${reason}`, needsHumanLogin: false };
+	await sendOpsAlert(
+		'OKX chat bot fenced itself',
+		`agent #${cfg.agentId} on ${cfg.host} lost the single-writer lease (${reason}) and stopped its daemon without snapshotting. It restarts and waits for the lease; no action is needed unless this repeats.`,
+		{ severity: 'warn' },
+	).catch(() => {});
+	await supervisor.stop(5_000).catch(() => {});
+	process.exit(75);
 }
 
 main().catch((err) => {

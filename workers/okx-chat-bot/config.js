@@ -30,10 +30,11 @@ const num = (v, fallback) => {
  *                      No secret exists to leak, rotate or forget, and the spend
  *                      lands on the pool the platform already prefers.
  *   anthropic-key      a first-party ANTHROPIC_API_KEY.
- *   anthropic-gateway  any Anthropic-wire-format gateway (OpenRouter serves one
- *                      at /api/v1/messages). Opt-in: it only exists when an
- *                      operator sets its base URL and token, because it bills a
- *                      third-party account per token.
+ *   anthropic-gateway  any Anthropic-wire-format gateway. The deploy points it
+ *                      at three.ws's own we-pay proxy (the free model chain,
+ *                      metered against a dedicated platform agent); OpenRouter
+ *                      serves one too. Opt-in: it only exists when an operator
+ *                      sets its base URL and token.
  *   anthropic-oauth    an interactive `claude` login on a developer host.
  *   openai-key         the codex CLI on OPENAI_API_KEY.
  *
@@ -286,6 +287,19 @@ export function loadConfig(env = process.env) {
 		repoRoot: env.OKX_BOT_REPO_ROOT || '/app',
 
 		heartbeatMs: num(env.OKX_BOT_HEARTBEAT_MS, 30_000),
+
+		// The single-writer lease (lease.js). Required whenever state is shared
+		// through the bucket, because that is when a second host could write it.
+		// The TTL bounds how long a host that died without releasing blocks its
+		// successor; renewal runs well inside it so a slow query never loses it.
+		leaseRequired: !!(env.OKX_BOT_STATE_BUCKET || '').trim(),
+		leaseTtlMs: num(env.OKX_BOT_LEASE_TTL_MS, 120_000),
+		leaseRenewMs: num(env.OKX_BOT_LEASE_RENEW_MS, 20_000),
+		leasePollMs: num(env.OKX_BOT_LEASE_POLL_MS, 5_000),
+		// A host built before the lease existed is recognised by its heartbeat and
+		// waited out until that beat is this old: three missed beats at the default
+		// cadence, so one slow write never reads as the host having gone.
+		legacyBeatStaleMs: num(env.OKX_BOT_LEGACY_BEAT_STALE_MS, 3 * num(env.OKX_BOT_HEARTBEAT_MS, 30_000)),
 		sessionProbeMs: num(env.OKX_BOT_SESSION_PROBE_MS, 60_000),
 		snapshotMs: num(env.OKX_BOT_SNAPSHOT_MS, 5 * 60_000),
 		// A logged-out session needs a human. Alert on the transition, then at most

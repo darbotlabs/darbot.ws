@@ -61,6 +61,18 @@ export function statusBody(cfg, live, daemonStats, bootAt) {
 		agents: live.agents,
 		workspace: live.workspace,
 		state: { bucket: cfg.stateBucket || null, restore: live.stateRestore },
+		// Who may write the bot identity. `waitingOn` names what a host that has
+		// not taken the lease yet is waiting for (a rollout's old instance, or a
+		// host that predates the lease).
+		lease: live.lease
+			? {
+					held: live.lease.held,
+					holder: live.lease.holder,
+					acquiredAt: live.lease.acquiredAt || null,
+					waitingOn: live.lease.waitingOn,
+					lostReason: live.lease.lostReason,
+				}
+			: null,
 		health: live.verdict,
 		checkedAt: live.checkedAt,
 	};
