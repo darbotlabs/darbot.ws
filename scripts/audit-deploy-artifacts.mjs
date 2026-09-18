@@ -21,6 +21,18 @@
  *        b. every bare import in api/**∕*.js is declared in package.json —
  *           phantom deps that only exist via hoisting disappear on dedupe.
  *
+ *   3. An install tree that no longer matches the lockfile. The image is built
+ *      with a clean install from package-lock.json, but every local test and
+ *      every deploy worktree (which hardlinks this node_modules) runs whatever
+ *      is on disk. When a dependency bump lands in the lockfile and nobody
+ *      reinstalls, the suite keeps passing against the OLD version while
+ *      production boots the NEW one. On 2026-09-17 that shipped
+ *      @x402/extensions 2.25.0, whose resource-server extension throws at
+ *      construction without an `origin`: api/_lib/siwx-server.js built it at
+ *      module load, so every paidEndpoint() route, /api/mcp, the facilitator
+ *      and /.well-known/x402 answered 500 while local tests (on 2.14.0)
+ *      stayed green.
+ *
  * Runs standalone (`node scripts/audit-deploy-artifacts.mjs`), as phase 1 of
  * scripts/build-vercel.mjs, and via tests/deploy-artifacts.test.js.
  */
@@ -213,6 +225,12 @@ export async function findUndeclaredApiImports({ apiDir = resolve(ROOT, 'api') }
 		...Object.keys(rootPkg.optionalDependencies || {}),
 		...workspacePackageNames(rootPkg),
 	]);
+	// A devDependency is declared, so it is not a phantom, and the Cloud Run image
+	// installs devDependencies. It is still only acceptable behind a dynamic
+	// import: those are lazy tooling paths (the x-content reviewer's browser and
+	// spell checker) that never run at module load, so they cannot take a handler
+	// down on import. A static import of one stays a failure.
+	const declaredDev = new Set(Object.keys(rootPkg.devDependencies || {}));
 	const builtins = new Set(builtinModules);
 	const problems = [];
 	// Test and test-config files under api/ run via vitest only; they are never
@@ -236,6 +254,7 @@ export async function findUndeclaredApiImports({ apiDir = resolve(ROOT, 'api') }
 			if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('node:')) continue;
 			const name = bareSpecifierToPackageName(spec);
 			if (builtins.has(name) || declared.has(name)) continue;
+			if (imp.type === 'dynamic' && declaredDev.has(name)) continue;
 			problems.push({
 				file,
 				specifier: spec,
@@ -247,7 +266,7 @@ export async function findUndeclaredApiImports({ apiDir = resolve(ROOT, 'api') }
 }
 
 // ---------------------------------------------------------------------------
-// 3. Critical static runtime assets in dist/
+// 4. Critical static runtime assets in dist/
 // ---------------------------------------------------------------------------
 // The Draco/Basis decoder binaries are gitignored (regenerated from
 // node_modules by scripts/copy-three-decoders.mjs at postinstall/prebuild),
@@ -270,6 +289,42 @@ export function findMissingDistAssets() {
 		'scene-studio/basis/basis_transcoder.wasm',
 	];
 	return { skipped: false, missing: required.filter((p) => !existsSync(resolve(dist, p))) };
+}
+
+// ---------------------------------------------------------------------------
+// 5. Install tree matches the lockfile
+// ---------------------------------------------------------------------------
+
+/**
+ * Compares every production package in package-lock.json with what is actually
+ * installed and returns the ones that differ: `stale` (a different version on
+ * disk) or `missing` (nothing on disk). Dev-only packages never reach the
+ * image, and optional ones are legitimately absent on a platform they do not
+ * target, so neither is reported.
+ */
+export function findLockDrift({ lock, root = ROOT } = {}) {
+	if (!lock) {
+		lock = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'));
+	}
+	const drift = [];
+	for (const [path, info] of Object.entries(lock.packages || {})) {
+		if (!path.startsWith('node_modules/') || info.link) continue;
+		if (info.dev || info.devOptional) continue;
+		let installed = null;
+		try {
+			installed = JSON.parse(readFileSync(resolve(root, path, 'package.json'), 'utf8')).version;
+		} catch {
+			if (info.optional || info.peer) continue;
+		}
+		if (installed === info.version) continue;
+		drift.push({
+			path,
+			locked: info.version,
+			installed,
+			kind: installed === null ? 'missing' : 'stale',
+		});
+	}
+	return drift;
 }
 
 // ---------------------------------------------------------------------------
@@ -325,12 +380,24 @@ if (isMain) {
 		for (const m of distAssets.missing) console.error(`  dist/${m}`);
 	}
 
+	const drift = findLockDrift();
+	if (drift.length) {
+		failed = true;
+		console.error(
+			`[audit:deploy] FAIL: ${drift.length} installed package(s) do not match package-lock.json, so local tests are not exercising the versions the image will run (the @x402/extensions 2.25.0 outage). Run \`npm install\`, then \`npm test\`, before deploying:`,
+		);
+		for (const d of drift.slice(0, 15)) {
+			console.error(`  ${d.path}  locked ${d.locked}, ${d.kind === 'missing' ? 'not installed' : `installed ${d.installed}`}`);
+		}
+		if (drift.length > 15) console.error(`  ... and ${drift.length - 15} more`);
+	}
+
 	const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 	if (failed) {
 		console.error(`\n[audit:deploy] failed in ${elapsed}s`);
 		process.exit(1);
 	}
 	console.log(
-		`[audit:deploy] clean in ${elapsed}s — no committed symlinks, no unsatisfied peers, no undeclared api imports, decoder assets ${distAssets.skipped ? 'skipped (no dist/)' : 'present'}`,
+		`[audit:deploy] clean in ${elapsed}s: no committed symlinks, no unsatisfied peers, no undeclared api imports, install tree matches the lockfile, decoder assets ${distAssets.skipped ? 'skipped (no dist/)' : 'present'}`,
 	);
 }

@@ -8,16 +8,34 @@
 //      silently vanished and every /api/cron/* died with ERR_MODULE_NOT_FOUND.
 //   3. Undeclared (phantom) bare imports in api/ — they resolve today only via
 //      hoisting from some transitive dep, and disappear on the next dedupe.
+//   4. An install tree that drifted from package-lock.json. The image installs
+//      from the lockfile while local tests run whatever is on disk, so a bump
+//      nobody reinstalled ships untested (@x402/extensions 2.25.0, 2026-09-17:
+//      every paid x402 route 500ed on import while the suite stayed green).
 //
 // The same checks gate the Vercel build (scripts/build-vercel.mjs phase 1);
 // running them here means `npm test` catches the regression before a push.
 
-import { describe, it, expect } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
 	findCommittedSymlinks,
 	findUnsatisfiedPeers,
 	findUndeclaredApiImports,
+	findLockDrift,
 } from '../scripts/audit-deploy-artifacts.mjs';
+
+const scratchDirs = [];
+function scratchDir() {
+	const dir = mkdtempSync(join(tmpdir(), 'deploy-artifacts-'));
+	scratchDirs.push(dir);
+	return dir;
+}
+afterEach(() => {
+	while (scratchDirs.length) rmSync(scratchDirs.pop(), { recursive: true, force: true });
+});
 
 describe('deploy artifacts', () => {
 	it('has no committed symlinks (Vercel function tracing cannot resolve them)', () => {
@@ -30,6 +48,89 @@ describe('deploy artifacts', () => {
 
 	it('has no undeclared bare imports in api/', async () => {
 		expect(await findUndeclaredApiImports()).toEqual([]);
+	});
+
+	it('runs against the dependency versions the lockfile will install in the image', () => {
+		expect(findLockDrift()).toEqual([]);
+	});
+});
+
+describe('findUndeclaredApiImports logic', () => {
+	// vitest is a declared devDependency of this repo, which makes it a stable
+	// stand-in for "tooling package that is present but not a runtime dependency".
+	it('allows a lazy import of a declared devDependency', async () => {
+		const apiDir = scratchDir();
+		writeFileSync(join(apiDir, 'tool.js'), "export async function run() {\n\treturn import('vitest');\n}\n");
+		expect(await findUndeclaredApiImports({ apiDir })).toEqual([]);
+	});
+
+	it('still fails a static import of a devDependency, which would load with the handler', async () => {
+		const apiDir = scratchDir();
+		writeFileSync(join(apiDir, 'handler.js'), "import { vi } from 'vitest';\nexport default vi;\n");
+		const problems = await findUndeclaredApiImports({ apiDir });
+		expect(problems.map((p) => p.specifier)).toEqual(['vitest']);
+	});
+
+	it('still fails a lazy import of a package declared nowhere', async () => {
+		const apiDir = scratchDir();
+		writeFileSync(join(apiDir, 'tool.js'), "export const load = () => import('three-ws-undeclared-package');\n");
+		const problems = await findUndeclaredApiImports({ apiDir });
+		expect(problems.map((p) => p.specifier)).toEqual(['three-ws-undeclared-package']);
+	});
+});
+
+describe('findLockDrift logic', () => {
+	function installTree(packages) {
+		const root = scratchDir();
+		for (const [path, version] of Object.entries(packages)) {
+			mkdirSync(join(root, path), { recursive: true });
+			writeFileSync(join(root, path, 'package.json'), JSON.stringify({ version }));
+		}
+		return root;
+	}
+
+	it('reports a package installed at a different version than the lockfile pins', () => {
+		const root = installTree({ 'node_modules/some-sdk': '2.14.0' });
+		const lock = { packages: { '': {}, 'node_modules/some-sdk': { version: '2.25.0' } } };
+		expect(findLockDrift({ lock, root })).toEqual([
+			{ path: 'node_modules/some-sdk', locked: '2.25.0', installed: '2.14.0', kind: 'stale' },
+		]);
+	});
+
+	it('reports a locked production package that is not installed at all', () => {
+		const root = installTree({});
+		const lock = { packages: { '': {}, 'node_modules/some-sdk': { version: '1.0.0' } } };
+		expect(findLockDrift({ lock, root })).toEqual([
+			{ path: 'node_modules/some-sdk', locked: '1.0.0', installed: null, kind: 'missing' },
+		]);
+	});
+
+	it('passes a tree that matches, nested installs included', () => {
+		const root = installTree({
+			'node_modules/some-sdk': '2.25.0',
+			'node_modules/some-sdk/node_modules/core': '2.25.0',
+		});
+		const lock = {
+			packages: {
+				'': {},
+				'node_modules/some-sdk': { version: '2.25.0' },
+				'node_modules/some-sdk/node_modules/core': { version: '2.25.0' },
+			},
+		};
+		expect(findLockDrift({ lock, root })).toEqual([]);
+	});
+
+	it('ignores dev-only packages, absent optional ones, and workspace links', () => {
+		const root = installTree({ 'node_modules/dev-tool': '1.0.0' });
+		const lock = {
+			packages: {
+				'': {},
+				'node_modules/dev-tool': { version: '9.9.9', dev: true },
+				'node_modules/other-platform-binary': { version: '1.0.0', optional: true },
+				'node_modules/workspace-pkg': { resolved: 'packages/workspace-pkg', link: true },
+			},
+		};
+		expect(findLockDrift({ lock, root })).toEqual([]);
 	});
 });
 
