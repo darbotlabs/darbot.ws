@@ -604,7 +604,7 @@
 		"helius-sdk": "^3.0.0",
 		"idb-keyval": "^6.3.0",
 		"imapflow": "^2.0.2",
-		"jose": "^5.9.6",
+		"jose": "^6.2.12",
 		"lightweight-charts": "^5.2.0",
 		"livekit-client": "^2.19.2",
 		"livepeer": "^3.5.0",
