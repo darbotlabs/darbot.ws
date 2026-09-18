@@ -612,6 +612,198 @@
 					}
 				}
 			]
+		},
+		{
+			"id": "text-to-3d",
+			"status": "review",
+			"kind": "post",
+			"tier": 2,
+			"lane": "creation",
+			"pattern": "proof",
+			"notBefore": "2026-09-18T09:00:00Z",
+			"source": {
+				"path": "docs/announcements/text-to-3d.md"
+			},
+			"posts": [
+				{
+					"text": "Type a sentence. Get a 3D model.\n\nFree. No account, no API key.\n\nWe typed \"a worn leather armchair with brass studs\" and had a textured 3D model 106 seconds later. Download it and use it anywhere.\n\nthree.ws/forge",
+					"textFrom": "docs/announcements/text-to-3d.post.txt",
+					"media": [
+						{
+							"path": "public/x-media/text-to-3d/card.png",
+							"alt": "A three.ws card reading 'Type a sentence. Get a 3D model.' beside a browser window showing a textured 3D model of a worn leather armchair with brass studs, generated from that prompt in 106 seconds"
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "No account, no API key",
+					"evidence": [
+						{
+							"type": "file",
+							"path": ".agents/skills/generate-3d-model/SKILL.md",
+							"contains": "no auth, no account"
+						}
+					]
+				},
+				{
+					"says": "106 seconds later",
+					"evidence": [
+						{
+							"type": "file",
+							"path": "docs/announcements/text-to-3d.md",
+							"contains": "returned 106 seconds after the request was sent"
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/cdn/forge/anon/122077f6-8cc7-46b8-bbca-f38a0d7b2670.glb",
+							"contains": "glTF"
+						}
+					]
+				}
+			],
+			"probes": [
+				{
+					"type": "api",
+					"name": "the generated model is served",
+					"url": "https://three.ws/cdn/forge/anon/122077f6-8cc7-46b8-bbca-f38a0d7b2670.glb",
+					"expect": {
+						"status": 200
+					}
+				},
+				{
+					"type": "api",
+					"name": "the forge page is live",
+					"url": "https://three.ws/forge",
+					"expect": {
+						"status": 200
+					}
+				}
+			]
+		},
+		{
+			"id": "free-characters",
+			"status": "review",
+			"kind": "post",
+			"tier": 2,
+			"lane": "library",
+			"pattern": "number",
+			"notBefore": "2026-09-18T09:00:00Z",
+			"source": {
+				"path": "docs/announcements/text-to-3d.md"
+			},
+			"posts": [
+				{
+					"text": "107 rigged 3D characters. Free.\n\nEvery one is ready to animate. Pick one, press Animate, and it moves.\n\nPut one on your website, drop it in a scene, or make it your agent's body.\n\nthree.ws/character-library",
+					"textFrom": "docs/announcements/free-characters.post.txt",
+					"media": [
+						{
+							"path": "public/x-media/free-characters/card.png",
+							"alt": "A three.ws card reading '107 rigged characters. Free.' beside a browser window showing the character library: a grid of rigged 3D characters, each with Use, Animate and Preview buttons"
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "107 rigged 3D characters",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/api/catalog?limit=1",
+							"contains": "\"character\":107"
+						}
+					]
+				}
+			],
+			"probes": [
+				{
+					"type": "api",
+					"name": "the catalog serves characters",
+					"url": "https://three.ws/api/catalog?kind=character&limit=1",
+					"expect": {
+						"contains": "\"ok\":true"
+					}
+				},
+				{
+					"type": "api",
+					"name": "the library page is live",
+					"url": "https://three.ws/character-library",
+					"expect": {
+						"status": 200
+					}
+				}
+			]
+		},
+		{
+			"id": "free-animations",
+			"status": "review",
+			"kind": "post",
+			"tier": 2,
+			"lane": "animation",
+			"pattern": "list",
+			"notBefore": "2026-09-18T09:00:00Z",
+			"source": {
+				"path": "docs/animations.md"
+			},
+			"posts": [
+				{
+					"text": "2,900+ free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on any humanoid avatar, whatever rig it came with: Mixamo, VRM, Unreal, Daz.\n\nthree.ws/animations",
+					"textFrom": "docs/announcements/free-animations.post.txt",
+					"media": [
+						{
+							"path": "public/x-media/free-animations/card.png",
+							"alt": "A three.ws card reading '2,900+ free animations.' beside a browser window showing the animation library: a grid of a 3D character performing different clips, with filters for dance, combat, sports and gestures"
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "2,900+ free animations",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/api/catalog?limit=1",
+							"contains": "\"animation\":2913"
+						}
+					]
+				},
+				{
+					"says": "Mixamo, VRM, Unreal, Daz",
+					"evidence": [
+						{
+							"type": "file",
+							"path": "src/glb-canonicalize.js",
+							"contains": "Daz"
+						},
+						{
+							"type": "file",
+							"path": "src/glb-canonicalize.js",
+							"contains": "Mixamo"
+						}
+					]
+				}
+			],
+			"probes": [
+				{
+					"type": "api",
+					"name": "the catalog serves animations",
+					"url": "https://three.ws/api/catalog?kind=animation&limit=1",
+					"expect": {
+						"contains": "\"ok\":true"
+					}
+				},
+				{
+					"type": "api",
+					"name": "the animations page is live",
+					"url": "https://three.ws/animations",
+					"expect": {
+						"status": 200
+					}
+				}
+			]
 		}
 	]
 }
