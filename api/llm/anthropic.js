@@ -436,10 +436,9 @@ const systemSchema = z.union([
 ]);
 
 /**
- * Collapse a block-array `system` to the plain string every lane below reads.
- * The OpenAI-shape lanes need a string, and the Anthropic lanes get one cache
- * breakpoint back from sanitizeAnthropicBody on a long prompt, so nothing a
- * caller's block markers bought is lost.
+ * Collapse a block-array `system` to the plain string an OpenAI-shape lane
+ * reads. The Anthropic and Vertex lanes receive the caller's blocks unchanged,
+ * cache_control markers included.
  */
 export function flattenSystem(system) {
 	if (!Array.isArray(system)) return system;
@@ -578,7 +577,6 @@ export default wrap(async (req, res) => {
 
 	const rawBody = await readJson(req);
 	const body = parse(bodySchema, rawBody);
-	if (body.system !== undefined) body.system = flattenSystem(body.system);
 	const requestedModel = resolveRequestedModel(body.model, policy.brain?.model);
 
 	// Ordered fallback chain for 429 / 5xx from OpenRouter free tier:
@@ -1057,7 +1055,8 @@ export function toolResultText(content) {
 
 export function anthropicBodyToOpenAI(body, { provider } = {}) {
 	const messages = [];
-	if (body.system) messages.push({ role: 'system', content: body.system });
+	const system = flattenSystem(body.system);
+	if (system) messages.push({ role: 'system', content: system });
 
 	for (const m of body.messages) {
 		if (typeof m.content === 'string') {

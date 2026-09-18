@@ -1068,3 +1068,140 @@ describe('/api/llm/anthropic: streaming, Anthropic lane', () => {
 		});
 	});
 });
+
+// ── Anthropic SDK clients (base-URL path, block system, large max_tokens) ──
+//
+// An SDK client is configured with a base URL and appends /v1/messages to it,
+// so the agent travels in the path. These pin that such a client, sending what
+// the official SDKs send by default, is served rather than turned away on a
+// field it does not choose.
+
+describe('/api/llm/anthropic: Anthropic SDK clients', () => {
+	const SDK_URL = '/api/llm/anthropic/agents/agent-1/v1/messages?beta=true';
+
+	beforeEach(() => {
+		process.env.OPENROUTER_API_KEY = 'sk-or-test';
+		authState.user = { id: 'platform-user', source: 'bearer' };
+		fetchState.response = () =>
+			upstreamOk({
+				id: 'gen-sdk',
+				choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+				usage: { prompt_tokens: 3, completion_tokens: 1 },
+			});
+	});
+
+	async function invokeSdk(body, { query = { agent: 'agent-1' } } = {}) {
+		const req = makeReq({ url: SDK_URL, body, noOrigin: true, headers: { authorization: 'Bearer sk_live_test' } });
+		req.query = query;
+		const res = makeRes();
+		await handler(req, res);
+		return { status: res.statusCode, body: res.body ? safeJson(res.body) : null };
+	}
+
+	it('meters against the agent the router bound from the path segment', async () => {
+		const { status } = await invokeSdk({ ...VALID_BODY, model: 'google/gemma-4-31b-it:free' });
+		expect(status).toBe(200);
+		expect(usageEvents[0]).toMatchObject({ agentId: 'agent-1', status: 'ok' });
+	});
+
+	it('still requires an agent when neither the query nor the path names one', async () => {
+		const { status, body } = await invokeSdk(VALID_BODY, { query: {} });
+		expect(status).toBe(400);
+		expect(body.error).toBe('validation_error');
+	});
+
+	it('still refuses a header-less caller that does not authenticate', async () => {
+		authState.user = null;
+		const { status, body } = await invokeSdk(VALID_BODY);
+		expect(status).toBe(403);
+		expect(body.error).toBe('embed_denied_origin');
+	});
+
+	it('accepts a block-array system prompt and hands OpenAI-shape lanes one string', async () => {
+		const { status } = await invokeSdk({
+			...VALID_BODY,
+			model: 'google/gemma-4-31b-it:free',
+			system: [
+				{ type: 'text', text: 'first block' },
+				{ type: 'text', text: 'second block', cache_control: { type: 'ephemeral' } },
+			],
+		});
+		expect(status).toBe(200);
+		const sent = JSON.parse(fetchState.calls[0].init.body);
+		expect(sent.messages[0]).toEqual({ role: 'system', content: 'first block\n\nsecond block' });
+	});
+
+	it('passes a block-array system prompt to an Anthropic lane unchanged', async () => {
+		const system = [{ type: 'text', text: 'keep my cache marker', cache_control: { type: 'ephemeral' } }];
+		fetchState.response = () => upstreamOk({ ok: true, usage: { input_tokens: 1, output_tokens: 1 } });
+		const { status } = await invokeSdk({ ...VALID_BODY, system });
+		expect(status).toBe(200);
+		expect(fetchState.calls[0].url).toBe('https://api.anthropic.com/v1/messages');
+		expect(JSON.parse(fetchState.calls[0].init.body).system).toEqual(system);
+	});
+
+	it('bounds a block-array system prompt by the same total length as a string one', async () => {
+		const { status, body } = await invokeSdk({
+			...VALID_BODY,
+			system: [
+				{ type: 'text', text: 'a'.repeat(40_000) },
+				{ type: 'text', text: 'b'.repeat(40_000) },
+			],
+		});
+		expect(status).toBe(400);
+		expect(body.error).toBe('validation_error');
+		expect(fetchState.calls).toHaveLength(0);
+	});
+
+	it('clamps an oversized max_tokens instead of rejecting the request', async () => {
+		const { status } = await invokeSdk({ ...VALID_BODY, model: 'google/gemma-4-31b-it:free', max_tokens: 32_000 });
+		expect(status).toBe(200);
+		const sent = JSON.parse(fetchState.calls[0].init.body);
+		expect(sent.max_tokens).toBe(16_000);
+	});
+
+	it('hands a text-block tool_result to an OpenAI-shape model as plain text', async () => {
+		await invokeSdk({
+			...VALID_BODY,
+			model: 'google/gemma-4-31b-it:free',
+			messages: [
+				{ role: 'user', content: 'run it' },
+				{ role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'ls' } }] },
+				{
+					role: 'user',
+					content: [
+						{
+							type: 'tool_result',
+							tool_use_id: 'toolu_1',
+							content: [
+								{ type: 'text', text: 'a.txt' },
+								{ type: 'text', text: 'b.txt' },
+							],
+						},
+					],
+				},
+			],
+		});
+		const sent = JSON.parse(fetchState.calls[0].init.body);
+		expect(sent.messages.find((m) => m.role === 'tool')).toEqual({
+			role: 'tool',
+			tool_call_id: 'toolu_1',
+			content: 'a.txt\nb.txt',
+		});
+	});
+});
+
+describe('/api/llm/anthropic: SDK base-URL route', () => {
+	it('resolves the SDK path to the proxy alias and binds the agent segment', async () => {
+		const path = await import('node:path');
+		const { resolveApiHandler } = await import('../../server/route-resolve.mjs');
+		const apiRoot = path.resolve('api');
+		const sdk = resolveApiHandler(apiRoot, '/api/llm/anthropic/agents/4c0e4d18-0544-4c95-a0db-a16896b029be/v1/messages');
+		expect(sdk.file).toBe(path.join(apiRoot, 'llm/anthropic/agents/[agent]/v1/messages.js'));
+		expect(sdk.params).toEqual({ agent: '4c0e4d18-0544-4c95-a0db-a16896b029be' });
+		const alias = await import('../../api/llm/anthropic/agents/[agent]/v1/messages.js');
+		expect(alias.default).toBe(handler);
+		// The canonical path still reaches the proxy file itself.
+		expect(resolveApiHandler(apiRoot, '/api/llm/anthropic').file).toBe(path.join(apiRoot, 'llm/anthropic.js'));
+	});
+});

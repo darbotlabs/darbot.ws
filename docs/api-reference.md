@@ -1179,6 +1179,15 @@ POST /api/llm/anthropic?agent=<agent_id>
 
 Older single-provider proxy. Request/response shape matches the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) exactly. New integrations should use `/api/brain/chat` instead — it supports more providers and emits richer events.
 
+**Anthropic SDK clients.** An official Anthropic SDK, or a CLI built on one, takes a base URL and appends `/v1/messages` itself, so it cannot add the `agent` query parameter. Point it at the agent-scoped base URL instead, and authenticate with a bearer API key owned by the agent's owner:
+
+```
+ANTHROPIC_BASE_URL=https://three.ws/api/llm/anthropic/agents/<agent_id>
+ANTHROPIC_AUTH_TOKEN=sk_live_...
+```
+
+That reaches `POST /api/llm/anthropic/agents/<agent_id>/v1/messages`, which is this same proxy with the same auth, policy, ceilings and model rules. `system` may be a string or an array of text blocks (at most 64,000 characters in total), and a `max_tokens` above 16,000 is clamped to 16,000 rather than rejected. Only meter against an agent you own: the per-agent ceilings and budget below are that agent's.
+
 **Who may call it.** This lane is billed to the platform's own provider keys, so it is scoped to the browser embed it exists for:
 
 | Caller | Result |

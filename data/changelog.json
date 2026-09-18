@@ -3,6 +3,13 @@
 	"entries": [
 		{
 			"date": "2026-09-18",
+			"title": "Standard Anthropic SDK clients can now use a three.ws agent's AI budget",
+			"summary": "The AI proxy behind every embedded three.ws agent now answers at the address an Anthropic SDK or command-line tool builds for itself. Point a client at /api/llm/anthropic/agents/<your agent id> with one of your API keys and it runs on that agent's model, limits, and monthly budget. The proxy also stopped turning such clients away over their defaults: a system prompt sent as a list of text blocks is accepted, and an output limit above 16,000 tokens is lowered to 16,000 instead of rejected.",
+			"tags": ["feature", "sdk"],
+			"link": "/docs/api-reference"
+		},
+		{
+			"date": "2026-09-18",
 			"title": "The embedded 3D agent is readable on light websites and quiet in the console",
 			"summary": "Two fixes for anyone who has put a three.ws agent on their own site with the two-line embed. The floating widget had no background of its own, so on a light page its white button labels and name vanished into the page; it now has its own dark panel, and the suggestion buttons carry a solid ground, so it reads the same on any site. You can still ask for a transparent or light panel with the background attribute. The embed also made two background requests that browsers blocked on every site but ours, logging errors in the host page's console; those requests now succeed, and only the public, signed-out answer is ever shared across sites.",
 			"tags": [
