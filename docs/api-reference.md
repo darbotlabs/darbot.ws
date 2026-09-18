@@ -1186,7 +1186,7 @@ ANTHROPIC_BASE_URL=https://three.ws/api/llm/anthropic/agents/<agent_id>
 ANTHROPIC_AUTH_TOKEN=sk_live_...
 ```
 
-That reaches `POST /api/llm/anthropic/agents/<agent_id>/v1/messages`, which is this same proxy with the same auth, policy, ceilings and model rules. `system` may be a string or an array of text blocks (at most 64,000 characters in total), and a `max_tokens` above 16,000 is clamped to 16,000 rather than rejected. Only meter against an agent you own: the per-agent ceilings and budget below are that agent's.
+That reaches `POST /api/llm/anthropic/agents/<agent_id>/v1/messages`, which is this same proxy with the same auth, policy, ceilings and model rules. `system` may be a string or an array of text blocks (at most 64,000 characters in total), `messages` may carry `system` turns between user and assistant turns (the free OpenAI-compatible models receive them folded into the system prompt), and a `max_tokens` above 16,000 is clamped to 16,000 rather than rejected. This is enough for the Claude Code CLI to run its full agentic loop, tool calls included, on the free model chain. Only meter against an agent you own: the per-agent ceilings and budget below are that agent's.
 
 **Who may call it.** This lane is billed to the platform's own provider keys, so it is scoped to the browser embed it exists for:
 

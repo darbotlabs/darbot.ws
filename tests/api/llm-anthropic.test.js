@@ -1153,6 +1153,34 @@ describe('/api/llm/anthropic: Anthropic SDK clients', () => {
 		expect(fetchState.calls).toHaveLength(0);
 	});
 
+	it('accepts an in-thread system turn and folds it into the system prompt for OpenAI-shape lanes', async () => {
+		const { status } = await invokeSdk({
+			model: 'google/gemma-4-31b-it:free',
+			system: [{ type: 'text', text: 'base prompt' }],
+			messages: [
+				{ role: 'user', content: [{ type: 'text', text: 'hi' }] },
+				{ role: 'system', content: [{ type: 'text', text: '# Environment' }] },
+			],
+		});
+		expect(status).toBe(200);
+		const sent = JSON.parse(fetchState.calls[0].init.body);
+		expect(sent.messages).toEqual([
+			{ role: 'system', content: 'base prompt\n\n# Environment' },
+			{ role: 'user', content: 'hi' },
+		]);
+	});
+
+	it('passes an in-thread system turn to an Anthropic lane unchanged', async () => {
+		fetchState.response = () => upstreamOk({ ok: true, usage: { input_tokens: 1, output_tokens: 1 } });
+		const messages = [
+			{ role: 'user', content: 'hi' },
+			{ role: 'system', content: [{ type: 'text', text: '# Environment' }] },
+		];
+		const { status } = await invokeSdk({ max_tokens: 10, messages });
+		expect(status).toBe(200);
+		expect(JSON.parse(fetchState.calls[0].init.body).messages).toEqual(messages);
+	});
+
 	it('clamps an oversized max_tokens instead of rejecting the request', async () => {
 		const { status } = await invokeSdk({ ...VALID_BODY, model: 'google/gemma-4-31b-it:free', max_tokens: 32_000 });
 		expect(status).toBe(200);

@@ -450,7 +450,10 @@ const bodySchema = z.object({
 	messages: z
 		.array(
 			z.object({
-				role: z.enum(['user', 'assistant']),
+				// `system` turns are how the Claude Code CLI delivers its environment
+				// block mid-conversation; the Messages API accepts them, so they are
+				// passed through to Anthropic lanes and hoisted for OpenAI-shape ones.
+				role: z.enum(['user', 'assistant', 'system']),
 				content: messageContentSchema,
 			}),
 		)
@@ -1055,10 +1058,18 @@ export function toolResultText(content) {
 
 export function anthropicBodyToOpenAI(body, { provider } = {}) {
 	const messages = [];
-	const system = flattenSystem(body.system);
+	// OpenAI-compatible servers disagree about a system message that is not the
+	// first one (several chat templates refuse it outright), so every in-thread
+	// `system` turn is folded into the leading system prompt, in order.
+	const systemParts = [flattenSystem(body.system)];
+	for (const m of body.messages) {
+		if (m.role === 'system') systemParts.push(typeof m.content === 'string' ? m.content : flattenSystem(m.content.filter((b) => b?.type === 'text')));
+	}
+	const system = systemParts.filter(Boolean).join('\n\n');
 	if (system) messages.push({ role: 'system', content: system });
 
 	for (const m of body.messages) {
+		if (m.role === 'system') continue;
 		if (typeof m.content === 'string') {
 			messages.push({ role: m.role, content: m.content });
 			continue;
