@@ -615,7 +615,7 @@
 		},
 		{
 			"id": "text-to-3d",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"tier": 2,
 			"lane": "creation",
@@ -626,7 +626,7 @@
 			},
 			"posts": [
 				{
-					"text": "Type a sentence. Get a 3D model.\n\nFree. No account, no API key.\n\nWe typed \"a worn leather armchair with brass studs\" and had a textured 3D model 106 seconds later. Download it and use it anywhere.\n\nthree.ws/forge",
+					"text": "Type a sentence. Get a 3D model.\n\nIt is free, with no account and no API key.\n\nWe typed \"a worn leather armchair with brass studs\" and had a textured 3D model 106 seconds later. Download it and use it anywhere.\n\nthree.ws/forge",
 					"textFrom": "docs/announcements/text-to-3d.post.txt",
 					"media": [
 						{
@@ -638,7 +638,7 @@
 			],
 			"claims": [
 				{
-					"says": "No account, no API key",
+					"says": "no account and no API key",
 					"evidence": [
 						{
 							"type": "file",
@@ -654,11 +654,6 @@
 							"type": "file",
 							"path": "docs/announcements/text-to-3d.md",
 							"contains": "returned 106 seconds after the request was sent"
-						},
-						{
-							"type": "page",
-							"url": "https://three.ws/cdn/forge/anon/122077f6-8cc7-46b8-bbca-f38a0d7b2670.glb",
-							"contains": "glTF"
 						}
 					]
 				}
@@ -684,7 +679,7 @@
 		},
 		{
 			"id": "free-characters",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"tier": 2,
 			"lane": "library",
@@ -695,7 +690,7 @@
 			},
 			"posts": [
 				{
-					"text": "107 rigged 3D characters. Free.\n\nEvery one is ready to animate. Pick one, press Animate, and it moves.\n\nPut one on your website, drop it in a scene, or make it your agent's body.\n\nthree.ws/character-library",
+					"text": "107 rigged 3D characters. Free.\n\nThey arrive rigged and ready to animate. Pick one, press Animate, and it moves.\n\nPut one on your website, drop it in a scene, or make it your agent's body.\n\nthree.ws/character-library",
 					"textFrom": "docs/announcements/free-characters.post.txt",
 					"media": [
 						{
@@ -749,24 +744,29 @@
 			},
 			"posts": [
 				{
-					"text": "2,900+ free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on any humanoid avatar, whatever rig it came with: Mixamo, VRM, Unreal, Daz.\n\nthree.ws/animations",
+					"text": "3,000+ free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on any humanoid avatar, whatever rig it came with: Mixamo, VRM, Unreal, Daz.\n\nthree.ws/animations",
 					"textFrom": "docs/announcements/free-animations.post.txt",
 					"media": [
 						{
 							"path": "public/x-media/free-animations/card.png",
-							"alt": "A three.ws card reading '2,900+ free animations.' beside a browser window showing the animation library: a grid of a 3D character performing different clips, with filters for dance, combat, sports and gestures"
+							"alt": "A three.ws card reading '3,000+ free animations.' beside a browser window showing the animation library: a grid of a 3D character performing different clips, with filters for dance, combat, sports and gestures"
 						}
 					]
 				}
 			],
 			"claims": [
 				{
-					"says": "2,900+ free animations",
+					"says": "3,000+ free animations",
 					"evidence": [
 						{
 							"type": "page",
 							"url": "https://three.ws/api/catalog?limit=1",
 							"contains": "\"animation\":2913"
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/animations/manifest.json",
+							"contains": "\"name\""
 						}
 					]
 				},

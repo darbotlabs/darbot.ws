@@ -1,0 +1,122 @@
+{
+	"id": "free-animations",
+	"contentHash": "c82312bc9560ce99732fef8b06ad21c809b4661b485dd4f1915e3b19c2210a91",
+	"reviewedAt": "2026-09-18T09:31:25.946Z",
+	"passed": false,
+	"blockers": [
+		"editor (accuracy): The only checkable number is the live catalog, which returns \"animation\":2913. 2,913 is below 3,000, so the headline claim is false as verified.",
+		"editor (visual): The image repeats the overstated number on the card, and the screenshot frame predates the current count. Per policy the live product is the source of truth: the screenshot is stale and must be recaptured, not matched.",
+		"editor (accuracy): The two passing file checks verify only Mixamo and Daz strings in src/glb-canonicalize.js. No passing check verifies VRM or Unreal support.",
+		"editor verdict is revise"
+	],
+	"texts": [
+		"3,000+ free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on any humanoid avatar, whatever rig it came with: Mixamo, VRM, Unreal, Daz.\n\nthree.ws/animations"
+	],
+	"lint": [],
+	"verification": {
+		"ok": true,
+		"checks": [
+			{
+				"claim": "3,000+ free animations",
+				"kind": "evidence:page",
+				"target": "https://three.ws/api/catalog?limit=1",
+				"ok": true,
+				"detail": "live page shows \"\"animation\":2913\""
+			},
+			{
+				"claim": "3,000+ free animations",
+				"kind": "evidence:page",
+				"target": "https://three.ws/animations/manifest.json",
+				"ok": true,
+				"detail": "live page shows \"\"name\"\""
+			},
+			{
+				"claim": "Mixamo, VRM, Unreal, Daz",
+				"kind": "evidence:file",
+				"target": "src/glb-canonicalize.js",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"claim": "Mixamo, VRM, Unreal, Daz",
+				"kind": "evidence:file",
+				"target": "src/glb-canonicalize.js",
+				"ok": true,
+				"detail": "file supports the claim"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the catalog serves animations",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
+				"kind": "probe:api",
+				"target": "the animations page is live",
+				"ok": true,
+				"detail": "HTTP 200, expectations met"
+			},
+			{
+				"kind": "link",
+				"target": "https://three.ws/animations",
+				"ok": true,
+				"detail": "HTTP 200"
+			}
+		]
+	},
+	"editor": {
+		"verdict": "revise",
+		"scores": {
+			"accuracy": 2,
+			"clarity": 4,
+			"specificity": 4,
+			"voice": 5,
+			"professionalism": 5,
+			"visual": 2
+		},
+		"issues": [
+			{
+				"severity": "blocking",
+				"area": "accuracy",
+				"quote": "3,000+ free animations",
+				"problem": "The only checkable number is the live catalog, which returns \"animation\":2913. 2,913 is below 3,000, so the headline claim is false as verified.",
+				"fix": "Say the verified number: '2,913 free animations'. Rerun the catalog check and use whatever live count it returns at publication time."
+			},
+			{
+				"severity": "blocking",
+				"area": "visual",
+				"quote": "3,000+ free animations.",
+				"problem": "The image repeats the overstated number on the card, and the screenshot frame predates the current count. Per policy the live product is the source of truth: the screenshot is stale and must be recaptured, not matched.",
+				"fix": "Recapture card.png with the live count: card reading '2,913 free animations' over the current three.ws/animations gallery."
+			},
+			{
+				"severity": "blocking",
+				"area": "accuracy",
+				"quote": "whatever rig it came with: Mixamo, VRM, Unreal, Daz",
+				"problem": "The two passing file checks verify only Mixamo and Daz strings in src/glb-canonicalize.js. No passing check verifies VRM or Unreal support.",
+				"fix": "Drop the unverified rigs: 'whatever rig it came with: Mixamo or Daz', or add passing verification for VRM and Unreal before listing them."
+			}
+		],
+		"rewrite": {
+			"posts": [
+				"2,913 free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on any humanoid avatar, whatever rig it came with: Mixamo, Daz.\n\nthree.ws/animations"
+			],
+			"altText": [
+				"A three.ws card reading '2,913 free animations.' beside a browser window showing the animation gallery: a grid of a 3D character posed in different clips, with category filters for dance, combat, sports and gestures."
+			]
+		},
+		"summary": "Headline number and the image both claim 3,000+ but the live catalog shows 2,913, and two of the four listed rigs (VRM, Unreal) have no passing verification. Rewrite to the verified count and the verified rigs, and recapture the card with the live number.",
+		"model": "nvidia:moonshotai/kimi-k3",
+		"fallbacks": [
+			"No GCP credentials found. Set GCP_SERVICE_ACCOUNT_JSON, run `gcloud auth application-default login`, or run on GCE/Cloud Run.",
+			"openrouter 402: {\"error\":{\"message\":\"Insufficient credits. Add more using https://openrouter.ai/settings/credits\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits at https://openr",
+			"openai 429: {\n    \"error\": {\n        \"message\": \"Your account is not active, please check your billing details on our website.\",\n        \"type\": \"billing_not_active\",\n        \"param\": null,\n        \"code\": \"billi"
+		],
+		"rewriteFindings": [
+			"claims: claim \"3,000+ free animations\" does not appear in the copy; claims must quote the post",
+			"claims: claim \"Mixamo, VRM, Unreal, Daz\" does not appear in the copy; claims must quote the post",
+			"claims: \"2,913\" is an unverified number; declare it in claims with evidence"
+		]
+	},
+	"editorError": null
+}
