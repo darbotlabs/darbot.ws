@@ -20,6 +20,8 @@ This directory is the operational layer above the repo's deeper source material:
   Marketplace Action, curated-directory, adopter-story, and startup-program acquisition loops.
 - [External directory submission kit](./submissions/README.md): verified listing copy,
   evidence, and dispatch instructions for the first two high-intent directories.
+- [Partner program applications](./applications/README.md): field-by-field, fact-checked
+  application packages and go/no-go memos, with each form URL, deadline, and owner-only field.
 - [90-day campaigns](./campaigns.csv): one row per campaign, with channel, CTA, partner ask,
   KPI, date, and status.
 - [Anchor campaign proof](./proof/README.md): desktop, X, and mobile stills plus 15-second
