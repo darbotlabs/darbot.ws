@@ -56,9 +56,11 @@ export function freeEpochEndsAt(now = Date.now()) {
  *
  * @param {{ name: string, label?: string, category?: string, loop?: boolean, duration?: number }} entry  manifest row
  * @param {{ tracks?: Array<{ times?: ArrayLike<number> }>, duration?: number, userData?: Record<string, any> }} clip  the library clip JSON
- * @param {{ ownerId: string, price: number, artifactKey: string, artifactBytes: number, tags?: string[] }} listing
+ * @param {{ ownerId: string, price: number, artifactKey: string, artifactBytes: number, tags?: string[], take?: number }} listing
+ *   `take` numbers the listings of one prompt (1, 2, 3...) so takes that share a
+ *   label stay distinguishable; take 1 keeps the bare label.
  */
-export function generatedListingRow(entry, clip, { ownerId, price, artifactKey, artifactBytes, tags = [] }) {
+export function generatedListingRow(entry, clip, { ownerId, price, artifactKey, artifactBytes, tags = [], take = 1 }) {
 	const duration = Number(clip?.duration ?? entry.duration ?? 0);
 	let frames = 0;
 	for (const track of clip?.tracks ?? []) frames = Math.max(frames, track?.times?.length ?? 0);
@@ -70,7 +72,7 @@ export function generatedListingRow(entry, clip, { ownerId, price, artifactKey, 
 	return {
 		owner_id: ownerId,
 		slug: entry.name,
-		name: entry.label || entry.name,
+		name: take > 1 ? `${entry.label || entry.name} (take ${take})` : entry.label || entry.name,
 		description: prompt
 			? `Generated on the three.ws motion lane from the prompt "${prompt}". Baked onto the three.ws rig as a GLB.`
 			: 'Generated on the three.ws motion lane. Baked onto the three.ws rig as a GLB.',

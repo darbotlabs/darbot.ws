@@ -59,7 +59,7 @@
  * own and would otherwise delete the other's catalog (see api/animations/library.js).
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -607,6 +607,7 @@ async function listForSale(state) {
 		return { listed: 0 };
 	}
 	const { client, PutObjectCommand, bucket, publicDomain } = store;
+	const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
 	const { sql } = await import('../../api/_lib/db.js');
 	const { bakeMotionGlb } = await import('../../api/_lib/motion-glb.js');
 	const market = await import('../../api/_lib/generated-clip-market.js');
@@ -621,13 +622,39 @@ async function listForSale(state) {
 	const prompts = new Map(loadPrompts().map((p) => [p.id, p]));
 	log(`Listing ${entries.length} generated clips at ${price} USDC under ${market.PLATFORM_CREATOR_EMAIL}`);
 
+	// The object store serves its whole bucket on a public domain, and every
+	// clip name is published in the free manifest, so a GLB keyed by clip name
+	// could be fetched without paying. Each listing's GLB lives under a random
+	// key instead, kept in its row and reused on every later run.
+	const existing = new Map(
+		(
+			await sql`select slug, artifact_key from animation_clips where owner_id = ${owner.id} and ${market.GENERATED_TAG} = any(tags)`
+		).map((r) => [r.slug, r.artifact_key]),
+	);
+	const unguessable = (key, name) =>
+		typeof key === 'string' && key.startsWith(`${market.GENERATED_GLB_PREFIX}/`) && !key.includes(name);
+
+	// Several takes of one prompt share a label; number them so a buyer can tell
+	// them apart. Lowest take first, matching the publish order.
+	const takeOf = new Map();
+	const perPrompt = {};
+	for (const entry of entries) {
+		// gen-<prompt id>-<12 hex>: the id is everything between prefix and hash.
+		const promptId = entry.name.slice(CLIP_NAME_PREFIX.length, entry.name.lastIndexOf('-'));
+		perPrompt[promptId] = (perPrompt[promptId] || 0) + 1;
+		takeOf.set(entry.name, perPrompt[promptId]);
+	}
+
 	let listed = 0;
 	for (const entry of entries) {
 		const clip = JSON.parse(readFileSync(join(CLIPS_DIR, `${entry.name}.json`), 'utf8'));
 		// Staged clips are in the library basis, so the bake leaves their root
 		// alone (see bakeMotionGlb): a walk keeps the travel its feet imply.
 		const { glb } = bakeMotionGlb({ rig, clip, name: entry.label || entry.name });
-		const artifactKey = `${market.GENERATED_GLB_PREFIX}/${entry.name}.glb`;
+		const previous = existing.get(entry.name);
+		const artifactKey = unguessable(previous, entry.name)
+			? previous
+			: `${market.GENERATED_GLB_PREFIX}/${randomUUID()}.glb`;
 		await client.send(
 			new PutObjectCommand({
 				Bucket: bucket,
@@ -644,6 +671,7 @@ async function listForSale(state) {
 			artifactKey,
 			artifactBytes: glb.length,
 			tags: prompts.get(promptId)?.tags ?? [],
+			take: takeOf.get(entry.name),
 		});
 		const storageKey = `${R2_PREFIX}/clips/${entry.name}.json`;
 		await sql`
@@ -666,6 +694,11 @@ async function listForSale(state) {
 				artifact_bytes = excluded.artifact_bytes, artifact_mime = excluded.artifact_mime,
 				listed = true, deleted_at = null
 		`;
+		// A GLB an earlier run stored under its guessable name is removed once
+		// the row points at the random key.
+		if (previous && previous !== artifactKey && !unguessable(previous, entry.name)) {
+			await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: previous }));
+		}
 		listed++;
 		if (listed % 25 === 0) log(`  listed ${listed}/${entries.length}`);
 	}

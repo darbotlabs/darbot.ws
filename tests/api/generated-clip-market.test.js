@@ -98,6 +98,13 @@ describe('generatedListingRow', () => {
 		expect(row.name).toBe(SLUGS[1]);
 	});
 
+	it('numbers later takes of one prompt so they stay distinguishable', () => {
+		const listing = { ownerId: PLATFORM_ID, price: 0.01, artifactKey: 'k.glb', artifactBytes: 1 };
+		const entry = { name: SLUGS[2], label: 'Wave Hello' };
+		expect(market.generatedListingRow(entry, clip, listing).name).toBe('Wave Hello');
+		expect(market.generatedListingRow(entry, clip, { ...listing, take: 2 }).name).toBe('Wave Hello (take 2)');
+	});
+
 	it('prices at the Animation Bazaar advertised price, overridable by env', () => {
 		expect(market.generatedListingPrice()).toBe(0.01);
 		process.env.X402_PRICE_ANIMATION_DOWNLOAD = '250000';
