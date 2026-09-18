@@ -606,7 +606,7 @@
 		"imapflow": "^2.0.2",
 		"jose": "^5.9.6",
 		"lightweight-charts": "^5.2.0",
-		"livekit-client": "^2.19.2",
+		"livekit-client": "^2.22.3",
 		"livepeer": "^3.5.0",
 		"lru-cache": "^11.5.2",
 		"manifold-3d": "^3.5.3",
