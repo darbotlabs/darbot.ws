@@ -67,15 +67,30 @@ async function readJobs() {
 	const port = server.address().port;
 
 	const { chromium } = await import('playwright');
-	const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage', '--enable-unsafe-swiftshader'] });
+	const launch = () => chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage', '--enable-unsafe-swiftshader'] });
+	let browser = await launch();
+	let relaunching = null;
 
 	let ok = 0, fail = 0, skipped = 0, cursor = 0;
 
-	async function worker(wi) {
+	// A heavy model can crash the renderer process. One page reused for the whole
+	// run meant a single crash failed every job after it (389 of 511 on one run),
+	// so a worker can always get a fresh page, and a fresh browser if that died too.
+	async function openPage() {
+		if (!browser.isConnected()) {
+			relaunching ||= launch().then((b) => { browser = b; relaunching = null; });
+			await relaunching;
+		}
 		const page = await browser.newPage({ viewport: { width: 640, height: 640 }, deviceScaleFactor: 2 });
 		page.on('pageerror', () => {});
 		await page.goto(`http://localhost:${port}/harness.html`, { waitUntil: 'domcontentloaded' });
 		await page.waitForFunction('window.__ready === true', { timeout: 20000 });
+		return page;
+	}
+	const crashed = (err) => /Target crashed|Target page, context or browser has been closed|Browser has been closed|Protocol error/i.test(err.message);
+
+	async function worker(wi) {
+		let page = await openPage();
 
 		while (cursor < jobs.length) {
 			const i = cursor++;
@@ -86,8 +101,18 @@ async function readJobs() {
 				const glb = await getObject(glbKey);
 				const local = `m${wi}-${i}.glb`;
 				writeFileSync(join(scratch, local), glb);
-				const dataUrl = await page.evaluate((u) => window.__renderGlb(u), `http://localhost:${port}/${local}`);
-				rmSync(join(scratch, local), { force: true });
+				let dataUrl;
+				try {
+					dataUrl = await page.evaluate((u) => window.__renderGlb(u), `http://localhost:${port}/${local}`);
+				} catch (err) {
+					if (!crashed(err)) throw err;
+					// One more try on a clean page: a crash is often the machine, not the model.
+					await page.close().catch(() => {});
+					page = await openPage();
+					dataUrl = await page.evaluate((u) => window.__renderGlb(u), `http://localhost:${port}/${local}`);
+				} finally {
+					rmSync(join(scratch, local), { force: true });
+				}
 				const png = Buffer.from(String(dataUrl).replace(/^data:image\/png;base64,/, ''), 'base64');
 				if (png.length < 1000) throw new Error('empty render');
 				await putObject(thumbKey, png, 'image/png', 'public, max-age=604800');
@@ -96,9 +121,11 @@ async function readJobs() {
 			} catch (err) {
 				fail++;
 				console.warn(`${label} render fail ${glbKey}: ${err.message.split('\n')[0]}`);
+				// The retry crashed as well: leave this model and carry on with a live page.
+				if (crashed(err)) { await page.close().catch(() => {}); page = await openPage(); }
 			}
 		}
-		await page.close();
+		await page.close().catch(() => {});
 	}
 
 	await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
