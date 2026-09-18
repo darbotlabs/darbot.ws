@@ -19,7 +19,7 @@
 
 import { sql } from '../../_lib/db.js';
 import { authenticateBearer, extractBearer, getSessionUser } from '../../_lib/auth.js';
-import { cors, error, json, method, wrap, rateLimited } from '../../_lib/http.js';
+import { embedReadCors, error, json, method, wrap, rateLimited } from '../../_lib/http.js';
 import { clientIp, limits } from '../../_lib/rate-limit.js';
 import { getSkillPrices, skillPriceMap } from '../../_lib/skill-price-cache.js';
 import { viewerNftGatedSkills } from '../../_lib/nft-gate.js';
@@ -34,7 +34,7 @@ async function resolveAuth(req) {
 }
 
 export default wrap(async (req, res) => {
-	if (cors(req, res, { methods: 'GET,OPTIONS', credentials: true })) return;
+	if (embedReadCors(req, res)) return;
 	if (!method(req, res, ['GET'])) return;
 
 	const rl = await limits.widgetRead(clientIp(req));

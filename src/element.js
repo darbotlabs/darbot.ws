@@ -371,8 +371,12 @@ const BASE_STYLE = `
 	@keyframes blink-cursor { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 	/* Suggestion chips when the conversation is empty */
 	.suggest-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 0; }
-	.suggest-chip { font: 600 11px/1 var(--agent-chat-font); color: var(--agent-on-surface); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); padding: 6px 10px; border-radius: 999px; cursor: pointer; transition: all .12s; }
-	.suggest-chip:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); }
+	/* A chip carries its own ground. It used to be a 6% white wash, which is only
+	   legible over something dark: on a host page with a light background the
+	   near-white label disappeared. */
+	.suggest-chip { font: 600 11px/1 var(--agent-chat-font); color: var(--agent-on-surface); background: var(--agent-surface); border: 1px solid rgba(255,255,255,.14); padding: 6px 10px; border-radius: 999px; cursor: pointer; transition: all .12s; }
+	.suggest-chip:hover { background: rgba(38, 48, 70, 0.96); border-color: rgba(255,255,255,.26); }
+	.suggest-chip:focus-visible { outline: 2px solid var(--agent-accent); outline-offset: 2px; }
 	/* Tool-call indicator near the bottom of the canvas */
 	.tool-indicator { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); display: none; align-items: center; gap: 8px; padding: 6px 12px; background: var(--agent-surface); color: var(--agent-on-surface); border-radius: 999px; font: 12px var(--agent-chat-font); backdrop-filter: blur(12px); pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 3; }
 	.tool-indicator[data-active="true"] { display: inline-flex; opacity: 1; }
@@ -487,6 +491,11 @@ const BASE_STYLE = `
 		border: 1px solid rgba(0, 0, 0, 0.08);
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.12);
 	}
+	/* The floating widget sits on top of a page we do not control, and its text is
+	   light. With no background of its own it was white-on-cream on any light site,
+	   so floating mode defaults to the dark surface. background="transparent" or
+	   "light" still opt out. */
+	:host([mode="floating"]:not([background])) { background: #0b0d10; }
 	:host([background="dark"]) { background: #0b0d10; }
 	:host([background="light"]) { background: #f5f5f5; }
 	:host([background="light"]) .name-plate {
@@ -1785,8 +1794,10 @@ class Agent3DElement extends HTMLElement {
 			if (_backendId) {
 				try {
 					const detailBase = _scriptOrigin || window.location.origin;
+					// On somebody else's site our cookies are third-party and the public
+					// answer is all an embed can use, so only send them on our own origin.
 					const r = await fetch(`${detailBase}/api/agents/${_backendId}/skill-access`, {
-						credentials: 'include',
+						credentials: detailBase === window.location.origin ? 'include' : 'omit',
 					});
 					if (r.ok) {
 						const a = (await r.json())?.data;
@@ -2037,7 +2048,7 @@ class Agent3DElement extends HTMLElement {
 						try {
 							const base = _scriptOrigin || window.location.origin;
 							const r = await fetch(`${base}/api/agents/${_backendId}/skill-access`, {
-								credentials: 'include',
+								credentials: base === window.location.origin ? 'include' : 'omit',
 							});
 							if (r.ok) {
 								const a = (await r.json())?.data;

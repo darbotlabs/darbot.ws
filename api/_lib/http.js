@@ -527,6 +527,22 @@ export function cors(
 	return false;
 }
 
+// CORS for a read that the <agent-3d> embed makes from somebody else's website.
+//
+// The default allowlist is right for our own pages and wrong for an embed: the whole
+// point of the embed is that it runs on origins we have never heard of, so those
+// reads were blocked and logged a CORS error in every host site's console. A request
+// that carries no cookie and no authorization header can only ever see the public
+// answer, so it is safe to open to any origin. Anything authenticated keeps the
+// strict allowlist and its credentials.
+export function embedReadCors(req, res, { methods = 'GET,OPTIONS', authedMethods = methods } = {}) {
+	const wanted = req.method === 'OPTIONS' ? String(req.headers['access-control-request-method'] || 'GET').toUpperCase() : req.method;
+	const anonymous = !req.headers.cookie && !req.headers.authorization;
+	const asksForAuth = /\bauthorization\b/i.test(String(req.headers['access-control-request-headers'] || ''));
+	if (wanted === 'GET' && anonymous && !asksForAuth) return cors(req, res, { origins: '*', methods });
+	return cors(req, res, { methods: authedMethods, credentials: true });
+}
+
 function isAllowedOrigin(origin, allowed) {
 	if (!allowed) {
 		if (origin === env.APP_ORIGIN) return true;

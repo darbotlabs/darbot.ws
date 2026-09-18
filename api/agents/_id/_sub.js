@@ -6,7 +6,7 @@ import { Wallet } from 'ethers';
 import { z } from 'zod';
 import { sql } from '../../_lib/db.js';
 import { getSessionUser, authenticateBearer, extractBearer } from '../../_lib/auth.js';
-import { cors, json, method, readJson, wrap, error, rateLimited } from '../../_lib/http.js';
+import { cors, json, method, readJson, wrap, error, rateLimited, embedReadCors } from '../../_lib/http.js';
 import { limits, clientIp } from '../../_lib/rate-limit.js';
 import { requireCsrf } from '../../_lib/csrf.js';
 import { parse } from '../../_lib/validate.js';
@@ -321,7 +321,7 @@ export const handleAnimations = wrap(async (req, res, id) => {
 // ── embed-policy ──────────────────────────────────────────────────────────────
 
 export const handleEmbedPolicy = wrap(async (req, res, id) => {
-	if (cors(req, res, { methods: 'GET,PUT,DELETE,OPTIONS', credentials: true })) return;
+	if (embedReadCors(req, res, { authedMethods: 'GET,PUT,DELETE,OPTIONS' })) return;
 	if (!method(req, res, ['GET', 'PUT', 'DELETE'])) return;
 
 	if (req.method === 'GET') {
