@@ -1642,8 +1642,16 @@ export async function build402Body({
 // (HEADERS_OVERFLOW, "some clients will fail to parse this response").
 // Endpoints with rich bazaar schemas + per-accept signed offers were
 // emitting 11-17 KB headers, which the production LB then dropped entirely.
-// 8 KB leaves comfortable room for the ~0.5 KB of ordinary headers.
-const PAYMENT_REQUIRED_HEADER_MAX = 8 * 1024;
+//
+// The cap itself was then too close to the edge. On 2026-09-18 production
+// delivered a 7,760-byte mirror (/api/x402/forge) but silently stripped an
+// 8,192-byte one (/api/x402/pump-launch, which landed exactly on the old 8 KB
+// cap), so that route answered 402 with no PAYMENT-REQUIRED header at all and
+// marketplace validators failed it. 7 KB sits below every size observed to
+// survive and leaves headroom for the other response headers to grow. The body
+// always carries the complete challenge, so a smaller mirror loses nothing a
+// client needs.
+export const PAYMENT_REQUIRED_HEADER_MAX = 7 * 1024;
 
 const isPlainRecord = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 

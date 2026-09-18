@@ -620,10 +620,10 @@ describe('send402 PAYMENT-REQUIRED header', () => {
 		});
 
 		it('keeps the full bazaar (info + schema) when a schema-bearing envelope fits', async () => {
-			const { paymentRequiredHeaderValue } = await loadSpec();
+			const { paymentRequiredHeaderValue, PAYMENT_REQUIRED_HEADER_MAX } = await loadSpec();
 			const body = envelopeWithBazaarSchema();
 			const header = paymentRequiredHeaderValue(body);
-			expect(header.length).toBeLessThanOrEqual(8 * 1024);
+			expect(header.length).toBeLessThanOrEqual(PAYMENT_REQUIRED_HEADER_MAX);
 			const decoded = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
 			// Full envelope fit — bazaar and its info both survive verbatim.
 			expect(decoded.extensions.bazaar.info).toBeDefined();
@@ -632,10 +632,10 @@ describe('send402 PAYMENT-REQUIRED header', () => {
 		});
 
 		it('drops the bazaar info examples (keeping the real schema) when the full mirror overflows', async () => {
-			const { paymentRequiredHeaderValue } = await loadSpec();
+			const { paymentRequiredHeaderValue, PAYMENT_REQUIRED_HEADER_MAX } = await loadSpec();
 			const body = envelopeWithBazaarSchema({ infoBytes: 20_000 });
 			const header = paymentRequiredHeaderValue(body);
-			expect(header.length).toBeLessThanOrEqual(8 * 1024);
+			expect(header.length).toBeLessThanOrEqual(PAYMENT_REQUIRED_HEADER_MAX);
 			const decoded = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
 			// Heavy payment extensions and the bloated info are gone; the machine
 			// schema the discovery crawler needs stays, verbatim.
@@ -647,10 +647,10 @@ describe('send402 PAYMENT-REQUIRED header', () => {
 		});
 
 		it('compacts the bazaar field schemas when even the schema alone overflows', async () => {
-			const { paymentRequiredHeaderValue } = await loadSpec();
+			const { paymentRequiredHeaderValue, PAYMENT_REQUIRED_HEADER_MAX } = await loadSpec();
 			const body = envelopeWithBazaarSchema({ fieldBytes: 20_000 });
 			const header = paymentRequiredHeaderValue(body);
-			expect(header.length).toBeLessThanOrEqual(8 * 1024);
+			expect(header.length).toBeLessThanOrEqual(PAYMENT_REQUIRED_HEADER_MAX);
 			const decoded = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
 			// Field schemas collapse to a compact `{type:'object'}` placeholder,
 			// but input/output presence — all the crawler keys on — survives.
@@ -661,13 +661,21 @@ describe('send402 PAYMENT-REQUIRED header', () => {
 			expect(discoverySchemasResolvable(decoded)).toBe(true);
 		});
 
+		it('keeps the mirror under the size production is known to strip', async () => {
+			// 2026-09-18: a 7,760-byte mirror reached clients, an 8,192-byte one was
+			// removed in transit and its route answered 402 with no header at all.
+			const { PAYMENT_REQUIRED_HEADER_MAX } = await loadSpec();
+			expect(PAYMENT_REQUIRED_HEADER_MAX).toBeLessThan(8192);
+			expect(PAYMENT_REQUIRED_HEADER_MAX).toBeLessThanOrEqual(7760);
+		});
+
 		it('falls to an extension-less slim mirror when no bazaar tier fits', async () => {
-			const { paymentRequiredHeaderValue } = await loadSpec();
+			const { paymentRequiredHeaderValue, PAYMENT_REQUIRED_HEADER_MAX } = await loadSpec();
 			// Schema-less bazaar that is itself far too big — no discovery tier
 			// can shrink it, so only the payable slim envelope survives.
 			const body = envelopeWithExtensions(20_000);
 			const header = paymentRequiredHeaderValue(body);
-			expect(header.length).toBeLessThanOrEqual(8 * 1024);
+			expect(header.length).toBeLessThanOrEqual(PAYMENT_REQUIRED_HEADER_MAX);
 			const decoded = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
 			expect(decoded.extensions).toBeUndefined();
 			// Everything a header-only payer needs survives.
