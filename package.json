@@ -497,7 +497,7 @@
 		"awesome:standalone": "node scripts/build-awesome.mjs --standalone"
 	},
 	"dependencies": {
-		"@0xsplits/splits-sdk": "^6.5.0",
+		"@0xsplits/splits-sdk": "^6.6.0",
 		"@ai-sdk/anthropic": "^4.0.53",
 		"@ai-sdk/openai": "^4.0.66",
 		"@avaturn/sdk": "^1.1.4",
