@@ -22,6 +22,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
+import sharp from 'sharp';
 import { getObject, putObject, objectExists } from './lib/asset-r2.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -130,6 +131,11 @@ async function readJobs() {
 				}
 				const png = Buffer.from(String(dataUrl).replace(/^data:image\/png;base64,/, ''), 'base64');
 				if (png.length < 1000) throw new Error('empty render');
+				// A blank frame is a perfectly valid PNG of a respectable size, so size alone
+				// let empty posters through. A frame with no variation in any channel,
+				// alpha included, has nothing drawn in it.
+				const { channels } = await sharp(png).stats();
+				if (Math.max(...channels.map((ch) => ch.stdev)) < 2) throw new Error('blank render: nothing was drawn');
 				await putObject(thumbKey, png, 'image/png', 'public, max-age=604800');
 				ok++;
 				if (ok % 20 === 0) process.stdout.write(`\r  ${ok} rendered, ${skipped} skipped, ${fail} failed…`);

@@ -28,6 +28,20 @@
 		<script type="module">
 			const mv = document.getElementById('mv');
 
+			// The capture has a transparent ground, so a frame with the model in it has
+			// opaque pixels and an empty one has none. Checked on a 48px copy: cheap, and
+			// any model big enough to be a poster survives the downscale.
+			async function hasPixels(blob) {
+				const bitmap = await createImageBitmap(blob);
+				const probe = new OffscreenCanvas(48, 48);
+				const ctx = probe.getContext('2d');
+				ctx.drawImage(bitmap, 0, 0, 48, 48);
+				bitmap.close?.();
+				const { data } = ctx.getImageData(0, 0, 48, 48);
+				for (let i = 3; i < data.length; i += 4) if (data[i] > 8) return true;
+				return false;
+			}
+
 			// theta: swing round so the longer horizontal side faces the camera instead
 			// of pointing at it. phi: look down on something flat, across at something
 			// tall. "auto" radius still fits the whole bounding sphere.
@@ -63,7 +77,16 @@
 							// Always the full square frame. Cropping to the model's "ideal
 							// aspect" is what turned a thin object into a 73px-wide poster,
 							// and every card in a gallery wants the same shape anyway.
-							const blob = await mv.toBlob({ mimeType: 'image/png', idealAspect: false });
+							// A fixed pause is a guess about how long the first frame takes, and at
+							// double resolution on a software renderer the guess was wrong for some
+							// models: the capture came back with nothing drawn. So look at the frame,
+							// and wait for one that actually has the model in it.
+							let blob = await mv.toBlob({ mimeType: 'image/png', idealAspect: false });
+							for (let attempt = 0; attempt < 8 && !(await hasPixels(blob)); attempt++) {
+								await new Promise((r) => setTimeout(r, 400 + attempt * 300));
+								await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+								blob = await mv.toBlob({ mimeType: 'image/png', idealAspect: false });
+							}
 							const reader = new FileReader();
 							reader.onload = () => resolve(reader.result);
 							reader.onerror = () => reject(new Error('blob read failed'));
