@@ -1,7 +1,7 @@
-3,000+ free animations for any 3D character.
+2,900+ free animations for any 3D character.
 
 Dances, gestures, combat, sports, reactions.
 
-They play on any humanoid avatar, whatever rig it came with: Mixamo, VRM, Unreal, Daz.
+They play on your humanoid avatar whether it was rigged for Mixamo, VRM, Unreal or Daz.
 
 three.ws/animations

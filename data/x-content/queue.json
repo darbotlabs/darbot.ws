@@ -733,7 +733,7 @@
 		},
 		{
 			"id": "free-animations",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"tier": 2,
 			"lane": "animation",
@@ -744,44 +744,79 @@
 			},
 			"posts": [
 				{
-					"text": "3,000+ free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on any humanoid avatar, whatever rig it came with: Mixamo, VRM, Unreal, Daz.\n\nthree.ws/animations",
+					"text": "2,900+ free animations for any 3D character.\n\nDances, gestures, combat, sports, reactions.\n\nThey play on your humanoid avatar whether it was rigged for Mixamo, VRM, Unreal or Daz.\n\nthree.ws/animations",
 					"textFrom": "docs/announcements/free-animations.post.txt",
 					"media": [
 						{
 							"path": "public/x-media/free-animations/card.png",
-							"alt": "A three.ws card reading '3,000+ free animations.' beside a browser window showing the animation library: a grid of a 3D character performing different clips, with filters for dance, combat, sports and gestures"
+							"alt": "A three.ws card reading '2,900+ free animations.' beside a browser window showing the three.ws animation library: a grid of the same 3D character performing different clips, including idle, look down, cover eyes, facepalm and a crouching kick"
 						}
 					]
 				}
 			],
 			"claims": [
 				{
-					"says": "3,000+ free animations",
+					"says": "2,900+ free animations",
 					"evidence": [
 						{
 							"type": "page",
-							"url": "https://three.ws/api/catalog?limit=1",
-							"contains": "\"animation\":2913"
-						},
-						{
-							"type": "page",
-							"url": "https://three.ws/animations/manifest.json",
-							"contains": "\"name\""
+							"url": "https://three.ws/api/animations/library?facets=1",
+							"contains": "\"total\":2913"
 						}
 					]
 				},
 				{
-					"says": "Mixamo, VRM, Unreal, Daz",
+					"says": "Dances, gestures, combat, sports, reactions",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/api/animations/library?facets=1",
+							"contains": "\"key\":\"dance\""
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/api/animations/library?facets=1",
+							"contains": "\"key\":\"gesture\""
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/api/animations/library?facets=1",
+							"contains": "\"key\":\"combat\""
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/api/animations/library?facets=1",
+							"contains": "\"key\":\"sport\""
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/api/animations/library?facets=1",
+							"contains": "\"key\":\"reaction\""
+						}
+					]
+				},
+				{
+					"says": "Mixamo, VRM, Unreal or Daz",
 					"evidence": [
 						{
 							"type": "file",
 							"path": "src/glb-canonicalize.js",
-							"contains": "Daz"
+							"contains": "Mixamo"
 						},
 						{
 							"type": "file",
 							"path": "src/glb-canonicalize.js",
-							"contains": "Mixamo"
+							"contains": "VRM / VRoid"
+						},
+						{
+							"type": "file",
+							"path": "src/glb-canonicalize.js",
+							"contains": "Unreal mannequin"
+						},
+						{
+							"type": "file",
+							"path": "src/glb-canonicalize.js",
+							"contains": "Daz"
 						}
 					]
 				}
@@ -799,6 +834,118 @@
 					"type": "api",
 					"name": "the animations page is live",
 					"url": "https://three.ws/animations",
+					"expect": {
+						"status": 200
+					}
+				}
+			]
+		},
+		{
+			"id": "ai-3d-skills",
+			"status": "approved",
+			"kind": "post",
+			"tier": 2,
+			"lane": "creation",
+			"pattern": "proof",
+			"notBefore": "2026-09-18T17:00:00Z",
+			"source": {
+				"path": "docs/agent-skills.md"
+			},
+			"posts": [
+				{
+					"text": "Your AI can make 3D now.\n\nInstall our free 3D skills for Claude, then ask it for a chair.\n\nIt checks 3,500+ free 3D assets first. If nothing fits, it makes a new model from your words.\n\nNo account. No API key.\n\nthree.ws/docs/agent-skills",
+					"textFrom": "docs/announcements/ai-3d-skills.post.txt",
+					"media": [
+						{
+							"path": "public/x-media/ai-3d-skills/card.png",
+							"alt": "A three.ws card reading 'Your AI can make 3D now.' beside a browser window showing the free three.ws object library: a grid of CC0 3D models including an alarm clock, a ceramic vase, an American football and an arm chair, each with Preview, AR and Download buttons"
+						}
+					]
+				}
+			],
+			"claims": [
+				{
+					"says": "3,500+ free 3D assets",
+					"evidence": [
+						{
+							"type": "page",
+							"url": "https://three.ws/api/catalog?limit=1",
+							"contains": "\"total\":3531"
+						}
+					]
+				},
+				{
+					"says": "free 3D skills for Claude",
+					"evidence": [
+						{
+							"type": "file",
+							"path": "docs/agent-skills.md",
+							"contains": "Claude Code"
+						},
+						{
+							"type": "page",
+							"url": "https://three.ws/skills/3d-studio/generate-3d-model/SKILL.md",
+							"contains": "generate-3d-model"
+						}
+					]
+				},
+				{
+					"says": "It checks 3,500+ free 3D assets first",
+					"evidence": [
+						{
+							"type": "file",
+							"path": ".agents/skills/find-3d-assets/SKILL.md",
+							"contains": "Check here BEFORE generating a model from scratch"
+						}
+					]
+				},
+				{
+					"says": "it makes a new model from your words",
+					"evidence": [
+						{
+							"type": "file",
+							"path": ".agents/skills/generate-3d-model/SKILL.md",
+							"contains": "Turn a text prompt into a downloadable, textured 3D model"
+						}
+					]
+				},
+				{
+					"says": "No account. No API key.",
+					"evidence": [
+						{
+							"type": "file",
+							"path": ".agents/skills/find-3d-assets/SKILL.md",
+							"contains": "no account, no API key"
+						},
+						{
+							"type": "file",
+							"path": ".agents/skills/generate-3d-model/SKILL.md",
+							"contains": "no key, no account"
+						}
+					]
+				}
+			],
+			"probes": [
+				{
+					"type": "api",
+					"name": "the skills download is served",
+					"url": "https://three.ws/skills/3d-studio/three-ws-3d-skills.zip",
+					"expect": {
+						"status": 200
+					}
+				},
+				{
+					"type": "api",
+					"name": "the free catalog answers a chair search",
+					"url": "https://three.ws/api/catalog?q=chair&limit=3",
+					"expect": {
+						"contains": "ArmChair_01"
+					}
+				},
+				{
+					"type": "api",
+					"name": "the skills doc is live",
+					"url": "https://three.ws/docs/agent-skills",
 					"expect": {
 						"status": 200
 					}

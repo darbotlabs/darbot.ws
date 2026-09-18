@@ -13,7 +13,10 @@
 // Spec: { "out": "public/x-media/<id>/card.png", "headline": "Line one\nLine two",
 //         "body": "One or two plain sentences.", "code": ["<line>", "<line>"],
 //         "frame": "browser" | "phone", "shot": "path/to.png" | "https://three.ws/page",
-//         "label": "yoursite.com", "scrollBy": 400, "settleMs": 12000 }
+//         "label": "yoursite.com", "scrollBy": 400, "settleMs": 12000,
+//         "hide": [".sticky-toolbar"] }
+// `hide` lists extra selectors to drop from a live capture, e.g. a sticky bar that
+// would otherwise sit on top of the content once the page is scrolled.
 // `shot` is a local PNG (a capture of the feature really running) or a live URL that is
 // captured on the spot. A capture that comes back blank fails the run, so a card can
 // never ship showing nothing.
@@ -47,7 +50,7 @@ async function shotUri() {
 	if (/^https?:/.test(spec.shot)) {
 		const page = await browser.newPage({ viewport: spec.frame === 'phone' ? { width: 412, height: 892 } : { width: 1280, height: 800 }, deviceScaleFactor: 2, colorScheme: 'dark' });
 		try { await page.goto(spec.shot, { waitUntil: 'networkidle', timeout: 90000 }); } catch { /* an open socket never idles; the settle below covers it */ }
-		await page.addStyleTag({ content: `${OVERLAYS.join(',')}{display:none!important}` });
+		await page.addStyleTag({ content: `${[...OVERLAYS, ...(spec.hide || [])].join(',')}{display:none!important}` });
 		if (spec.scrollBy) await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'instant' }), spec.scrollBy);
 		await page.waitForTimeout(spec.settleMs ?? 9000);
 		buf = await page.screenshot({ type: 'png' });
