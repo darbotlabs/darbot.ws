@@ -253,7 +253,7 @@ This section names every program, marketplace, and infrastructure relationship b
 
 ### Distribution and directories
 
-Solana Mobile dApp Store (submitted 28 August 2026, in review), Google Play (in review), the OpenAI GPT Store (live), the official MCP Registry, the VS Code Marketplace and Open VSX, the Chrome Web Store (the walking avatar extension), and the Claude Code plugin marketplace.
+Solana Mobile dApp Store (submitted 28 August 2026, in review), Google Play (in review), the OpenAI GPT Store (live), the official MCP Registry, the VS Code Marketplace and Open VSX, and the Claude Code plugin marketplace.
 
 ### Media
 

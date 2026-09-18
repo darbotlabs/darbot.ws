@@ -64,7 +64,7 @@ Sequencing matters because several of these link to each other, and because the 
 
 **Week 2, gated separately.** CoinMarketCap (4), which needs the other-coin approval as well as the channel approval.
 
-**Week 3, short-form.** Show HN, then Product Hunt on a Tuesday to Thursday, then the subreddits spread across separate days. Reddit is the only channel here where posting two of ours within a day looks like a campaign, which is exactly what it must not look like.
+**Week 3, short-form.** Show HN, then Product Hunt on a Tuesday to Thursday, then the subreddits spread across separate days. Product Hunt constraint, checked 2026-09-18: three.ws already launched there on 2026-05-28 ([the launch post](https://three.ws/news/2059894004771418220)), and Product Hunt's [relaunch rule](https://help.producthunt.com/en/articles/484934-can-i-relaunch-my-product) needs six months between launches from one root domain plus a significant product change. The Materialize launch therefore goes on or after 2026-11-28, or earlier only through Product Hunt's relaunch request naming what changed. Show HN is unaffected: an hn.algolia.com search finds no three.ws post ever. Reddit is the only channel here where posting two of ours within a day looks like a campaign, which is exactly what it must not look like.
 
 **No date pressure on the Khronos discussion.** It is a question, not a launch, and it should be opened when someone can watch the thread for a week.
 

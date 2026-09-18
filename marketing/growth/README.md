@@ -25,6 +25,9 @@ This directory is the operational layer above the repo's deeper source material:
 - [Anchor campaign proof](./proof/README.md): desktop, X, and mobile stills plus 15-second
   clips of every anchor campaign's three.ws surface, captured from production by
   `scripts/capture-campaign-proof.mjs`, with the defects seen at capture.
+- [Wide sweep of 2026-09-18](./sweep-2026-09-18.md): every launch platform, directory,
+  newsletter, app store, event, standards body, and crypto-ecosystem route found that day,
+  with evidence and the dropped lists.
 - [Opportunity tracker](./opportunities.csv): the machine-readable pipeline. This is where
   a status or next action changes first.
 - [Measurement](./measurement.md): the UTM convention, campaign scorecard, and weekly review.

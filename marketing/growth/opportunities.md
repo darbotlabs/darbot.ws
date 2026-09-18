@@ -306,6 +306,16 @@ the OpenAI Agents SDK have no community listing surface. glTF-Transform, three-m
 Spark, and Rapier have no users showcase. `Shubhamsaboo/awesome-llm-apps` is owner-authored
 tutorials. `cursor.directory` answered 429 and stays unverified.
 
+## The wide sweep (2026-09-18)
+
+The same day, a wider sweep covered launch platforms, AI and MCP directories, newsletters,
+podcasts, guest-post programs, app stores, events and CFPs, standards bodies, and the Solana
+and crypto ecosystem. Its full evidence and dropped lists live in
+[sweep-2026-09-18.md](./sweep-2026-09-18.md); the dated rows that need an owner action are in
+[`opportunities.csv`](./opportunities.csv). Closest deadlines: Web3D 2026 Competitions
+(2026-09-30), AI Native DevCon CFP (2026-10-01), AI Engineer Code Summit CFP (2026-10-11),
+Colosseum Crypto World's Fair (2026-10-12).
+
 ## High-value editorial routes
 
 These are earned after a measurable launch, not submitted as generic company profiles:

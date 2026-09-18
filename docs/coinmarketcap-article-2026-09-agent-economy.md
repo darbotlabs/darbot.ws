@@ -228,7 +228,7 @@ We do not hardcode a verification badge, a partner tier, or a listing status.
 
 ## Where this is listed, precisely
 
-Live: the BNB Chain Dappbay directory, categorised under AI Agent Launchpad, AI Data and AI Infra. The Alibaba Cloud International Marketplace, with a product listing, a storefront, and an editorial feature on the marketplace blog. The Solana Mobile dApp Store. The OpenAI GPT Store. The official Model Context Protocol registry, with 72 servers under one namespace. The VS Code Marketplace and Open VSX. The Chrome Web Store, for the walking avatar extension. And a feature article on the $THREE coin page on pump.fun.
+Live: the BNB Chain Dappbay directory, categorised under AI Agent Launchpad, AI Data and AI Infra. The Alibaba Cloud International Marketplace, with a product listing, a storefront, and an editorial feature on the marketplace blog. The Solana Mobile dApp Store. The OpenAI GPT Store. The official Model Context Protocol registry, with 72 servers under one namespace. The VS Code Marketplace and Open VSX. And a feature article on the $THREE coin page on pump.fun.
 
 Built and waiting: AWS Marketplace, where the SaaS integration is deployed and conformant but the listing itself is not yet public, so there is nothing to subscribe to on the AWS side today. Google Play, in review. The OpenAI plugin directory, open to submission, where the gating requirement of a public OAuth 2.1 MCP server is already met. Google Cloud Marketplace, open to partnership. Microsoft Azure Marketplace, on the roadmap.
 
