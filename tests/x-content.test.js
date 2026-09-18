@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { copyProblems, weightedLength } from '../api/_lib/x-content/quality.js';
 import { attachmentProblems, mediaProblems, parseFfmpegProbe } from '../api/_lib/x-content/media.js';
 import { markdownToContentState, attachArticleMedia } from '../api/_lib/x-content/articles.js';
-import { currentSlot, inQuietHours, jitterMinutes, pickDue, slotOpenings, tierOrder } from '../api/_lib/x-content/schedule.js';
-import { engagementSignals, loadLifts, rankItems, scoreItem } from '../api/_lib/x-content/priority.js';
+import { DEFAULT_SLOTS, currentSlot, inQuietHours, jitterMinutes, pickDue, slotOpenings, tierOrder } from '../api/_lib/x-content/schedule.js';
+import { engagementSignals, loadLifts, loadVolumeModel, rankItems, scoreItem, volumeScore } from '../api/_lib/x-content/priority.js';
 import { activeHolds, inventory, isPostSpecific, placeHold, runTick } from '../api/_lib/x-content/runner.js';
 import { memoryStore } from '../api/_lib/x-content/state.js';
 import { validateItem, validateQueue, loadQueue } from '../api/_lib/x-content/queue.js';
@@ -210,6 +210,48 @@ describe('priority', () => {
 		const scored = scoreItem(post('The $THREE layer, on @awscloud, explained for partners: three.ws/x'), { lifts, now: Date.parse('2026-09-17T00:00:00Z') });
 		expect(scored.predictedLift).toBeGreaterThan(1.5);
 		expect(scored.predictedLift).toBeLessThan(10);
+	});
+
+	it('ranks on the chance of a volume response, not on engagement, when the volume model ships', () => {
+		const model = loadVolumeModel(root);
+		expect(model.baseRate).toBeGreaterThan(0);
+		expect(model.features.map((row) => row.key)).toEqual(expect.arrayContaining(['launch', 'recognition', 'tier1', 'long', 'thread', 'video']));
+
+		const plain = post('A short note about a tool: three.ws/x');
+		const partner = post('three.ws has been accepted into the @nvidia Inception program. The rendering pipeline that ships your agent is now live for every creator on the platform, and the partnership opens GPU capacity we could not reach before: three.ws/nvidia', { posts: [{ text: 'three.ws has been accepted into the @nvidia Inception program. The rendering pipeline that ships your agent is now live for every creator on the platform, and the partnership opens GPU capacity we could not reach before: three.ws/nvidia', media: [{ path: 'public/x.webp' }] }, { text: 'What it unlocks, in detail.', media: [] }] });
+		expect(volumeScore(partner, model).found).toEqual(expect.arrayContaining(['tier1', 'recognition', 'launch', 'long', 'thread']));
+		expect(volumeScore(partner, model).chance).toBeGreaterThan(volumeScore(plain, model).chance * 2);
+
+		const context = { lifts, now: Date.parse('2026-09-17T00:00:00Z') };
+		const scored = scoreItem(partner, context);
+		expect(scored.parts.volume).toBeGreaterThan(0);
+		expect(scored.parts.engagement).toBeUndefined();
+		expect(scoreItem(plain, context).parts.volume).toBeLessThan(0);
+		expect(rankItems([{ ...plain, id: 'plain' }, { ...partner, id: 'partner' }], context)[0].item.id).toBe('partner');
+	});
+
+	it('falls back to the engagement estimate when no volume model is present', () => {
+		const withoutModel = Object.assign(new Map(lifts), { volumeModel: null });
+		const scored = scoreItem(post('The $THREE layer, on @awscloud: three.ws/x'), { lifts: withoutModel, now: Date.parse('2026-09-17T00:00:00Z') });
+		expect(scored.parts.engagement).toBeGreaterThan(0);
+		expect(scored.parts.volume).toBeUndefined();
+		expect(scored.volumeChance).toBeNull();
+	});
+
+	it('keeps every daily slot inside the hours the volume study favours, far enough apart to all post', () => {
+		const queue = loadQueue(root);
+		const slots = queue.cadence.slots;
+		expect(slots).toEqual(DEFAULT_SLOTS);
+		const minutes = slots.map((slot) => Number(slot.at.slice(0, 2)) * 60 + Number(slot.at.slice(3))).sort((a, b) => a - b);
+		for (const at of minutes) {
+			expect(at).toBeGreaterThanOrEqual(12 * 60);
+			expect(at + queue.cadence.windowMinutes).toBeLessThanOrEqual(20 * 60);
+		}
+		// The latest a slot can open, to the earliest the next one can: never closer
+		// than the minimum gap, or the later slot would be blocked by the earlier post.
+		for (let index = 1; index < minutes.length; index++) {
+			expect(minutes[index] - (minutes[index - 1] + queue.cadence.windowMinutes)).toBeGreaterThanOrEqual(queue.cadence.minimumMinutesApart);
+		}
 	});
 
 	it('adds owner boost, timeliness, waiting, and review; penalizes repetition; drops expired posts', () => {

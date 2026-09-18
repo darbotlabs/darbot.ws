@@ -60,8 +60,12 @@ export function inQuietHours(now, quiet) {
 //   T1 flagship         partner news, $THREE utility, major launches
 //   T2 features         shipped features with proof
 //   T3 proof of work    short demos, stats, build notes
-// Slot times come from the engagement report's hour-of-day data, and each slot
-// opens at a jittered minute only the seed can reproduce. A slot stays open for
+// Slot times come from the volume study: an original post between 12:00 and
+// 20:00 UTC (8 AM to 4 PM New York) is followed by a volume response on the
+// $THREE pool about 1.7 times as often as one outside it, and that is also when
+// the pool trades most, so all three slots sit inside that window with the
+// flagship slot at noon New York. Each slot opens at a jittered minute only the
+// seed can reproduce. A slot stays open for
 // three hours, so a missed tick (deploy, outage) still posts, but a day never
 // gets more than one post per slot and nothing spills into the small hours.
 //
@@ -74,9 +78,9 @@ export function inQuietHours(now, quiet) {
 export const TIERS = [1, 2, 3];
 
 export const DEFAULT_SLOTS = [
-	{ tier: 3, at: '08:00' },
+	{ tier: 3, at: '12:30' },
 	{ tier: 1, at: '16:00' },
-	{ tier: 2, at: '22:00' },
+	{ tier: 2, at: '19:30' },
 ];
 
 const dayKey = (timestamp) => new Date(timestamp).toISOString().slice(0, 10);

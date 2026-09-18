@@ -5,9 +5,15 @@
 // A score is a sum of named, explainable parts, so `npm run x:content -- plan`
 // can show exactly why one post outranks another:
 //
-//   engagement  predicted lift from how @trythreews posts with the same signals
-//               actually performed (data/x-archive/analysis), using the same
-//               format, length, and topic classifiers that produced the report
+//   volume      the chance the post is followed by a volume response on the
+//               $THREE pool, relative to the average post, from the model in
+//               data/x-content/volume-model.json. Pool volume is what pays the
+//               platform, so it outranks attention: it replaces the engagement
+//               part whenever the model file is present
+//   engagement  the fallback when there is no volume model: predicted lift from
+//               how @trythreews posts with the same signals actually performed
+//               (data/x-archive/analysis), using the same format, length, and
+//               topic classifiers that produced the report
 //   timely      a post with `expiresAt` rises as its window closes, and is
 //               dropped once it has passed (stale news is worse than none)
 //   boost       the owner's explicit `priority` on the item, -50 to +50
@@ -32,12 +38,58 @@ const SHRINK_K = 10;
 const TIMELY_WINDOW_MS = 2 * DAY;
 
 export const ENGAGEMENT_REPORT = 'data/x-archive/analysis/trythreews-engagement.json';
+export const VOLUME_MODEL = 'data/x-content/volume-model.json';
+
+// The model is fitted elsewhere (a logistic regression over every original post
+// moment against 1-minute pool candles) and shipped as plain JSON: an intercept,
+// a base rate, and one weight per attribute a draft can be checked for before it
+// is posted. Text attributes carry their own pattern, so a refit never needs a
+// code change here.
+export function loadVolumeModel(root) {
+	const path = resolve(root, VOLUME_MODEL);
+	if (!existsSync(path)) return null;
+	const model = JSON.parse(readFileSync(path, 'utf8'));
+	if (!Array.isArray(model.features) || !Number.isFinite(model.intercept) || !(model.baseRate > 0)) return null;
+	return { ...model, features: model.features.map((row) => ({ ...row, regex: row.pattern ? new RegExp(row.pattern.source, row.pattern.flags) : null })) };
+}
+
+// The attributes that are not a text pattern. Every slot sits inside the hours
+// the model calls `usHours` (schedule.js), and the queue only ever posts from the
+// company account, so both are true for every queued post: they move every score
+// by the same amount and are kept so the reported chance is an honest one.
+const VOLUME_CHECKS = {
+	video: (item) => (item.posts?.[0]?.media || []).some((row) => /\.(mp4|mov)$/i.test(row.path || '')),
+	thread: (item) => (item.posts?.length || 0) >= 2,
+	long: (item) => String(item.posts?.[0]?.text || '').length > 180,
+	usHours: () => true,
+	company: () => true,
+};
+
+// Chance that the post is followed by a volume response, and which attributes
+// the model found on it.
+export function volumeScore(item, model) {
+	if (!model) return null;
+	const head = item.posts?.[0] || {};
+	const text = String(item.kind === 'article' ? `${item.article?.title || ''}\n${head.text || ''}` : head.text || '');
+	let z = model.intercept;
+	const found = [];
+	for (const row of model.features) {
+		const has = row.regex ? row.regex.test(text) : Boolean(VOLUME_CHECKS[row.key]?.(item));
+		if (!has) continue;
+		z += row.weight;
+		found.push(row.key);
+	}
+	return { chance: 1 / (1 + Math.exp(-z)), found };
+}
 
 export function loadLifts(root) {
 	const path = resolve(root, ENGAGEMENT_REPORT);
-	if (!existsSync(path)) return null;
+	// The volume model rides along on the lifts map so every caller that already
+	// passes `lifts` into the ranking gets it without a new parameter.
+	const volumeModel = loadVolumeModel(root);
+	if (!existsSync(path)) return volumeModel ? Object.assign(new Map(), { volumeModel }) : null;
 	const report = JSON.parse(readFileSync(path, 'utf8')).report || {};
-	const lifts = new Map();
+	const lifts = Object.assign(new Map(), { volumeModel });
 	const add = (group, row) => {
 		const lift = row.lift ?? row.with?.lift;
 		const count = row.count ?? row.with?.count ?? 0;
@@ -108,7 +160,11 @@ export function scoreItem(item, { lifts, published = [], quality = {}, review = 
 
 	const signals = engagementSignals(item, lifts);
 	const predicted = Math.exp(combinedLog(signals));
-	parts.engagement = Math.round(10 * Math.log2(predicted) * 10) / 10;
+	const volume = volumeScore(item, lifts?.volumeModel);
+	// Same scale as the engagement part it replaces: 10 points per doubling against
+	// the average post, so the other parts keep their relative weight.
+	if (volume) parts.volume = Math.round(10 * Math.log2(volume.chance / lifts.volumeModel.baseRate) * 10) / 10;
+	else parts.engagement = Math.round(10 * Math.log2(predicted) * 10) / 10;
 
 	if (item.expiresAt) {
 		const left = Date.parse(item.expiresAt) - now;
@@ -136,7 +192,7 @@ export function scoreItem(item, { lifts, published = [], quality = {}, review = 
 	}
 
 	const score = Math.round(Object.values(parts).reduce((sum, value) => sum + value, 0) * 10) / 10;
-	return { score, parts, signals, predictedLift: Math.round(predicted * 100) / 100 };
+	return { score, parts, signals, predictedLift: Math.round(predicted * 100) / 100, volumeChance: volume ? Math.round(volume.chance * 1000) / 1000 : null, volumeSignals: volume?.found || [] };
 }
 
 // Every ready candidate, best first. Ties go to the item that has been ready

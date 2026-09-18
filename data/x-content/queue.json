@@ -2,8 +2,8 @@
 	"version": 2,
 	"account": "trythreews",
 	"cadence": {
-		"windowMinutes": 45,
-		"minimumMinutesApart": 240,
+		"windowMinutes": 30,
+		"minimumMinutesApart": 180,
 		"dailyCap": 3,
 		"quietHoursUtc": [
 			"02:00",
@@ -12,7 +12,7 @@
 		"slots": [
 			{
 				"tier": 3,
-				"at": "08:00"
+				"at": "12:30"
 			},
 			{
 				"tier": 1,
@@ -20,7 +20,7 @@
 			},
 			{
 				"tier": 2,
-				"at": "22:00"
+				"at": "19:30"
 			}
 		]
 	},

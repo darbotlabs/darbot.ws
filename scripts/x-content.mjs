@@ -123,7 +123,10 @@ async function plan() {
 			].filter(Boolean);
 			const parts = Object.entries(row.parts).map(([key, value]) => `${key} ${value > 0 ? '+' : ''}${value}`).join(', ');
 			console.log(`  ${String(row.score).padStart(6)}  ${item.id.padEnd(26)} ${flags.length ? `[${flags.join('; ')}]` : 'ready'}`);
-			console.log(`          ${parts}  (predicted ${row.predictedLift}x the account median)`);
+			const outlook = row.volumeChance == null
+				? `predicted ${row.predictedLift}x the account median`
+				: `${Math.round(row.volumeChance * 100)}% chance of a volume response${row.volumeSignals.length ? `: ${row.volumeSignals.join(', ')}` : ''}`;
+			console.log(`          ${parts}  (${outlook})`);
 		}
 		for (const item of waiting.filter((item) => !ranked.some((row) => row.item.id === item.id))) console.log(`    gone  ${item.id.padEnd(26)} [expired ${item.expiresAt}]`);
 	}
