@@ -18,6 +18,7 @@
  *   node scripts/gcp/seed-motion.mjs --limit=12            # smoke batch
  *   node scripts/gcp/seed-motion.mjs --categories=idle,emote
  *   node scripts/gcp/seed-motion.mjs --concurrency=4
+ *   node scripts/gcp/seed-motion.mjs --samples=4           # four takes per prompt
  *   node scripts/gcp/seed-motion.mjs --retry-rejects       # re-roll past rejects
  *   node scripts/gcp/seed-motion.mjs --publish             # upload + manifest
  *   node scripts/gcp/seed-motion.mjs --report              # checkpoint stats only
@@ -31,10 +32,10 @@
  * a clip that no longer passes simply stops being served. It costs no GPU time:
  * the motion is already generated, it was only ever written down wrong.
  *
- * SPEND SAFETY. Every job is submitted with no backend named, so the platform's
- * own free-first resolver picks the lane. Before a clip is accepted the run
- * decodes the provider's job envelope and asserts the work actually ran on a
- * self-hosted Cloud Run GPU service. If a job ever comes back from a paid
+ * SPEND SAFETY. Every job goes to the text2motion mode, whose only backend is
+ * our own model-text2motion Cloud Run GPU service. Before a clip is accepted the
+ * run decodes the provider's job envelope and asserts the work actually ran on
+ * that service (assertSelfHostedLane). If a job ever comes back from a paid
  * third-party lane the batch aborts immediately rather than quietly billing a
  * few hundred generations to someone else's API.
  *
@@ -53,8 +54,10 @@ import { fileURLToPath } from 'node:url';
 
 import { gateMotionClip, explainMotionGate, MOTION_GATE_VERSION } from '../../api/_lib/motion-quality.js';
 import {
+	assertSelfHostedLane,
 	closeLoopSeam,
 	flattenRootDrift,
+	gateMotionClip as gateRestBasis,
 	needsRebase,
 	rebaseToCanonicalRest,
 	toLibraryClip,
@@ -84,6 +87,16 @@ const RETRY_REJECTS = !!args['retry-rejects'];
 const PUBLISH = !!args.publish;
 const REPORT_ONLY = !!args.report;
 const REPAIR = !!args.repair;
+// Independent samples to draw per prompt. The sampler is stochastic, so the
+// same prompt yields a different take every time; several takes per prompt is
+// how a 137-prompt library grows into several hundred clips while the gate
+// keeps only the takes that hold up.
+const SAMPLES = Math.max(1, Math.min(Number(args.samples) || 1, 12));
+// Direct transport: call the text2motion worker through the platform's own GCP
+// provider, with no public endpoint and so no per-IP rate limit in the way.
+// Needs GCP_TEXT2MOTION_URL and GCP_RECONSTRUCTION_KEY (both on the three-ws-api
+// Cloud Run service). --origin forces the public HTTP route instead.
+const DIRECT = !args.origin && !!process.env.GCP_TEXT2MOTION_URL && !!process.env.GCP_RECONSTRUCTION_KEY;
 
 const R2_PREFIX = 'animations/library/generated';
 const CLIP_NAME_PREFIX = 'gen-';
@@ -98,10 +111,6 @@ const SUBMIT_TIMEOUT_MS = 30_000;
 // How long a bulk run will sit out the endpoint's per-IP hourly ceiling before
 // giving up and leaving the rest for the next resume. Default is one full window.
 const MAX_WAIT_SECONDS = Number(args['max-wait']) || 3900;
-
-// A job envelope must name one of these hosts. Anything else is a paid
-// third-party lane and aborts the batch (see SPEND SAFETY above).
-const SELF_HOSTED_HOST_RE = /(^|\.)run\.app$/i;
 
 function log(...parts) {
 	console.log(...parts);
@@ -144,22 +153,6 @@ function loadPrompts() {
 	}));
 }
 
-/**
- * Decode the provider's job envelope (base64url JSON, packJobId in
- * api/_providers/gcp.js) far enough to name the host that ran the work.
- * An envelope we cannot read is treated as unknown, which aborts the batch:
- * "I could not tell which lane billed this" is not a reason to keep spending.
- */
-function laneFromJobId(jobId) {
-	try {
-		const json = JSON.parse(Buffer.from(String(jobId), 'base64url').toString('utf8'));
-		const host = new URL(json.baseUrl).hostname;
-		return { host, mode: json.mode || null };
-	} catch {
-		return { host: null, mode: null };
-	}
-}
-
 class PaidLaneError extends Error {}
 
 /**
@@ -200,14 +193,54 @@ async function submitJob(prompt) {
 	}
 }
 
-function finishSubmit(data) {
-	const lane = laneFromJobId(data.job_id);
-	if (!lane.host || !SELF_HOSTED_HOST_RE.test(lane.host)) {
-		throw new PaidLaneError(
-			`job ran on ${lane.host || 'an unidentifiable lane'}, which is not a self-hosted Cloud Run GPU service`,
-		);
+let directProvider = null;
+async function provider() {
+	if (!directProvider) {
+		const { createRegenProvider } = await import('../../api/_providers/gcp.js');
+		directProvider = createRegenProvider();
 	}
-	return { jobId: data.job_id, lane: lane.host };
+	return directProvider;
+}
+
+async function submitDirect(prompt) {
+	const job = await (await provider()).submit({
+		mode: 'text2motion',
+		sourceUrl: null,
+		params: { prompt: prompt.prompt, duration_seconds: prompt.duration_seconds, fps: prompt.fps },
+	});
+	return finishSubmit({ job_id: job.extJobId });
+}
+
+// The worker keeps task records in instance memory and the service scales past
+// one instance with no session affinity, so a poll can land on the instance that
+// never saw the task. That reads as a 404 and is transient: keep polling inside
+// the budget rather than recording a failure the next poll would have cleared.
+async function awaitClipDirect(jobId) {
+	const deadline = Date.now() + POLL_BUDGET_MS;
+	let lastError = '';
+	while (Date.now() < deadline) {
+		await sleep(POLL_INTERVAL_MS);
+		const result = await (await provider()).status(jobId);
+		if (result.status === 'done' && result.resultClipUrl) return result.resultClipUrl;
+		if (result.status === 'failed') {
+			if (result.code === 'gcp_task_missing') {
+				lastError = result.error;
+				continue;
+			}
+			throw new Error(`worker: ${result.error || 'failed with no error text'}`);
+		}
+	}
+	throw new Error(`no clip after ${Math.round(POLL_BUDGET_MS / 1000)}s${lastError ? ` (${lastError})` : ''}`);
+}
+
+function finishSubmit(data) {
+	// The strict assertion names the worker, not just the platform: a job must
+	// have run on our own model-text2motion Cloud Run service.
+	try {
+		return { jobId: data.job_id, lane: assertSelfHostedLane(data.job_id).host };
+	} catch (err) {
+		throw new PaidLaneError(err.message);
+	}
 }
 
 async function awaitClip(jobId) {
@@ -244,10 +277,16 @@ function clipName(prompt, body) {
  */
 async function runPrompt(prompt) {
 	const started = Date.now();
-	const { jobId, lane } = await submitJob(prompt);
-	const clipUrl = await awaitClip(jobId);
-	const fetched = await fetchClip(clipUrl);
+	const { jobId, lane } = DIRECT ? await submitDirect(prompt) : await submitJob(prompt);
+	const clipUrl = DIRECT ? await awaitClipDirect(jobId) : await awaitClip(jobId);
+	const worker = await fetchClip(clipUrl);
 	const elapsedSeconds = Math.round((Date.now() - started) / 1000);
+
+	// The lane writes rotations in the HumanML3D skeleton's identity rest basis,
+	// not the library's canonical one (see rebaseToCanonicalRest). Converted
+	// first, because every later step, and every viewer, reads the clip in the
+	// library's basis. Played unconverted, the legs fold up over the body.
+	const fetched = needsRebase(worker) ? rebaseToCanonicalRest(worker).clip : worker;
 
 	// The lane's root channel is a constant forward ramp carrying no prompt
 	// signal (see ROOT_DRIFT in api/_lib/motion-seed.js), so it is removed first,
@@ -267,20 +306,26 @@ async function runPrompt(prompt) {
 	const seam = prompt.loop === true ? closeLoopSeam(flattened.clip) : null;
 	const raw = seam ? seam.clip : flattened.clip;
 
-	const verdict = gateMotionClip(raw, {
-		loop: prompt.loop === true,
-		requestedDuration: prompt.duration_seconds,
-	});
+	const verdict = gateWithBasis(raw, prompt);
 
 	// The clip is renamed to its library identity before it is written, so the
 	// staged file, the manifest entry and the published object always agree.
+	// toLibraryClip stamps the basis, so no later pass ever rebases it twice.
 	const body = JSON.stringify({ ...raw, name: 'pending' });
 	const name = clipName(prompt, body);
-	const clip = { ...raw, name };
+	const clip = toLibraryClip(raw, {
+		name,
+		promptId: prompt.id,
+		prompt: prompt.prompt,
+		category: prompt.category,
+		loop: prompt.loop === true,
+		taskId: assertSelfHostedLane(jobId).taskId,
+	});
 	const serialized = JSON.stringify(clip);
 
 	const record = {
 		prompt_id: prompt.id,
+		sample: prompt.sample ?? 0,
 		label: prompt.label,
 		category: prompt.category,
 		icon: prompt.icon || '🎬',
@@ -315,6 +360,36 @@ async function runPrompt(prompt) {
 		);
 	}
 	return record;
+}
+
+/**
+ * The quality gate plus the rest-basis net. motion-quality.js measures a clip
+ * against itself, which a clip in the wrong rest basis passes perfectly, so the
+ * basis check from motion-seed.js rides alongside it. It should never fire once
+ * rebaseToCanonicalRest has run; if it does, the conversion regressed and the
+ * clip must not ship.
+ */
+function gateWithBasis(clip, prompt) {
+	const verdict = gateMotionClip(clip, {
+		loop: prompt.loop === true,
+		requestedDuration: prompt.duration_seconds,
+	});
+	const basis = gateRestBasis(clip, { loop: prompt.loop === true });
+	if (basis.reasons.includes('wrong_rest_basis')) {
+		verdict.pass = false;
+		verdict.reasons = [...verdict.reasons, 'wrong_rest_basis'];
+	}
+	if (verdict.metrics) {
+		verdict.metrics.uprightGap = basis.metrics.uprightGap;
+		verdict.metrics.legBasisDegrees = basis.metrics.legBasisDegrees;
+	}
+	return verdict;
+}
+
+/** Checkpoint key for one take of one prompt. Take 0 keeps the bare id, so
+ * checkpoints written before --samples existed resume unchanged. */
+function sampleKey(prompt) {
+	return prompt.sample ? `${prompt.id}~${prompt.sample}` : prompt.id;
 }
 
 function shouldRun(record) {
@@ -472,10 +547,7 @@ async function repair(state) {
 		const seam = loop ? closeLoopSeam(flattened.clip) : null;
 		const repaired = seam ? seam.clip : flattened.clip;
 
-		const verdict = gateMotionClip(repaired, {
-			loop,
-			requestedDuration: prompt?.duration_seconds,
-		});
+		const verdict = gateWithBasis(repaired, { loop, duration_seconds: prompt?.duration_seconds });
 
 		const clip = toLibraryClip(repaired, {
 			name: entry.name,
@@ -557,11 +629,16 @@ async function main() {
 	if (!PUBLISH || args.limit || args.categories) {
 		let prompts = loadPrompts();
 		if (CATEGORIES) prompts = prompts.filter((p) => CATEGORIES.includes(p.category));
-		const queue = prompts.filter((p) => shouldRun(state.prompts[p.id])).slice(0, LIMIT);
+		// Interleave takes (every prompt's take 0, then every take 1, ...) so a
+		// partial run covers the whole library before it deepens any one prompt.
+		const takes = [];
+		for (let sample = 0; sample < SAMPLES; sample++) for (const p of prompts) takes.push({ ...p, sample });
+		const queue = takes.filter((p) => shouldRun(state.prompts[sampleKey(p)])).slice(0, LIMIT);
 
 		log(`Seeding motion from ${PROMPTS_PATH.replace(`${ROOT}/`, '')}`);
-		log(`  origin      ${ORIGIN}`);
-		log(`  queue       ${queue.length} prompt(s) of ${prompts.length} (${Object.keys(state.prompts).length} already decided)`);
+		log(`  transport   ${DIRECT ? 'direct (GCP provider, no public rate limit)' : ORIGIN}`);
+		log(`  samples     ${SAMPLES} per prompt`);
+		log(`  queue       ${queue.length} take(s) of ${takes.length} (${Object.keys(state.prompts).length} already decided)`);
 		log(`  concurrency ${CONCURRENCY}`);
 		log(`  staging     ${OUT_DIR.replace(`${ROOT}/`, '')}`);
 		log('');
@@ -573,22 +650,23 @@ async function main() {
 				const prompt = queue[index++];
 				try {
 					const record = await runPrompt(prompt);
-					state.prompts[prompt.id] = record;
+					state.prompts[sampleKey(prompt)] = record;
 					const mark = record.status === 'accepted' ? 'keep  ' : 'reject';
 					const why = record.status === 'accepted' ? '' : `  ${record.reasons.join(',')}`;
-					log(`  ${mark} ${prompt.id.padEnd(28)} ${String(record.elapsed_seconds).padStart(3)}s${why}`);
+					log(`  ${mark} ${sampleKey(prompt).padEnd(30)} ${String(record.elapsed_seconds).padStart(3)}s${why}`);
 				} catch (err) {
 					if (err instanceof PaidLaneError) {
 						aborted = err;
 						break;
 					}
-					state.prompts[prompt.id] = {
+					state.prompts[sampleKey(prompt)] = {
 						prompt_id: prompt.id,
+						sample: prompt.sample,
 						status: 'error',
 						detail: err?.message || String(err),
 						decided_at: new Date().toISOString(),
 					};
-					log(`  error  ${prompt.id.padEnd(28)} ${err?.message || err}`);
+					log(`  error  ${sampleKey(prompt).padEnd(30)} ${err?.message || err}`);
 				}
 				saveCheckpoint(state);
 			}
