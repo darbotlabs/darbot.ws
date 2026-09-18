@@ -24,6 +24,7 @@ import {
 	selfFacilitatorUrl,
 	validateRingConfig,
 } from './_lib/x402/ring-config.js';
+import { pendingSettlementStats } from './_lib/x402/pending-settlements.js';
 
 // Read SIWX table counts so operators can confirm at-a-glance whether the
 // SIWX rails are wired and active. The tables may not exist on a brand-new
@@ -72,6 +73,20 @@ export default wrap(async (req, res) => {
 		config_warnings: validateRingConfig(),
 	};
 
+	// Settlements that answered `settlement_pending` (broadcast, outcome not yet
+	// known), plus how the last day's pending settlements resolved. A non-zero
+	// `pending` is normal and self-clearing; a climbing `pending` with
+	// `abandoned`/`failed` alongside it means transactions are being broadcast
+	// into conditions where they cannot confirm, which is an RPC or sponsor-SOL
+	// problem rather than a payment problem. Falls back to null rather than
+	// failing the probe: this is an observability panel, not a health gate.
+	let settlements = null;
+	try {
+		settlements = await pendingSettlementStats({ windowHours: 24 });
+	} catch (err) {
+		settlements = { error: String(err?.message || err).slice(0, 160) };
+	}
+
 	// Surface what we advertise in 402 challenges so operators can confirm at a
 	// glance: which accept entries opt into the Permit2 transfer method, and
 	// whether each facilitator's /supported probe actually advertises the
@@ -114,6 +129,7 @@ export default wrap(async (req, res) => {
 				},
 			},
 			ring,
+			settlements,
 			env: {
 				X402_PAY_TO_SOLANA: env.X402_PAY_TO_SOLANA || null,
 				X402_PAY_TO_BASE: env.X402_PAY_TO_BASE || null,

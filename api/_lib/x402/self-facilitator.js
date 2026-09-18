@@ -32,6 +32,14 @@ import {
 
 import { env } from '../env.js';
 import { solanaConnection } from '../solana/connection.js';
+// Pure DB/crypto helpers: no cycle back into this module.
+import {
+	SETTLEMENT_PENDING_REASON,
+	pendingSettlementKey,
+	recordPendingOrTerminal,
+} from './pending-settlements.js';
+
+export { SETTLEMENT_PENDING_REASON };
 
 const COMPUTE_BUDGET_PROGRAM_ID = new PublicKey(
 	'ComputeBudget111111111111111111111111111111',
@@ -518,20 +526,123 @@ function bumpSolCache(pubkeyB58, deltaLamports) {
 	}
 }
 
-async function confirmSignature(conn, signature, timeoutMs = 30_000) {
-	const deadline = Date.now() + timeoutMs;
+// How long a settle blocks waiting for confirmation before it answers
+// `settlement_pending` and lets the reconcile cron finish the job. The old
+// 30-second wait was the only thing between a slow slot and a 502, so it had to
+// be long; now that an unresolved wait is a third outcome rather than a failure,
+// holding the buyer's connection open for half a minute buys nothing. 12s clears
+// the overwhelming majority of Solana confirmations inline and caps the settle
+// leg of a paid request at a latency a client library will sit through.
+// Read per call, not at import: the confirmation window is the one settle
+// tunable an operator reaches for DURING an incident (a degraded RPC wants a
+// shorter wait so more settles go pending and reconcile out of band), and a
+// module-load constant would need a redeploy to move.
+function settleConfirmTimeoutMs() {
+	const raw = Number(process.env.X402_SETTLE_CONFIRM_TIMEOUT_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : 12_000;
+}
+// Status poll cadence. Tightened with the timeout above: at 1200ms a transaction
+// that confirms in 500ms still paid up to a full extra second of latency.
+const CONFIRM_POLL_MS = 800;
+
+// Wait for a signature's fate.
+//
+// Three answers, not two, because "we do not know yet" is a real state and the
+// caller's response to it differs completely from a rejection:
+//   { confirmed: true }                    landed, no error.
+//   { confirmed: false, terminal: true }   landed and FAILED on chain. It ran
+//                                            and reverted, so there is nothing
+//                                            to wait for; report the failure.
+//   { confirmed: false, terminal: false }  the wait ran out, or the RPC could
+//                                            not answer. The transaction may
+//                                            still land. NEVER report failure
+//                                            here: this is `settlement_pending`.
+//
+// A transaction that was dropped without landing looks identical to the third
+// case from inside the wait, and it is the reconcile pass
+// (probeSettlementSignature) that later distinguishes the two, once the
+// blockhash can no longer be valid.
+async function confirmSignature(conn, signature, timeoutMs) {
+	const deadline = Date.now() + (timeoutMs ?? settleConfirmTimeoutMs());
+	let lastRpcError = null;
 	for (;;) {
-		const { value } = await conn.getSignatureStatuses([signature]);
-		const st = value?.[0];
-		if (st) {
-			if (st.err) return { confirmed: false, err: JSON.stringify(st.err) };
-			if (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized') {
-				return { confirmed: true };
+		try {
+			const { value } = await conn.getSignatureStatuses([signature]);
+			const st = value?.[0];
+			if (st) {
+				if (st.err) {
+					// An on-chain error is definitive: this transaction ran and reverted.
+					return { confirmed: false, terminal: true, err: JSON.stringify(st.err) };
+				}
+				if (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized') {
+					return { confirmed: true };
+				}
 			}
+			lastRpcError = null;
+		} catch (err) {
+			// An RPC that cannot answer tells us nothing about the transaction. Keep
+			// polling until the deadline, then report UNKNOWN, not failure.
+			lastRpcError = String(err?.message || err).slice(0, 160);
 		}
-		if (Date.now() > deadline) return { confirmed: false, err: 'confirm_timeout' };
-		await new Promise((r) => setTimeout(r, 1200));
+		if (Date.now() > deadline) {
+			return {
+				confirmed: false,
+				terminal: false,
+				err: lastRpcError ? `confirm_rpc_unavailable:${lastRpcError}` : 'confirm_timeout',
+			};
+		}
+		await new Promise((r) => setTimeout(r, CONFIRM_POLL_MS));
 	}
+}
+
+// Finish a settle whose transaction is already on the wire: re-await THIS
+// signature instead of verifying, co-signing, and broadcasting a second
+// transaction.
+//
+// Reached from the pending-store hit at the top of settleRingPayment, i.e. a
+// retry of a payload we have already broadcast. Re-sending there is what the
+// pending state exists to prevent: the original may land at any moment, and a
+// second transfer of the same funds is a double charge. (The reconcile cron
+// answers the same question out of band, without a payload in hand, through
+// probeSettlementSignature.)
+async function awaitBroadcastSettlement({
+	connection,
+	signature,
+	network,
+	payer,
+	decoded,
+	pendingStore,
+	key,
+	meta,
+}) {
+	const conf = await confirmSignature(connection, signature);
+	if (conf.confirmed) {
+		if (pendingStore && key) await pendingStore.delete(key);
+		return {
+			success: true,
+			transaction: signature,
+			network,
+			payer,
+			feeLamports: decoded?.estFeeLamports ?? meta?.feeLamports ?? 0,
+			feePayer: decoded?.feePayer ?? meta?.feePayer ?? null,
+			selfPay: decoded?.selfPay ?? false,
+			reconciled: true,
+		};
+	}
+	if (conf.terminal) {
+		if (pendingStore && key) await pendingStore.delete(key);
+		return { success: false, reason: `not_confirmed:${conf.err}`, transaction: signature };
+	}
+	// Still unknown. Re-record (refreshing the row's error detail) and stay pending.
+	return recordPendingOrTerminal({
+		store: pendingStore,
+		key,
+		signature,
+		network,
+		payer,
+		meta,
+		cause: conf.err,
+	});
 }
 
 // Settle a validated ring payment: co-sign with the sponsor, broadcast over our
@@ -545,7 +656,22 @@ async function confirmSignature(conn, signature, timeoutMs = 30_000) {
 // pay this transaction's fee. A { ok:false } verdict refuses the settle before
 // any co-sign/broadcast; a hook error fails OPEN — the floor is the hard
 // protection, the meter is pacing.
-export async function settleRingPayment({ paymentPayload, requirement, conn, feePayer, feeMeter }) {
+//
+// `pendingStore` is the x402 PendingSettlementStore (pending-settlements.js).
+// With one supplied, a confirmation wait that ends UNKNOWN records the broadcast
+// signature and answers `settlement_pending` instead of a failure the buyer's
+// payment contradicts, and a retry of the same payload reconciles against that
+// signature rather than broadcasting a second transaction. Without one the
+// behaviour is the old binary, which is why the endpoint always passes it.
+export async function settleRingPayment({
+	paymentPayload,
+	requirement,
+	conn,
+	feePayer,
+	feeMeter,
+	pendingStore,
+	idempotencyKey,
+}) {
 	const network = requirement.network;
 	const connection = conn || solanaConnection({ url: env.SOLANA_RPC_URL, commitment: 'confirmed' });
 
@@ -564,6 +690,44 @@ export async function settleRingPayment({ paymentPayload, requirement, conn, fee
 	if (!validation.ok) return { success: false, reason: validation.reason };
 	const decoded = validation.decoded;
 	const { tx, payer, estFeeLamports, selfPay } = decoded;
+
+	// Metadata every pending record and reconcile pass needs, assembled once.
+	const pendingKey = pendingSettlementKey(txBase64);
+	const pendingMeta = {
+		network,
+		payer,
+		payTo: requirement.payTo,
+		mint: requirement.asset,
+		amountAtomic: decoded.amountAtomic,
+		feeLamports: estFeeLamports,
+		feePayer: decoded.feePayer,
+		// The caller's settle idempotency key, stored so the reconcile pass claims
+		// the settle credit under the SAME key the resource server used. Without it
+		// the credit gate reads the reconciled claim as a different payment reusing
+		// the signature and refuses it (settle-credit.js classify()).
+		idempotencyKey: idempotencyKey || null,
+	};
+
+	// A retry of a payload we ALREADY broadcast: re-await that signature. Placed
+	// before the balance reads, the fee meter, the co-sign, and the broadcast
+// because none of them should run twice. The first attempt already spent
+	// (or committed to spending) this transaction's fee, and a second broadcast
+	// of a different transaction for the same authorization is a double charge.
+	if (pendingStore && pendingKey) {
+		const cachedSignature = await pendingStore.get(pendingKey);
+		if (cachedSignature) {
+			return awaitBroadcastSettlement({
+				connection,
+				signature: cachedSignature,
+				network,
+				payer,
+				decoded,
+				pendingStore,
+				key: pendingKey,
+				meta: pendingMeta,
+			});
+		}
+	}
 
 	// Anti fee-burn: a sponsor-mode settle must move at least enough to cover the
 	// SOL fee we're about to burn co-signing it. Blocks the dust-transfer grief
@@ -808,9 +972,30 @@ export async function settleRingPayment({ paymentPayload, requirement, conn, fee
 
 	const conf = await confirmSignature(connection, signature);
 	if (!conf.confirmed) {
-		return { success: false, reason: `not_confirmed:${conf.err}`, transaction: signature };
+		// Landed and reverted, or provably dropped: a real failure.
+		if (conf.terminal) {
+			if (pendingStore && pendingKey) await pendingStore.delete(pendingKey);
+			return { success: false, reason: `not_confirmed:${conf.err}`, transaction: signature };
+		}
+		// Outcome unknown. The transaction is broadcast and may land at any moment,
+		// so reporting failure here would tell a buyer who is about to be charged
+		// that they were not. Record the signature and answer `settlement_pending`;
+		// the caller's retry reconciles against it and the reconcile cron closes the
+		// books either way. The fee cache is deliberately NOT bumped: whether the
+		// fee was burned is exactly what we do not know yet, and the reconcile pass
+		// meters it once the chain answers.
+		return recordPendingOrTerminal({
+			store: pendingStore,
+			key: pendingKey,
+			signature,
+			network,
+			payer,
+			meta: pendingMeta,
+			cause: conf.err,
+		});
 	}
 
+	if (pendingStore && pendingKey) await pendingStore.delete(pendingKey);
 	bumpSolCache(feeWallet.toBase58(), estFeeLamports);
 
 	// Best-effort: read the real network fee for accurate burn accounting.
@@ -948,4 +1133,57 @@ export async function verifyRingPayment({ paymentPayload, requirement, feePayerP
 		asset: validation.decoded.mint,
 		payer: validation.decoded.payer,
 	};
+}
+
+// A transaction can only be included while its blockhash is live (150 slots,
+// ~60-90s). Past that a signature the ledger has never seen can never appear, so
+// "not found" stops meaning "not yet" and starts meaning "dropped". Held well
+// clear of the real limit so a lagging history index is never mistaken for a
+// dropped payment.
+export const SETTLEMENT_DROP_HORIZON_MS = 180_000;
+
+// The reconcile pass's read: what does the chain say about a signature we
+// broadcast and never confirmed?
+//
+// Strictly read-only: it never signs, re-sends, or touches a wallet. Returns
+// the state the pending row should take:
+//   'confirmed': landed, no error. feeLamports carries the real fee when the
+//                 parsed transaction is available, so the burn meter records
+//                 what was actually spent rather than the estimate.
+//   'failed':    landed with an on-chain error.
+//   'abandoned': no trace, and too old for its blockhash to still be valid.
+//   'pending':   no trace yet, still inside the horizon, or the RPC could not
+//                 answer. Ask again next pass.
+export async function probeSettlementSignature({ conn, signature, broadcastAtMs }) {
+	const connection =
+		conn || solanaConnection({ url: env.SOLANA_RPC_URL, commitment: 'confirmed' });
+	let status;
+	try {
+		status = (
+			await connection.getSignatureStatuses([signature], { searchTransactionHistory: true })
+		)?.value?.[0];
+	} catch (err) {
+		return { state: 'pending', error: `probe_rpc_failed:${String(err?.message || err).slice(0, 160)}` };
+	}
+
+	if (status && status.err) {
+		return { state: 'failed', error: JSON.stringify(status.err).slice(0, 400) };
+	}
+	if (status && !status.err) {
+		let feeLamports = null;
+		try {
+			const parsed = await connection.getParsedTransaction(signature, {
+				maxSupportedTransactionVersion: 1,
+				commitment: 'confirmed',
+			});
+			if (parsed?.meta?.fee != null) feeLamports = parsed.meta.fee;
+		} catch { /* the stored estimate stands */ }
+		return { state: 'confirmed', feeLamports };
+	}
+
+	const ageMs = broadcastAtMs ? Date.now() - broadcastAtMs : 0;
+	if (ageMs > SETTLEMENT_DROP_HORIZON_MS) {
+		return { state: 'abandoned', error: `not_found_after_${Math.round(ageMs / 1000)}s` };
+	}
+	return { state: 'pending', error: 'not_found_yet' };
 }

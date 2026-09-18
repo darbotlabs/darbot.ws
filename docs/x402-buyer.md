@@ -88,8 +88,27 @@ On settlement the response carries the receipt material the platform issues
 builder-code extension, the client echoes it (and `X402_BUILDER_CODE_WALLET` when
 set) back into the payment so attribution survives the round trip.
 
+## When a settlement is still confirming
+
+A settle has three outcomes, not two. Alongside success and failure, a
+transaction that has been broadcast but not yet confirmed answers
+`settlement_pending`, and it is not a failed payment: the correct response is to
+retry the settle once with the identical payload and idempotency key, which is
+what lets the facilitator reconcile against the transaction it already broadcast
+instead of sending a second one.
+
+Our paid endpoints deliver the response either way and set `status: "pending"`
+plus the settlement signature in `X-PAYMENT-RESPONSE`, so a `settled` result with
+that status means the work is yours and the transfer is still confirming. Do not
+pay again: the authorization is single-use and already spent.
+
+Full behavior on both sides of the wire, including what our own facilitator
+guarantees: [Pending settlement](x402-settlement-pending.md).
+
 ## Related
 
 - [x402 protocol](x402.md) — the underlying challenge/settle mechanics.
 - [x402 paid endpoints](x402-endpoints.md) — what you can buy from us.
 - [Autonomous x402 loop](autonomous-x402.md) — uses this client on a schedule.
+- [Pending settlement](x402-settlement-pending.md): the `settlement_pending`
+  outcome, what a buyer does with it, and how the books close afterwards.

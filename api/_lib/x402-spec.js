@@ -30,6 +30,13 @@
 //   4. If isValid, do the work.
 //   5. Server POSTs facilitator /settle (same body) → { success, transaction, network, payer }
 //      Server attaches a base64 settlement object as `X-PAYMENT-RESPONSE` on the success reply.
+//
+// Settle has THREE outcomes, not two (Solana facilitators, 2026-09-17): success,
+// failure, and `{ success:false, errorReason:'settlement_pending', transaction }`
+// (broadcast, outcome not yet known). settlePayment retries a pending settle once
+// and, if it is still unresolved, records it for the reconcile cron and returns
+// `status:'pending'` so the buyer gets the good they paid for and the settlement
+// hash to watch, instead of a 502 their own wallet history contradicts.
 
 import { createHash } from 'crypto';
 
@@ -74,6 +81,10 @@ import {
 	selfFacilitatorEnabled,
 	selfFacilitatorUrl,
 } from './x402/ring-config.js';
+import {
+	SETTLEMENT_PENDING_REASON,
+	recordResourcePending,
+} from './x402/pending-settlements.js';
 // Safe to import here: self-facilitator.js pulls in env + the Solana connection
 // only, never this module, so there is no cycle.
 import { sponsorKnownBelowFloor } from './x402/self-facilitator.js';
@@ -85,6 +96,9 @@ export { X402Error };
 // present, and the public surface should match.
 export { declareEip2612GasSponsoringExtension, declareErc20ApprovalGasSponsoringExtension };
 export { BUILDER_CODE, declareBuilderCodeExtension };
+// Protocol constant, re-exported so a caller handling a pending settle does not
+// have to reach into the storage module for the wire string.
+export { SETTLEMENT_PENDING_REASON };
 
 export const X402_VERSION = 2;
 
@@ -1129,6 +1143,22 @@ export async function verifyPayment({ paymentHeader, requirements, builderCode }
 //      ← legacy. Payer-binding cannot be enforced (no `verified.payer`
 //      anchor). Kept so external/older callers don't break, but new code
 //      should pass `verified`.
+// Is this settle response the non-terminal `settlement_pending` outcome?
+//
+// Both halves are required. The reason alone is not enough: without a broadcast
+// signature there is nothing for a retry to reconcile against, so a bare
+// `settlement_pending` with no transaction is treated as an ordinary failure
+// rather than something to wait on. Matches @x402/core's
+// isRetryableSettlementPendingResult.
+export function isSettlementPending(result) {
+	return (
+		!!result &&
+		result.success === false &&
+		result.errorReason === SETTLEMENT_PENDING_REASON &&
+		!!result.transaction
+	);
+}
+
 export async function settlePayment(args) {
 	const verified = args?.verified || null;
 	const paymentPayload = verified?.paymentPayload || args?.paymentPayload;
@@ -1167,16 +1197,70 @@ export async function settlePayment(args) {
 		return settleOkxXLayerPayment({ verified: okxVerified, requirement, paymentPayload });
 	}
 	const idempotencyKey = buildIdempotencyKey({ paymentPayload, requirement });
-	const result = await callFacilitator(
-		requirement.network,
-		'/settle',
-		{
-			x402Version: X402_VERSION,
-			paymentPayload: config.cdp ? minimalPaymentPayloadForCdp(paymentPayload) : paymentPayload,
-			paymentRequirements: requirement,
-		},
-		{ idempotencyKey },
-	);
+	const settleBody = {
+		x402Version: X402_VERSION,
+		paymentPayload: config.cdp ? minimalPaymentPayloadForCdp(paymentPayload) : paymentPayload,
+		paymentRequirements: requirement,
+	};
+	let result = await callFacilitator(requirement.network, '/settle', settleBody, {
+		idempotencyKey,
+	});
+
+	// `settlement_pending`: the facilitator broadcast a transaction and cannot yet
+	// say whether it landed. Retry EXACTLY ONCE with the identical body and the
+	// same idempotency key, which is what lets the facilitator recognize the retry
+	// and reconcile against the signature it already broadcast instead of sending
+	// a second transaction. One retry, never a loop: bounded waiting belongs to
+	// the facilitator's own confirmation window, and this call is inside a buyer's
+	// open HTTP request. Mirrors @x402/core's settleWithPendingRetry.
+	if (isSettlementPending(result)) {
+		result = await callFacilitator(requirement.network, '/settle', settleBody, {
+			idempotencyKey,
+		});
+	}
+
+	// Still unresolved after the retry. Reporting failure here is the exact bug
+	// the pending state exists to remove: the buyer's transaction is on the wire
+	// and very likely lands, so a 502 would tell someone who IS being charged
+	// that they were not, and leave the work they paid for undelivered.
+	//
+	// Instead: record the signature, answer pending, and let the caller deliver.
+	// The reconcile cron (/api/cron/x402-settlement-reconcile) confirms the
+	// signature afterwards and closes the books. The record is the precondition,
+	// not a nicety: delivering against a pending settlement we cannot reconcile
+	// later would be an unaccountable giveaway, so an unrecordable pending stays
+	// a hard failure.
+	if (isSettlementPending(result)) {
+		const recorded = await recordResourcePending({
+			key: idempotencyKey,
+			signature: result.transaction,
+			meta: {
+				network: requirement.network,
+				payer: result.payer || verifiedPayer || null,
+				payTo: requirement.payTo,
+				mint: requirement.asset,
+				amountAtomic: requirement.amount ? Number(requirement.amount) : null,
+				resourceUrl: requirement.resource || null,
+				idempotencyKey,
+			},
+		});
+		if (!recorded) {
+			throw new X402Error(
+				'settle_failed',
+				`settle unresolved: the facilitator broadcast ${result.transaction} but its outcome is unknown and the pending record could not be stored, so it cannot be reconciled later. Retry the payment.`,
+				502,
+			);
+		}
+		return {
+			success: true,
+			status: 'pending',
+			pending: true,
+			transaction: result.transaction,
+			network: result.network || requirement.network,
+			payer: result.payer || verifiedPayer || null,
+		};
+	}
+
 	if (!result.success) {
 		const reason = result.errorReason || 'unknown reason';
 		// A sponsor/fee wallet under its SOL floor is transient operator capacity,

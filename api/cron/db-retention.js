@@ -365,6 +365,32 @@ async function pruneAuditLog(cutoffDays) {
 	return { deleted };
 }
 
+// B2b. Pending-settlement rows (x402_pending_settlements).
+//
+// A row exists to carry ONE x402 settlement whose transaction was broadcast
+// before its outcome was known (api/_lib/x402/pending-settlements.js). Once
+// /api/cron/x402-settlement-reconcile has recorded the chain's verdict the row is
+// history: the money record itself lives in x402_self_facilitator_log and
+// x402_audit_log, which have their own, longer windows.
+//
+// Only RESOLVED rows are prunable, and the cutoff is deliberately not the shared
+// storage valve: an unresolved row is a payment nobody has accounted for yet, and
+// deleting it under storage pressure would lose the only handle on it. Those stay
+// until the chain answers, however long that takes.
+const PENDING_SETTLEMENT_KEEP_DAYS = 30;
+
+async function prunePendingSettlements() {
+	if (!(await tableExists('x402_pending_settlements'))) return { deleted: 0 };
+	const del = await sql`
+		DELETE FROM x402_pending_settlements
+		WHERE state <> 'pending'
+		  AND resolved_at IS NOT NULL
+		  AND resolved_at < now() - ${PENDING_SETTLEMENT_KEEP_DAYS} * interval '1 day'
+		RETURNING key
+	`;
+	return { deleted: del.length };
+}
+
 // ── B. avatar_regen_jobs hygiene ──────────────────────────────────────────────
 async function pruneRegenJobs() {
 	if (!(await tableExists('avatar_regen_jobs'))) return { stripped: 0, deleted: 0 };
@@ -558,6 +584,7 @@ export default wrapCron(async (req, res) => {
 	});
 	const runLogs = await pruneRunLogs(cutoffDays);
 	const audit = await pruneAuditLog(auditCutoffDays);
+	const pendingSettlements = await prunePendingSettlements();
 	const regen = await pruneRegenJobs();
 	// E. Per-home action-log retention. Best-effort: the home tables may not exist
 	// on a branch that has not run the Home migrations, and a failure here must
@@ -577,6 +604,7 @@ export default wrapCron(async (req, res) => {
 	for (const t of Object.keys(series)) if (!touched.includes(t)) touched.push(t);
 	for (const t of Object.keys(runLogs)) if (!touched.includes(t)) touched.push(t);
 	if (audit.deleted > 0) touched.push('x402_audit_log');
+	if (pendingSettlements.deleted > 0) touched.push('x402_pending_settlements');
 	if (regen.deleted > 0 || regen.stripped > 0) touched.push('avatar_regen_jobs');
 	if (homeActionLog.deleted > 0) touched.push('home_action_log');
 	await vacuumTables(touched);
@@ -633,6 +661,7 @@ export default wrapCron(async (req, res) => {
 		series,
 		run_logs: runLogs,
 		audit,
+		pending_settlements: pendingSettlements,
 		regen,
 		home_action_log: homeActionLog,
 		vacuumed: touched,

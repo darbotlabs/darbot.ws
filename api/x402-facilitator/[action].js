@@ -18,7 +18,16 @@
 // Wire format matches the x402 v2 facilitator contract consumed by
 // api/_lib/x402-spec.js callFacilitator():
 //   /verify  → { isValid, network, asset, payer }  |  { isValid:false, invalidReason }
-//   /settle  → { success:true, transaction, network, payer }  |  { success:false, errorReason }
+//   /settle  → { success:true, transaction, network, payer }
+//            |  { success:false, errorReason:'settlement_pending', transaction }
+//            |  { success:false, errorReason }
+//
+// The middle shape is the non-terminal outcome every x402 SDK now understands:
+// the transaction is broadcast but its confirmation is not yet known, so the
+// caller retries instead of reporting a failed payment. The retry reconciles
+// against the recorded signature rather than broadcasting a second transaction
+// (api/_lib/x402/pending-settlements.js), and /api/cron/x402-settlement-reconcile
+// closes the row once the chain answers.
 
 import { cors, json, method, wrap, readJson, rateLimited } from '../_lib/http.js';
 import { limits, clientIp } from '../_lib/rate-limit.js';
@@ -30,6 +39,11 @@ import {
 	verifyRingPayment,
 	settleRingPayment,
 } from '../_lib/x402/self-facilitator.js';
+import {
+	PENDING_SCOPE_FACILITATOR,
+	SETTLEMENT_PENDING_REASON,
+	SqlPendingSettlementStore,
+} from '../_lib/x402/pending-settlements.js';
 import { facilitatorFeeMeter, recordSettledFee } from '../_lib/x402/wallet-fee-meter.js';
 import { claimSettleCredit } from '../_lib/x402/settle-credit.js';
 import { listDiscoveryResources } from '../_lib/x402/discovery-resources.js';
@@ -101,6 +115,10 @@ export default wrap(async (req, res) => {
 			kinds: [
 				{ x402Version: X402_VERSION, scheme: 'exact', network: NETWORK_SOLANA_MAINNET },
 			],
+			// Non-terminal settle outcomes this facilitator can answer with. Named
+			// here so a client can tell, before paying, that a pending settlement
+			// will be reconciled rather than reported as a failure.
+			settleStatuses: ['success', SETTLEMENT_PENDING_REASON, 'failure'],
 			payTo: env.X402_PAY_TO_SOLANA || null,
 			feePayer: env.X402_FEE_PAYER_SOLANA || null,
 			asset: env.X402_ASSET_MINT_SOLANA || null,
@@ -211,9 +229,45 @@ export default wrap(async (req, res) => {
 			paymentPayload,
 			requirement,
 			feeMeter: facilitatorFeeMeter(),
+			idempotencyKey: req.headers?.['idempotency-key'] || null,
+			// Shared across replicas on purpose: a settle retry has no session
+			// affinity, so the in-memory default store the x402 SDK ships would miss
+			// every retry that lands on another Cloud Run instance and re-broadcast
+			// instead of reconciling.
+			pendingStore: new SqlPendingSettlementStore({ scope: PENDING_SCOPE_FACILITATOR }),
 		});
 
 		const idempotencyKey = req.headers?.['idempotency-key'] || null;
+
+		// `settlement_pending`: broadcast, outcome not yet known. NOT a failure.
+		// the credit is deliberately NOT claimed and the fee is deliberately NOT
+		// metered, because neither is decided until the chain answers. The caller
+		// retries (and reconciles against the recorded signature), and
+		// /api/cron/x402-settlement-reconcile closes the row either way.
+		if (!result.success && result.pending) {
+			await logOp({
+				action: 'settle',
+				network: requirement.network,
+				payer: result.payer,
+				payTo: requirement.payTo,
+				mint: requirement.asset,
+				amountAtomic: Number(requirement.amount) || null,
+				txSig: result.transaction,
+				ok: false,
+				reason: result.pendingDetail
+					? `${SETTLEMENT_PENDING_REASON}:${result.pendingDetail}`
+					: SETTLEMENT_PENDING_REASON,
+				idempotencyKey,
+				feePayer: result.feePayer,
+			});
+			return json(res, 200, {
+				success: false,
+				errorReason: SETTLEMENT_PENDING_REASON,
+				transaction: result.transaction,
+				network: result.network || requirement.network,
+				payer: result.payer || null,
+			});
+		}
 
 		if (!result.success) {
 			await logOp({

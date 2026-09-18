@@ -457,3 +457,44 @@ export async function countRecentPayments(withinMinutes = 60) {
 		return -1;
 	}
 }
+
+/**
+ * Promote a settled-payment audit row from `pending` to its final status once
+ * the chain has answered.
+ *
+ * A payment that settled through the `settlement_pending` path is recorded with
+ * `settlement_status = 'pending'`, because at response time nobody knew whether
+ * it had landed. Revenue queries count `settlement_status = 'success'`, so a row
+ * left pending forever is a payment that silently never appears in the books.
+ * The reconcile cron (api/cron/x402-settlement-reconcile.js) calls this with the
+ * chain's verdict.
+ *
+ * Scoped to rows still marked pending, so it can never rewrite a status that was
+ * already decided, and keyed on the settlement signature, which is unique per
+ * settled payment (settle-credit.js enforces that invariant).
+ *
+ * @param {object} args
+ * @param {string} args.txHash       settlement signature
+ * @param {'success'|'failed'} args.status  the chain's verdict
+ * @returns {Promise<number>} rows promoted (0 when the payment was never pending)
+ */
+export async function promotePendingSettlementStatus({ txHash, status }) {
+	if (!txHash || !status) return 0;
+	try {
+		const rows = await sql`
+			UPDATE x402_audit_log
+			SET settlement_status = ${status}
+			WHERE tx_hash = ${txHash}
+			  AND event_type = 'payment_settled'
+			  AND settlement_status = 'pending'
+			RETURNING id
+		`;
+		return rows?.length || 0;
+	} catch (err) {
+		// The books are reconcilable from x402_pending_settlements and the
+		// facilitator log either way; a failed cosmetic promotion must not fail the
+		// reconcile pass that already recorded the real verdict.
+		console.warn('[x402-audit] settlement status promotion failed', err?.message || err);
+		return 0;
+	}
+}

@@ -1,5 +1,5 @@
 {
-	"generated_at": "2026-09-17T19:55:26.628Z",
+	"generated_at": "2026-09-17T23:48:58.673Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json",
 	"site": {
 		"name": "three.ws",
@@ -6329,6 +6329,16 @@
 					"showcase": false
 				},
 				{
+					"path": "/docs/doc-freshness",
+					"title": "Docs · Doc freshness, keeping docs true to the code",
+					"description": "Every doc is bound to the code it names, and git decides whether that code moved after the page was last written or last reviewed. How the measurement works, what each status means, how to record that you checked a page, and where the check runs.",
+					"added": "2026-09-17",
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
 					"path": "/docs/glasses",
 					"title": "Docs · Smart glasses, agents on your lens",
 					"description": "Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.",
@@ -6803,6 +6813,16 @@
 					"title": "Docs · x402 distribution",
 					"description": "three.ws sells dozens of pay-per-call services over x402. Building them is half the job; the other half is making sure every directory, crawler, and agent marketplace can find them. The distribution checklist.",
 					"added": null,
+					"auth": null,
+					"indexable": true,
+					"tags": [],
+					"showcase": false
+				},
+				{
+					"path": "/docs/x402-settlement-pending",
+					"title": "Pending settlement: the third answer an x402 settle can give",
+					"description": "Broadcasting a Solana payment and confirming it are separate events, so a settle has three outcomes, not two. What settlement_pending means for a buyer, how our facilitator guarantees one authorization never produces two transactions, and the reconciler that closes the books.",
+					"added": "2026-09-17",
 					"auth": null,
 					"indexable": true,
 					"tags": [],

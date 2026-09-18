@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-17T19:55:26.694Z",
+	"generated_at": "2026-09-17T23:48:58.720Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3697,
+	"total": 3701,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -15,6 +15,16 @@
 			"title": "Agent Wallet Agreement",
 			"summary": "The agreement governing every agent wallet: experimental custodial software, deposits by anyone at their own risk, no insurance, no guaranteed withdrawal or recovery, and no liability for lost funds.",
 			"link": "/legal/agent-wallet",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
+			"title": "Docs · Doc freshness, keeping docs true to the code",
+			"summary": "Every doc is bound to the code it names, and git decides whether that code moved after the page was last written or last reviewed. How the measurement works, what each status means, how to record that you checked a page, and where the check runs.",
+			"link": "/docs/doc-freshness",
 			"tags": [
 				"launch"
 			]
@@ -32,11 +42,33 @@
 		{
 			"date": "2026-09-17",
 			"type": "launch",
+			"title": "Pending settlement: the third answer an x402 settle can give",
+			"summary": "Broadcasting a Solana payment and confirming it are separate events, so a settle has three outcomes, not two. What settlement_pending means for a buyer, how our facilitator guarantees one authorization never produces two transactions, and the reconciler that closes the books.",
+			"link": "/docs/x402-settlement-pending",
+			"tags": [
+				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "launch",
 			"title": "Real-Funds Agreements",
 			"summary": "Sign, and review your signatures on, the Terms of Service, Risk Disclosure, and Agent Wallet Agreement required before any real-funds action.",
 			"link": "/legal/agreements",
 			"tags": [
 				"launch"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "A payment that is still confirming no longer reads as a failed payment",
+			"summary": "Settling an x402 payment on Solana means broadcasting a transaction and then waiting for the network to confirm it, and in between the answer is genuinely unknown. Until now an unfinished wait was reported as a failure, so a payment the chain was in the middle of accepting could tell the buyer it had failed and withhold what they paid for. Our facilitator now answers with the protocol's pending state and the settlement signature instead, a retry re-checks that same transaction rather than sending a second one, the endpoint still returns the work with the signature to watch, and a reconciler closes the books every two minutes once the chain answers. The confirmation wait also dropped from 30 seconds to 12, so paid calls come back faster.",
+			"link": "/docs/x402-settlement-pending",
+			"tags": [
+				"fix",
+				"improvement",
+				"infra"
 			]
 		},
 		{
@@ -78,6 +110,17 @@
 			"summary": "Every coin launched on three.ws used to carry a quality score, a conviction tier and risk labels on its page, in the launch feed and on its share image. A high score can read as investment advice and a low one as FUD about someone's launch, so all of them are gone. In their place is a Token stats panel with the facts traders look up in terminals: volume, buys, sells, net buy and price change over 5 minutes, 1 hour, 6 hours and 24 hours, plus holders, the top 10 share, how much the dev holds, how much early buyers still hold, mint and freeze authority, bonding curve progress, liquidity and whether a DEX Screener profile was paid for. The Holders panel lists the ten largest wallets with links to each one, and leaves the bonding curve and pool out of the ranking. If the full holder index is unavailable, the page still shows the largest holders and says so instead of going blank.",
 			"link": "/launches",
 			"tags": [
+				"improvement"
+			]
+		},
+		{
+			"date": "2026-09-17",
+			"type": "update",
+			"title": "Documentation that tells you whether to trust it",
+			"summary": "Every page in the docs is bound to the code it names, and git decides whether that code moved after the page was last written. That measurement now has a second clock: when someone reads a page, checks it against the source and finds it correct, that review is recorded, so careful reading counts as much as editing and nobody has to fake a change to clear a page. Docs that record a moment, like a dated audit or a finished piece of work, are marked as records and are no longer counted as drift. Every page that was out of date has been brought back in line: 110 documents were read against the exact changes that had moved under them, 82 were corrected, 22 were confirmed still accurate, and 6 were marked as records of a moment. The dashboard at /docs/freshness now shows who last checked each page and when, the report is regenerated on every deploy instead of by hand, and the check runs automatically so drift cannot pile up unnoticed again.",
+			"link": "/docs/freshness",
+			"tags": [
+				"docs",
 				"improvement"
 			]
 		},
@@ -1575,50 +1618,6 @@
 			"tags": [
 				"docs",
 				"fix"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The club now takes $THREE at the door and at the stage, not just USDC",
-			"summary": "The club has always advertised two ways to pay: USDC or $THREE, on Solana, for both the cover charge and every dance tip. Only one of them was reachable. The checkout window picked the first token a service offered and gave you no way to choose the other, so $THREE was quoted on every paid page and payable on none of them. Across every club tip ever settled, not one was paid in $THREE, which is what you would expect from a menu with a hidden second item. The checkout now shows a token picker whenever a service quotes more than one, with each token's real price on it, so you can compare 0.001 USDC against its $THREE equivalent before you approve anything, and the price at the top of the window follows what you pick. If you have agent wallets, they still pay in USDC only, and the window now says so instead of quietly hiding them when you switch tokens. Two settlement bugs behind the door were fixed at the same time. The first would have hit the very first person to pay in $THREE: sending a token to a wallet that has never held it requires opening an account for it on-chain, and the check that decides whether we can afford to sponsor a payment was ignoring that cost, so the payment would have been accepted and then failed on-chain for a reason that looked like something else entirely. The second was making the club look open when it was not: a healthy payer covering their own fees could reset a shared 'we can still sponsor payments' flag that belonged to a different wallet, so the door kept quoting prices it could not actually take. Finally, when payments are paused because the wallet that settles them needs topping up, the checkout now says that in a sentence and tells you nothing was charged, instead of showing you the raw error envelope it used to paste in, which read like a broken link.",
-			"link": "/club",
-			"tags": [
-				"fix",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The guardian console now tells you why someone is asking for an agent back",
-			"summary": "If a friend has named you a guardian or a beneficiary of their agent, /guardian is where you decide whether to let them back in. Until now the card told you a process was open and asked you to approve it, without showing you the one thing a decision actually turns on: the reason the person gave when they opened the request. It now shows that reason, names every guardian who has already approved or declined, and says how long the request has before it expires if nobody acts. The status stopped reading like a database field, so a card says \"awaiting approvals\" or \"in the safety window\" instead of pending_approvals. Approving takes a couple of seconds to travel; the button now says Approving while it does, rather than going quiet. If the safety window lifts while you have the page open, it refreshes itself so Complete transfer appears without a reload, and it refreshes again whenever you come back to the tab. Signed out, the page has a proper heading, offers to make you an account, and brings you straight back here after you sign in; with nobody yet naming you, it now points you at setting up guardians on your own agents. When the console cannot load at all it explains what went wrong in plain words, telling a dropped connection apart from a rate limit and a fault on our side, instead of printing the browser's own \"Failed to fetch\".",
-			"link": "/guardian",
-			"tags": [
-				"improvement",
-				"fix"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The Launch a Coin button now works once you have filled the form",
-			"summary": "On the Launch a Coin page we fill in your token name and ticker from the agent you pick, but never the description, because only you can write that. The launch button read \"Add name, symbol & description to launch\" until all three were there, and that label was worked out once when the page drew itself and then never again. So the moment you typed your description the button was describing a form that no longer existed: it still said something was missing, and pressing it did nothing whatsoever, because it went looking for an empty field and found none. The button now keeps up with what you type, turning into \"Connect wallet to launch\" or the real launch action the instant the last field is filled, and back again if you clear one. Pressing it while something is genuinely missing now says which field it is, instead of silently moving your cursor there. Separately, if we cannot reach your agent list, the page now says so and offers a Try again button that recovers in place; it used to tell owners of a dozen agents that they had none yet and send them off to create a duplicate. The agent picker also fits a phone screen now instead of running off both edges.",
-			"link": "/launch",
-			"tags": [
-				"fix",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The Revenue view on Protocol Fees stopped calling itself Fees",
-			"summary": "Open /fees, switch to Revenue, and the numbers, the chart and the stat cards all changed to revenue while the table heading and the browser tab kept saying \"Fees\". The page writes those two pieces of copy itself, and the site-wide translation pass, which lands a second or two after the page does, was overwriting them back to the fees wording. Both now hold the metric you actually selected, and hand themselves back to the translator when you switch to Fees, so a reader in another language keeps their own copy. Four more things on that page while we were in there: the footer line now says when a figure is a cached copy served because DeFiLlama is unreachable, rather than presenting it as live; a run where the feed returns nothing no longer paints three empty totals and a \"Top 0 protocols\" line that read like a claim DeFi earned nothing; toggling Fees and Revenue faster than the network answers can no longer land one metric's numbers under the other's heading; and screen readers are now told every column is sortable, told which metric each region is showing, and given a proper pair of toggle buttons instead of tabs with no panel behind them. The \"+3\" badge on a protocol's chain list also names the chains it is hiding.",
-			"link": "/fees",
-			"tags": [
-				"fix",
-				"improvement"
 			]
 		}
 	]

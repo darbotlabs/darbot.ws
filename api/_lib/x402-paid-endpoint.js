@@ -1200,7 +1200,15 @@ export function paidEndpoint(spec) {
 		// Success telemetry for a settled payment — logged once the good has been
 		// delivered (after res.end in the buffered path, after the handler streamed
 		// in the streaming path).
+		//
+		// A `status:'pending'` settlement is recorded as PENDING, not success. The
+		// good ships either way (the transaction is broadcast and the buyer holds
+		// its hash), but the books are not closed until
+		// /api/cron/x402-settlement-reconcile confirms the signature, and telemetry
+		// that called it settled would overstate revenue by exactly the payments
+		// still in flight.
 		function recordSettledSuccess(settled) {
+			const pending = settled.status === 'pending';
 			logPaymentEvent({
 				eventType: 'payment_settled',
 				route,
@@ -1210,7 +1218,7 @@ export function paidEndpoint(spec) {
 				amountAtomics: verified.requirement?.amount || null,
 				asset: verified.requirement?.asset || null,
 				txHash: settled.transaction || null,
-				settlementStatus: 'success',
+				settlementStatus: pending ? 'pending' : 'success',
 				facilitatorResponse: settled,
 				durationMs: Date.now() - requestStartTime,
 				ipAddress: clientIp(req),

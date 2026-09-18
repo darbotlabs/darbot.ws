@@ -176,10 +176,15 @@ holds a little SOL for its own fees.
 **Self-pay is the default now** — `ringSelfPayDefault()` (`pay.js`) returns true
 unless `X402_RING_SELF_PAY=false` is set explicitly. Sponsor mode is the
 fallback for gasless buyers that hold no SOL, and it still works (an explicit
-`false` selects it). In self-pay the settlement-time SOL floor guard
-(`settleRingPayment`, `self-facilitator.js`) watches the **payer** wallet
-(`feeWallet = decoded.feePayer = payer`), so the payer's balance is the hard
-stop that pauses the loop before it can drain.
+`false` selects it). In self-pay the settlement-time guard
+(`settleRingPayment`, `self-facilitator.js`) still reads the fee wallet, which is
+the **payer** (`feeWallet = decoded.feePayer = payer`), but it no longer holds
+that wallet to the sponsor's reserve: the floor is there to stop the paying loop
+draining *our* sponsor, and applying it to a buyer's own wallet refused good
+payments for not keeping 0.02 SOL spare. In self-pay the floor is `0` and the
+only hard stop is affordability, refused as `buyer_cannot_cover_fee` (the buyer
+adds a little SOL; no top-up of ours fixes it). The payer's runway is governed
+upstream instead, by `governedCalls()` and the wallet fee governor.
 
 Priority fee is already negligible (~5 µlamports) and ATA rent is one-time and
 reclaimable. So the practical minimum is: **self-pay + the biggest per-call size
@@ -308,14 +313,35 @@ then kept in a verified, watched, auto-fundable state:
     priority fee, recipient must be allowlisted. This blocks the "anyone drains
     the sponsor" attack **and** enforces "only our wallets settle here".
   - **SOL floor.** Below `X402_SPONSOR_SOL_FLOOR_LAMPORTS` (default 0.02 SOL) the
-    facilitator refuses to settle, pausing the loop before it can drain your SOL.
+    sponsor cannot settle, pausing the loop before it can drain your SOL. The floor
+    is a **reserve that must survive the settle**, not a line the balance merely has
+    to sit above: the estimated fee, including the ~0.00204 SOL of ATA rent when the
+    recipient has never held this mint, is subtracted first, so a first payment in a
+    new token cannot pass the gate and then die on chain with
+    `InsufficientFundsForRent`. Sponsor mode refuses that as
+    `fee_wallet_cannot_cover_settle` (a 503, ours to top up); self-pay refuses it as
+    `buyer_cannot_cover_fee` (the buyer's own wallet, a 402). The floor applies to
+    the sponsor only: a self-pay settle uses a floor of `0`.
+    A dry sponsor does not take Solana off the menu, either. The 402 keeps
+    advertising the Solana accept **without** `extra.feePayer`, the wire signal for
+    self-pay, so endpoints keep receiving while the sponsor is refilled; that
+    fallback is only offered when we settle in-house, because an external
+    facilitator pins the sponsor as fee payer and rejects a challenge without one.
     The floor guard is written by two witnesses, not one: the balance read, and
     the chain's own verdict. `noteSponsorRentFailure()` trips it whenever a
     settle simulation (or the rebalancer's sweep broadcast) fails with
     `InsufficientFundsForRent` on account index 0 and that fee payer is our
     sponsor, so a dry wallet is caught even while every RPC lane is over quota
     and `getBalance` cannot answer (on 2026-08-28 that gap cost three hours and
-    95 unsettleable payments). A buyer paying its own fee never trips it. The
+    95 unsettleable payments). A buyer paying its own fee never trips it, and only
+    `X402_FEE_PAYER_SOLANA`'s balance writes the cached floor state, so a healthy
+    self-pay buyer can no longer clear the flag for a starved sponsor and
+    re-advertise a sponsored accept that cannot settle.
+    The verify gate names who is short rather than folding it into
+    `simulation_failed`: `sponsor_fee_unfunded:<pubkey>` when the unfundable fee
+    payer is ours, `payer_fee_unfunded:<pubkey>` when it is the buyer's own wallet
+    in a self-pay settle. Account index 0 is the fee payer by definition, so the
+    split is exact, and only the sponsor class is a funding signal. The
     autonomous loop reads the same guard (`sponsorKnownBelowFloor()`) when its
     once-per-tick balance read fails, so an unreadable balance never reads as
     solvent.
@@ -331,7 +357,12 @@ then kept in a verified, watched, auto-fundable state:
     built on the x402 npm package's `useFacilitator().list()`). It projects the
     same canonical catalog as `/.well-known/x402.json` into the legacy v1 wire
     format, so explorers indexing this facilitator list our paid endpoints
-    automatically. Projection lives in
+    automatically. The catalog doc is cached for 5 minutes, and because the wire
+    format carries no cursor, a paging sweep that straddles a rebuild would re-serve
+    some rows and skip as many (measured 2026-09-02: 4,519 rows holding 4,499
+    distinct resources). Pages past the first therefore keep the build the sweep
+    started on for a bounded grace window past the TTL, while `offset=0` always
+    takes the fresh build. Projection lives in
     [api/_lib/x402/discovery-resources.js](../api/_lib/x402/discovery-resources.js).
 - **Ring settlement endpoint** — [api/x402/ring-settle.js](../api/x402/ring-settle.js).
   Price-configurable (`X402_PRICE_RING_SETTLE`), internal (`discoverable:false`),
@@ -461,6 +492,27 @@ regressed and buyers are eating avoidable retries.
 Pre-fix history is deliberately left intact. Those duplicates are real and
 published; `scripts/x402-milestone-stats.mjs` prints a warning with both figures
 so nobody quotes the row count as an on-chain transaction count.
+
+## Broadcast is not confirmed
+
+Settling co-signs a transaction, broadcasts it, and waits. Broadcast and
+confirmation are separate events seconds apart, and between them the outcome is
+genuinely unknown. The facilitator used to answer that gap with a guess: the
+confirmation wait ran out, it reported `not_confirmed:confirm_timeout`, and the
+resource server turned that into a 502 on payments the chain was in the middle of
+accepting.
+
+It now answers `settlement_pending` with the broadcast signature instead, records
+that signature so a retry reconciles against it rather than sending a second
+transaction, and lets
+[`/api/cron/x402-settlement-reconcile`](../api/cron/x402-settlement-reconcile.js)
+claim the settle credit through the gate above once the chain answers. The credit
+is still granted at most once per signature, so nothing in this section is
+loosened: the pending state only changes *when* the claim happens, never how many
+times.
+
+Full behavior, on both sides of the wire:
+[Pending settlement](./x402-settlement-pending.md).
 
 ## Reconciliation — proving every ring dollar on-chain
 
@@ -721,8 +773,13 @@ the funding root's only USDC inflow: `economy-fuel.js` converts it to SOL (a
 self-swap, per-run and per-day capped) and `treasury-topup` distributes that SOL
 to every engine below its floor: the circulation treasury that drives the
 Money Pulse (tips, trades, agent-to-agent payments), the ring sponsor whose SOL
-floor gates settlement, and the rest of `SOLANA_SIGNERS`. Without this leg the
-master starves, the sponsor slips under its floor, settles 502, and the pulse
+floor gates settlement, and the rest of `SOLANA_SIGNERS`. Signers marked
+`settleCritical` (the ring sponsor and payer) are funded **first**, ahead of
+neediest-first ordering, because a thin run that spent its whole cap on a
+hungrier float wallet used to leave the fee wallet under its floor and the whole
+rail dead (2026-09-04); a skip now also says whether the run cap or an empty
+master bound it (`run_cap_reached` vs `master_insufficient_spendable`).
+Without this leg the master starves, the sponsor slips under its floor, settles 502, and the pulse
 flat-lines (July 2026 incident). Both legs of a split sweep land in
 `x402_ring_ledger` (`kind='sweep'` payer leg, `kind='revshare'` master leg,
 same `tx_sig`) and the reconciler verifies the treasury's on-chain delta

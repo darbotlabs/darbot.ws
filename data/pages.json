@@ -4942,6 +4942,14 @@
 					"changefreq": "monthly"
 				},
 				{
+					"path": "/docs/doc-freshness",
+					"title": "Docs \u00b7 Doc freshness, keeping docs true to the code",
+					"description": "Every doc is bound to the code it names, and git decides whether that code moved after the page was last written or last reviewed. How the measurement works, what each status means, how to record that you checked a page, and where the check runs.",
+					"priority": 0.6,
+					"changefreq": "monthly",
+					"added": "2026-09-17"
+				},
+				{
 					"path": "/docs/glasses",
 					"title": "Docs · Smart glasses, agents on your lens",
 					"description": "Wear smart glasses and the world tells you an agent is standing thirty metres away. How three.ws splits the work: the lens carries the signal, the phone carries the 3D body, and the presence-gated IRL rail carries the truth.",
@@ -5284,6 +5292,14 @@
 					"description": "three.ws sells dozens of pay-per-call services over x402. Building them is half the job; the other half is making sure every directory, crawler, and agent marketplace can find them. The distribution checklist.",
 					"priority": 0.6,
 					"changefreq": "monthly"
+				},
+				{
+					"path": "/docs/x402-settlement-pending",
+					"title": "Pending settlement: the third answer an x402 settle can give",
+					"description": "Broadcasting a Solana payment and confirming it are separate events, so a settle has three outcomes, not two. What settlement_pending means for a buyer, how our facilitator guarantees one authorization never produces two transactions, and the reconciler that closes the books.",
+					"priority": 0.6,
+					"changefreq": "monthly",
+					"added": "2026-09-17"
 				},
 				{
 					"path": "/docs/x402-ring-economy",
