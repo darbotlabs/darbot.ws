@@ -76,16 +76,31 @@ async function readJobs() {
 	// A heavy model can crash the renderer process. One page reused for the whole
 	// run meant a single crash failed every job after it (389 of 511 on one run),
 	// so a worker can always get a fresh page, and a fresh browser if that died too.
+	async function relaunch() {
+		relaunching ||= (async () => {
+			await browser.close().catch(() => {});
+			browser = await launch();
+			relaunching = null;
+		})();
+		await relaunching;
+	}
+	// Opening a page can crash too when the machine is short of memory, so that is
+	// retried against a fresh browser, with a pause that lets memory come back.
 	async function openPage() {
-		if (!browser.isConnected()) {
-			relaunching ||= launch().then((b) => { browser = b; relaunching = null; });
-			await relaunching;
+		for (let attempt = 1; ; attempt++) {
+			try {
+				if (!browser.isConnected()) await relaunch();
+				const page = await browser.newPage({ viewport: { width: 640, height: 640 }, deviceScaleFactor: 2 });
+				page.on('pageerror', () => {});
+				await page.goto(`http://localhost:${port}/harness.html`, { waitUntil: 'domcontentloaded' });
+				await page.waitForFunction('window.__ready === true', { timeout: 20000 });
+				return page;
+			} catch (err) {
+				if (attempt >= 5) throw err;
+				await new Promise((r) => setTimeout(r, 4000 * attempt));
+				await relaunch();
+			}
 		}
-		const page = await browser.newPage({ viewport: { width: 640, height: 640 }, deviceScaleFactor: 2 });
-		page.on('pageerror', () => {});
-		await page.goto(`http://localhost:${port}/harness.html`, { waitUntil: 'domcontentloaded' });
-		await page.waitForFunction('window.__ready === true', { timeout: 20000 });
-		return page;
 	}
 	const crashed = (err) => /Target crashed|Target page, context or browser has been closed|Browser has been closed|Protocol error/i.test(err.message);
 
