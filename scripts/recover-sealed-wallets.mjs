@@ -90,7 +90,11 @@ async function addressOf(kind, plaintext) {
 
 function readCandidates() {
 	if (process.stdin.isTTY) return [];
-	return [...new Set(readFileSync(0, 'utf8').split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim().length >= 16))];
+	// Each line is tried exactly as given and trimmed: a pasted value often carries
+	// stray whitespace, and the JWT_SECRET fallback that sealed some wallets had no
+	// minimum length, so short candidates are kept.
+	const lines = readFileSync(0, 'utf8').split('\n').map((l) => l.replace(/\r$/, ''));
+	return [...new Set(lines.flatMap((l) => [l, l.trim()]).filter((l) => l.trim().length > 0))];
 }
 
 async function sealedRecords() {
