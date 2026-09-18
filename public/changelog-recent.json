@@ -1,11 +1,11 @@
 {
-	"generated_at": "2026-09-18T07:48:36.343Z",
+	"generated_at": "2026-09-18T08:52:43.327Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3704,
+	"total": 3705,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
@@ -40,6 +40,17 @@
 			"tags": [
 				"fix",
 				"infra"
+			]
+		},
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "The $THREE page now has a live DEXTools chart and the Social Boost wins",
+			"summary": "The $THREE page shows a live candle chart of the three / SOL pair, drawn by DEXTools. Below the platform's own buybacks there is a new section for the community's: the three DEXTools Social Boost prizes $THREE has won so far, $11,382 of buybacks in total, each with a link to its receipt on DEXTools. Social Boost ranks tokens by visits to their DEXTools page, so the section also links straight there. Every visit counts toward the next win.",
+			"link": "/three-token",
+			"tags": [
+				"feature",
+				"improvement"
 			]
 		},
 		{
@@ -1605,17 +1616,6 @@
 			"title": "Text to 3D no longer stops when our image storage does",
 			"summary": "Turning a written prompt into a model takes one step you never see: we paint a reference picture of what you asked for, save it somewhere our sculpting engines can read, and hand them the link. If that save failed, the whole thing was over before a graphics card was ever asked for anything, and the error you got back was our storage provider's own wording about signatures and access keys, which told you nothing you could act on. Making a model from a photo you upload was unaffected, because it brings its own picture, so half the feature could look perfectly healthy while the other half was completely down. Our own engines never needed that saved copy: they accept the picture itself, sent along with the request. So when storage will not take the write, the reference view now travels inside the job and your model still gets built. The engines that genuinely need a link, the outside ones you can pick by name, now say so in plain language and point you at the ones still running, instead of failing with a message about our secret keys. Generations that take this route lose the extra angles we normally paint to fill in a subject's back, so they are built from the single front view.",
 			"link": "/forge",
-			"tags": [
-				"fix",
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The Agent Economy page is readable on a phone, and its x402 services finally have names",
-			"summary": "On a narrow screen the page laid itself out at desktop width and the browser quietly cut off two thirds of every section, so most of the content was simply unreachable on a phone. It now fits the screen at every size. The live x402 service list was also close to useless: every one of the ninety endpoints was labelled \"Service\", the price sat next to a raw token contract address, and the network read \"eip155:8453\" instead of \"Base\". Each row now carries a real name, its endpoint address, a clean price and a readable chain, an endpoint that takes path parameters no longer pretends to be a clickable page, and the list opens with a screenful you can expand to all of them. The three empty states tell you where to go next, and the services counter reports the true number instead of \"40+\".",
-			"link": "/economy",
 			"tags": [
 				"fix",
 				"improvement"

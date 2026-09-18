@@ -3,6 +3,16 @@
 	"entries": [
 		{
 			"date": "2026-09-18",
+			"title": "The $THREE page now has a live DEXTools chart and the Social Boost wins",
+			"summary": "The $THREE page shows a live candle chart of the three / SOL pair, drawn by DEXTools. Below the platform's own buybacks there is a new section for the community's: the three DEXTools Social Boost prizes $THREE has won so far, $11,382 of buybacks in total, each with a link to its receipt on DEXTools. Social Boost ranks tokens by visits to their DEXTools page, so the section also links straight there. Every visit counts toward the next win.",
+			"tags": [
+				"feature",
+				"improvement"
+			],
+			"link": "/three-token"
+		},
+		{
+			"date": "2026-09-18",
 			"title": "Paid endpoints now describe themselves the way marketplaces expect",
 			"summary": "When an agent or a marketplace asks one of our paid endpoints what it costs, the answer also explains how to call it and what comes back. Around sixty endpoints were sending that explanation in an older layout, or in one that did not match its own rules, which is enough for a marketplace to skip the listing without saying why. Every paid endpoint now sends it in the current standard layout, checked against its own rules. We also added a tool that tests our endpoints with the same checklist a marketplace validator uses, so a listing problem shows up on our side first.",
 			"tags": [

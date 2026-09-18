@@ -1,5 +1,5 @@
 {
-	"generated_at": "2026-09-18T07:48:36.227Z",
+	"generated_at": "2026-09-18T08:52:43.245Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json",
 	"site": {
 		"name": "three.ws",
@@ -2990,7 +2990,7 @@
 				{
 					"path": "/three-token",
 					"title": "$THREE Token",
-					"description": "The $THREE protocol token: live price, bonding-curve chart, streaming trades, and one-click buy.",
+					"description": "The $THREE protocol token: live price, a live DEXTools chart, streaming trades, programmatic buybacks, DEXTools Social Boost wins, and one-click buy.",
 					"added": null,
 					"auth": null,
 					"indexable": true,

@@ -31,6 +31,14 @@
 			<description>For several hours on September 18, nearly every paid endpoint on three.ws, the x402 discovery document at /.well-known/x402, the payment facilitator and the MCP server answered with a server error instead of a price. A routine update to the library behind wallet sign-in changed what it needs at startup, and our code tripped over it the moment it loaded, before any request could be served. Agents and marketplace validators that probed us saw a broken seller. The sign-in code now supplies what the library expects, returning buyers can sign back in to what they already paid for exactly as before, and the deploy checks now refuse to ship when the tested dependencies differ from the ones the live site will run, which is how this got past us.</description>
 		</item>
 		<item>
+			<title>The $THREE page now has a live DEXTools chart and the Social Boost wins</title>
+			<link>https://three.ws/three-token</link>
+			<guid isPermaLink="false">2026-09-18:The $THREE page now has a live DEXTools chart and the Social Boost wins</guid>
+			<pubDate>Fri, 18 Sep 2026 12:00:00 GMT</pubDate>
+			<category>feature</category>
+			<description>The $THREE page shows a live candle chart of the three / SOL pair, drawn by DEXTools. Below the platform's own buybacks there is a new section for the community's: the three DEXTools Social Boost prizes $THREE has won so far, $11,382 of buybacks in total, each with a link to its receipt on DEXTools. Social Boost ranks tokens by visits to their DEXTools page, so the section also links straight there. Every visit counts toward the next win.</description>
+		</item>
+		<item>
 			<title>Agent Wallet Agreement</title>
 			<link>https://three.ws/legal/agent-wallet</link>
 			<guid isPermaLink="false">2026-09-17:Agent Wallet Agreement</guid>

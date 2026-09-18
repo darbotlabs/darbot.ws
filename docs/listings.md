@@ -112,6 +112,20 @@ The badge itself is one shared component ([src/pump/verified-badge.js](../src/pu
 
 HackerNoon is one of the world's largest independent tech publications, read by millions of developers and founders monthly. Every three.ws announcement is pulled automatically from [`three.ws/rss/announcements.xml`](https://three.ws/rss/announcements.xml) into the HackerNoon drafts queue. A draft only goes public once it is submitted and passes HackerNoon's editorial review, and it then carries a canonical URL pointing back to three.ws. See [syndication setup](/docs/syndication#hackernoon) for technical details.
 
+### DEXTools
+
+$THREE trades on DEXTools as the [three / SOL pair](https://www.dextools.io/app/solana/pair-explorer/CnK82s8exdsK9nwqQ55kd9wcxoA22NwTchZJCBdu8LDa), and the public [/three-token](/three-token) page draws its live chart with DEXTools' own chart widget.
+
+DEXTools also runs [Social Boost](https://www.dextools.io/app/social-boost), which ranks tokens by daily and weekly visits to their pair page and buys the winner's token on the open market. $THREE has won it three times (checked 2026-09-18):
+
+| Date | Prize | Receipt |
+|---|---|---|
+| 2026-06-08 | Weekly winner, $5,543 buyback | [DEXTools announcement](https://x.com/DEXToolsApp/status/2064037499060555807) |
+| 2026-06-06 | Daily winner, $3,649 buyback | [Winner page](https://www.dextools.io/app/solana/pair-explorer/CnK82s8exdsK9nwqQ55kd9wcxoA22NwTchZJCBdu8LDa?social-boost=daily-2026-06-06) |
+| 2026-06-04 | Daily winner, $2,190 buyback | [Winner page](https://www.dextools.io/app/solana/pair-explorer/CnK82s8exdsK9nwqQ55kd9wcxoA22NwTchZJCBdu8LDa?social-boost=daily-2026-06-04) |
+
+The same list renders on [/three-token](/three-token#tk-social-boost) from one record, [src/pump/dextools-social-boost.js](../src/pump/dextools-social-boost.js). DEXTools publishes no API for past winners, so a new win is added there by hand (newest first, with its receipt) and mirrored in this table. Story: [three.ws Wins DEXTools Social Boost](/blog/three-ws-dextools-social-boost-buyback).
+
 ---
 
 ## Open Source

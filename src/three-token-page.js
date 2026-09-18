@@ -12,6 +12,17 @@ import { openSwapModal } from './swap-jupiter.js';
 import { trackFunnelStep, ANALYTICS_EVENTS } from './analytics.js';
 import { emptyStateHTML, errorStateHTML, ensureStateKitStyles } from './shared/state-kit.js';
 import { paintVerifiedBadge } from './pump/verified-badge.js';
+import { chartEmbedUrls } from './shared/chart-embeds.js';
+import { watchEmbed, embedFallbackNode } from './shared/embed-guard.js';
+import {
+	THREE_DEXTOOLS_PAIR,
+	DEXTOOLS_PAIR_URL,
+	SOCIAL_BOOST_LEADERBOARD_URL,
+	SOCIAL_BOOST_STORY_PATH,
+	SOCIAL_BOOST_WINS,
+	DEXTOOLS_HOLDING,
+	socialBoostSummary,
+} from './pump/dextools-social-boost.js';
 
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const PUMP_URL = `https://pump.fun/coin/${THREE_MINT}`;
@@ -166,8 +177,21 @@ function injectStyles() {
 	.tk-bb-run-amt b { color:#4ade80; font-weight:700; }
 	.tk-bb-run a { color:#7CC4FF; text-decoration:none; justify-self:end; white-space:nowrap; }
 	.tk-bb-run a:hover { text-decoration:underline; }
+	.tk-bb-lead a { color:#7CC4FF; text-decoration:none; } .tk-bb-lead a:hover { text-decoration:underline; }
+	.tk-dt-cta { margin:0 0 4px; }
+	.tk-chart { margin-bottom:18px; }
+	.tk-chart-h { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+	.tk-chart-h a { color:#7CC4FF; text-decoration:none; text-transform:none; letter-spacing:0; font-size:12.5px; } .tk-chart-h a:hover { text-decoration:underline; }
+	.tk-chart-host { position:relative; height:clamp(340px,52vh,520px); border-radius:10px; overflow:hidden; background:#0e0e12; }
+	.tk-chart-skel { position:absolute; inset:0; transition:opacity .3s ease; }
+	.tk-chart-frame { position:absolute; inset:0; width:100%; height:100%; border:0; opacity:0; transition:opacity .3s ease; }
+	.tk-chart-host.ready .tk-chart-frame { opacity:1; }
+	.tk-chart-host.ready .tk-chart-skel { opacity:0; }
+	.tk-chart-state { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:20px; color:#9a9aa3; font-size:13.5px; line-height:1.55; }
+	.tk-chart-state p { margin:0; max-width:420px; }
+	.tk-chart-state a { color:#7CC4FF; text-decoration:none; } .tk-chart-state a:hover { text-decoration:underline; }
 	@media (max-width:560px){ .tk-bb-head { grid-template-columns:repeat(2,1fr); gap:8px; } }
-	@media (prefers-reduced-motion: reduce){ html { scroll-behavior:auto; } .tk-trade.in { animation:none; } .tk-skel { animation:none; } .tk-bb-bar span { transition:none; } .tk-why-card { transition:none; } }
+	@media (prefers-reduced-motion: reduce){ html { scroll-behavior:auto; } .tk-trade.in { animation:none; } .tk-skel { animation:none; } .tk-bb-bar span { transition:none; } .tk-why-card { transition:none; } .tk-chart-skel, .tk-chart-frame { transition:none; } }
 	`;
 	const el = document.createElement('style');
 	el.textContent = css;
@@ -406,6 +430,77 @@ function startTradeTape(tapeEl, statusEl) {
 	return () => { stopped = true; clearInterval(timer); };
 }
 
+// ── live chart: DEXTools' own widget for the three / SOL pair ────────────────
+// The URL shape comes from the shared chart-embeds registry. A cross-origin
+// frame cannot report its own failure, so the embed guard swaps in a designed
+// fallback, and the card header links to the same chart on DEXTools either way.
+function mountDextoolsChart(host) {
+	const urls = chartEmbedUrls('dextools', { chain: 'solana', token: THREE_MINT, pool: THREE_DEXTOOLS_PAIR, theme: 'dark' });
+	let cancel = () => {};
+	const fail = () => {
+		cancel();
+		host.classList.remove('ready');
+		host.replaceChildren(
+			embedFallbackNode({
+				name: 'The DEXTools chart',
+				href: DEXTOOLS_PAIR_URL,
+				label: 'Open $THREE on DEXTools',
+				onRetry: () => mountDextoolsChart(host),
+				className: 'tk-chart-state',
+				buttonClassName: 'tk-btn',
+			}),
+		);
+	};
+	if (!urls) return fail();
+
+	const skel = document.createElement('div');
+	skel.className = 'tk-skel tk-chart-skel';
+	const frame = document.createElement('iframe');
+	frame.className = 'tk-chart-frame';
+	frame.src = urls.embed;
+	frame.title = '$THREE live price chart by DEXTools';
+	frame.loading = 'lazy';
+	frame.allow = 'clipboard-write; fullscreen';
+	// DEXTools' edge answers 403 to a loopback Referer, and a refused frame is a
+	// blank box the embed guard cannot see into. Local dev sends no referrer;
+	// every deployed origin sends its own, so DEXTools sees where its chart runs.
+	const loopback = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+	frame.referrerPolicy = loopback ? 'no-referrer' : 'strict-origin-when-cross-origin';
+	frame.addEventListener('load', () => {
+		cancel();
+		host.classList.add('ready');
+	});
+	frame.addEventListener('error', fail);
+	cancel = watchEmbed(host, { onTimeout: fail });
+	host.replaceChildren(skel, frame);
+}
+
+// ── community buybacks: DEXTools Social Boost wins, each with its receipt ────
+const fmtWinDate = (iso) =>
+	new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+function renderSocialBoost() {
+	const { count, totalUsd } = socialBoostSummary();
+	const held = `${(DEXTOOLS_HOLDING.tokens / 1e6).toFixed(2)}M`;
+	const rows = SOCIAL_BOOST_WINS.map(
+		(w) => `<div class="tk-bb-run">
+			<span class="tk-bb-run-date">${esc(fmtWinDate(w.date))}</span>
+			<span class="tk-bb-run-amt">${w.period === 'weekly' ? 'Weekly' : 'Daily'} winner · <b>${fmtUsd(w.prizeUsd, 0)}</b> buyback</span>
+			<a href="${esc(w.receipt)}" target="_blank" rel="noopener" title="See this win on DEXTools">Receipt ↗</a>
+		</div>`,
+	).join('');
+	return `
+		<div class="tk-bb-commit"><b>${fmtUsd(totalUsd, 0)}</b><em>of $THREE bought by DEXTools across ${count} Social Boost wins</em></div>
+		<p class="tk-bb-lead">DEXTools ranks tokens by visits to their pair page. When $THREE tops the board, DEXTools buys $THREE on the open market and holds it: after the weekly win it <a href="${esc(DEXTOOLS_HOLDING.source)}" target="_blank" rel="noopener">reported holding ${held} $THREE</a>. Every visit from here counts toward the next win.</p>
+		<div class="tk-buy tk-dt-cta">
+			<a class="tk-btn primary" href="${DEXTOOLS_PAIR_URL}" target="_blank" rel="noopener">Visit $THREE on DEXTools ↗</a>
+			<a class="tk-btn" href="${SOCIAL_BOOST_LEADERBOARD_URL}" target="_blank" rel="noopener">Social Boost leaderboard ↗</a>
+			<a class="tk-btn" href="${SOCIAL_BOOST_STORY_PATH}">Read the story →</a>
+		</div>
+		<div class="tk-bb-runs-h">Wins</div>
+		<div class="tk-bb-runs">${rows}</div>`;
+}
+
 // ── buy flow: Phantom → in-page swap, else pump.fun ─────────────────────────
 async function buyThree() {
 	const provider = window.solana || window.phantom?.solana;
@@ -449,6 +544,10 @@ function boot() {
 			${Array.from({ length: 4 }, () => `<div class="tk-stat"><div class="tk-skel" style="height:48px"></div></div>`).join('')}
 		</div>
 		<div class="tk-why" data-why>${renderWhyHold(50)}</div>
+		<div class="tk-card tk-chart">
+			<h2 class="tk-chart-h">Live chart <a href="${DEXTOOLS_PAIR_URL}" target="_blank" rel="noopener">Chart by DEXTools ↗</a></h2>
+			<div class="tk-chart-host" data-chart></div>
+		</div>
 		<div class="tk-grid">
 			<div class="tk-card">
 				<h2>Bonding curve</h2>
@@ -469,10 +568,15 @@ function boot() {
 			<h2>Programmatic buybacks</h2>
 			<div data-buyback><div class="tk-skel" style="height:96px"></div></div>
 		</div>
+		<div class="tk-card tk-bb" id="tk-social-boost">
+			<h2>Community buybacks · DEXTools Social Boost</h2>
+			${renderSocialBoost()}
+		</div>
 		<div class="tk-foot">
 			<a href="/dashboard/holders">🏆 Holder leaderboard</a>
 			<a href="/three-live">⚡ Protocol Pulse (live 3D)</a>
 			<a href="/dashboard/three-token">📊 $THREE dashboard</a>
+			<a href="${DEXTOOLS_PAIR_URL}" target="_blank" rel="noopener">📈 DEXTools ↗</a>
 			<a href="https://solscan.io/token/${THREE_MINT}" target="_blank" rel="noopener">🔎 Solscan ↗</a>
 		</div>
 	`;
@@ -502,6 +606,8 @@ function boot() {
 		});
 		buyThree().catch(() => window.open(PUMP_URL, '_blank', 'noopener'));
 	});
+
+	mountDextoolsChart(wrap.querySelector('[data-chart]'));
 
 	// Bonding curve — real on-chain reads for the $THREE mint.
 	mountBondingCurve(wrap.querySelector('[data-curve]'), { mint: THREE_MINT, network: 'mainnet', showUsd: true, refreshMs: 15_000, accent: '#4ade80' });

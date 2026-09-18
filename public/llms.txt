@@ -320,7 +320,7 @@ On-chain features: pay-per-call, token launches, vanity wallets.
 - [Crypto News](https://three.ws/markets/news): Live crypto news aggregated natively from 192 publisher feeds in 18 languages: filter by category (Bitcoin, DeFi, security, regulation, and more), pick a language, search headlines, and open any story in a rich reader with summary, key points, sentiment, and related coverage.
 - [Crypto News Archive](https://three.ws/markets/archive): The largest open crypto-news archive: 660,000+ articles from September 2017 to today, refreshed hourly from the live feed, in English and Chinese: searchable by keyword, ticker, source, sentiment, date, and language.
 - [Crypto News Digest](https://three.ws/markets/digest): The day's crypto news grouped into the handful of stories that actually matter: each with a plain-language summary, a market stance, the tickers involved, and every outlet that covered it. Clustered from 38 live publisher feeds.
-- [$THREE Token](https://three.ws/three-token): The $THREE protocol token: live price, bonding-curve chart, streaming trades, and one-click buy.
+- [$THREE Token](https://three.ws/three-token): The $THREE protocol token: live price, a live DEXTools chart, streaming trades, programmatic buybacks, DEXTools Social Boost wins, and one-click buy.
 - [x402 Catalog](https://three.ws/x402): A live catalog of pay-per-call APIs settled on-chain in USDC over the x402 protocol. Search, inspect the schema, and run any endpoint.
 - [Coin Communities](https://three.ws/communities): Pick a coin, drop in an avatar, and walk around its world with everyone else holding it. Each coin is its own live 3D community.
 - [Play](https://three.ws/play): Jump into a live coin community world and explore it with your avatar.

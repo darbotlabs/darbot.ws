@@ -2462,7 +2462,7 @@
 				{
 					"path": "/three-token",
 					"title": "$THREE Token",
-					"description": "The $THREE protocol token: live price, bonding-curve chart, streaming trades, and one-click buy.",
+					"description": "The $THREE protocol token: live price, a live DEXTools chart, streaming trades, programmatic buybacks, DEXTools Social Boost wins, and one-click buy.",
 					"priority": 0.8,
 					"changefreq": "daily"
 				},
@@ -6151,7 +6151,7 @@
 					"description": "three.ws is DEXTools' Social Boost winner of the week, earning a $5,543 buyback. The DEXTools wallet now holds 2.47M $three.",
 					"priority": 0.6,
 					"changefreq": "monthly",
-					"lastmod": "2026-06-08",
+					"lastmod": "2026-09-18",
 					"added": "2026-06-09"
 				},
 				{
