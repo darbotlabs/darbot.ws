@@ -163,6 +163,7 @@ Run `npm run audit:guards` to print the current count and per-stage breakdown. T
 | Bootstrap ordering | `npm run check:tdz-bootstrap` | No page calls its own entry point above the state that entry point writes, which renders fine in Chrome and throws in every Safari. |
 | Build output shape | `npm run check:dist` | `dist/` contains every artifact the deploy expects. |
 | Deploy artifact preflight | `npm run audit:deploy` | The artifact failure classes that have taken production down. |
+| Every API module loads | `npm run check:api-imports` | Every handler and shared module under `api/` importing without throwing, since a load-time throw is a 500 on every request to that route rather than a build error. |
 | Cloud Build upload | `npm run check:gcloudignore` | What `gcloud builds submit` would actually upload. |
 
 ### Runtime, assets, and money

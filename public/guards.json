@@ -130,6 +130,27 @@
 			}
 		},
 		{
+			"id": "check-api-imports",
+			"script": "scripts/check-api-imports.mjs",
+			"npm": "check:api-imports",
+			"title": "Every API module loads",
+			"protects": "Every handler and shared module under api/ importing without throwing.",
+			"why": "The server imports a handler the first time its route is hit, so a module that throws while loading is not a build error or a boot error. It is a 500 on every request to that route. On 2026-09-18 two merged dependency bumps did exactly that to the paid x402 surface while the build and a stale local test tree both stayed green.",
+			"stages": [
+				"deploy:submit"
+			],
+			"needs": "none",
+			"proof": {
+				"summary": "A shared API module that throws at load time, the way a dependency with a changed constructor does.",
+				"violation": {
+					"write": {
+						"api/_lib/guard-proof-throws-on-load.js": "throw new Error('guard proof: this module throws while loading');\n"
+					}
+				},
+				"expect": "guard-proof-throws-on-load.js"
+			}
+		},
+		{
 			"id": "audit-docs",
 			"script": "scripts/audit-docs.mjs",
 			"npm": "audit:docs",

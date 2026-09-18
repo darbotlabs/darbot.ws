@@ -106,7 +106,7 @@ if (isMain) {
 			if (failed.length > 8) console.error(`     ... and ${failed.length - 8} more`);
 		}
 		console.error(
-			`\n[check:api-imports] failed in ${elapsed}s. A dependency error usually means node_modules is behind package-lock.json (run \`npm install\`) or a bump changed an API.`,
+			`\n[check:api-imports] failed in ${elapsed}s. A dependency error usually means node_modules is behind package-lock.json (run \`npm install\`) or a bump changed an API. An ENOENT under data/_generated/ means the build has not run in this tree: that directory is written by \`prebuild\`, which is why this gate sits after build:gcp.`,
 		);
 		process.exit(1);
 	}
