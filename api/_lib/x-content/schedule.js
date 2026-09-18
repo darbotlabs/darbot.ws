@@ -61,9 +61,9 @@ export function inQuietHours(now, quiet) {
 //   T2 features         shipped features with proof
 //   T3 proof of work    short demos, stats, build notes
 // Slot times come from the engagement report's hour-of-day data, and each slot
-// opens at a jittered minute only the seed can reproduce. A slot stays open
-// until the next one starts, so a missed tick (deploy, outage) still posts, but
-// a day never gets more than one post per slot.
+// opens at a jittered minute only the seed can reproduce. A slot stays open for
+// three hours, so a missed tick (deploy, outage) still posts, but a day never
+// gets more than one post per slot and nothing spills into the small hours.
 //
 // Filling a slot: the slot's own tier first, then lower tiers (T1 slot empty ->
 // best T2), so the best available post always gets the best time. A higher tier
@@ -102,12 +102,20 @@ export function slotOpenings(now, cadence = DEFAULT_CADENCE, seed = null) {
 	return openings.sort((a, b) => a.opensAt - b.opensAt);
 }
 
-// The slot that is open right now (the latest one that has opened), and when
-// the next one opens.
+// How long a slot stays open after it opens. Long enough that a missed run or
+// a deploy does not lose the slot, short enough that an evening slot never
+// spills into the small hours where nobody is reading.
+export const SLOT_OPEN_MINUTES = 180;
+
+// The slot that is open right now (the latest one that has opened, and has not
+// yet closed), and when the next one opens.
 export function currentSlot(now, cadence = DEFAULT_CADENCE, seed = null) {
 	const openings = slotOpenings(now, cadence, seed);
 	const index = openings.findLastIndex((slot) => slot.opensAt <= now);
-	return { slot: index >= 0 ? openings[index] : null, next: openings[index + 1] || null };
+	const latest = index >= 0 ? openings[index] : null;
+	const openFor = Number(cadence.slotOpenMinutes ?? SLOT_OPEN_MINUTES) * MINUTE;
+	const slot = latest && now < latest.opensAt + openFor ? latest : null;
+	return { slot, next: openings[index + 1] || null };
 }
 
 // The order tiers are tried in for a slot: its own, then every lower tier,

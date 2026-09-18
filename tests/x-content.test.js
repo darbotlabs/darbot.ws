@@ -150,9 +150,12 @@ describe('schedule', () => {
 		expect(jitterMinutes('genesis', 60)).toBe(jitterMinutes('genesis', 60, null));
 	});
 
-	it('keeps the overnight slot open until the next morning slot', () => {
-		expect(currentSlot(Date.parse('2026-09-18T03:00:00Z'), cadence).slot.key).toBe('2026-09-17#2');
+	it('keeps a slot open for three hours, then closes it until the next one', () => {
 		expect(currentSlot(primeTime, cadence).slot.key).toBe('2026-09-17#1');
+		expect(currentSlot(Date.parse('2026-09-18T00:30:00Z'), cadence).slot.key).toBe('2026-09-17#2');
+		const small = currentSlot(Date.parse('2026-09-18T04:00:00Z'), cadence);
+		expect(small.slot).toBeNull();
+		expect(small.next.key).toBe('2026-09-18#0');
 	});
 
 	it('fills a slot from its own tier first, then lower tiers, then a higher tier with surplus', () => {
@@ -171,7 +174,7 @@ describe('schedule', () => {
 
 	it('spends each slot once, and respects embargo, spacing, and the daily cap', () => {
 		const used = { published: [{ id: 'z', slot: '2026-09-17#1', publishedAt: '2026-09-17T16:40:00Z' }] };
-		expect(pickDue({ items: [item('a', { tier: 1 })], state: used, now: primeTime + 5 * HOUR, cadence }).reason).toMatch(/2026-09-17#1.*used|spacing/);
+		expect(pickDue({ items: [item('a', { tier: 1 })], state: used, now: primeTime, cadence }).reason).toMatch(/2026-09-17#1 \(T1\) is used/);
 		expect(pickDue({ items: [item('a', { tier: 1, notBefore: '2026-09-18T00:00:00Z' })], state: {}, now: primeTime, cadence }).reason).toMatch(/embargoed/);
 		const recent = { published: [{ id: 'z', slot: 'other', publishedAt: new Date(primeTime - HOUR).toISOString() }] };
 		expect(pickDue({ items: [item('a', { tier: 1 })], state: recent, now: primeTime, cadence }).reason).toMatch(/spacing/);

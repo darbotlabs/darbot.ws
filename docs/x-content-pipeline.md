@@ -109,7 +109,7 @@ Cadence lives at the top of the file: `slots` (each `{ tier, at }` in UTC), `win
 
 ## How the next post is chosen
 
-**When:** three slots a day, one per tier, at the hours this account's own posts performed best in the engagement report: T3 at 08:00 UTC (2.75x the account median), T1 at 16:00 UTC (2.71x), T2 at 22:00 UTC (2.75x). Each opens at a minute only the production seed can reproduce, and stays open until the next slot starts, so a missed run still posts, but no slot is ever spent twice. Quiet hours are 02:00 to 07:00 UTC.
+**When:** three slots a day, one per tier, at the hours this account's own posts performed best in the engagement report: T3 at 08:00 UTC (2.75x the account median), T1 at 16:00 UTC (2.71x), T2 at 22:00 UTC (2.75x). Each opens at a minute only the production seed can reproduce, and stays open for three hours (`slotOpenMinutes`), so a missed run or a deploy still posts, but no slot is ever spent twice and an evening slot never spills into the small hours. Quiet hours are 02:00 to 07:00 UTC.
 
 **What:** the slot's own tier first, highest priority first. An empty tier falls to the next tier down, so the best available post always gets the best time. A higher tier only fills a lower slot when it has more than one post ready, so the last flagship post is kept for prime time. When nothing is ready, nothing posts: three a day is a ceiling, not a quota.
 
