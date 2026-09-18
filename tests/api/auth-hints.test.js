@@ -219,7 +219,7 @@ describe('authenticateAuthHintsRequest — SIWX (EOA)', () => {
 			issuedAt: new Date().toISOString(),
 			expirationTime: new Date(Date.now() + 5 * 60_000).toISOString(),
 		};
-		const payload = await createSIWxPayload(serverExtension, signer);
+		const payload = await createSIWxPayload(serverExtension, signer, serverExtension.uri);
 		header = encodeSIWxHeader(payload);
 	});
 
@@ -276,6 +276,7 @@ describe('authenticateAuthHintsRequest — SIWX (EOA)', () => {
 				expirationTime: new Date(Date.now() + 5 * 60_000).toISOString(),
 			},
 			signer,
+			'https://app.test/api/x402/agent-reputation',
 		);
 		const replayHeader = encodeSIWxHeader(payload);
 		const req = { headers: { 'sign-in-with-x': replayHeader } };

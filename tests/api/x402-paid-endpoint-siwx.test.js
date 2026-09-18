@@ -116,11 +116,11 @@ function solanaAdapterSigner(kp) {
 async function signSiwxFromChallenge(challenge, signer, chainId) {
 	const info = challenge.extensions[SIGN_IN_WITH_X].info;
 	const completeInfo = { ...info, chainId, type: 'ed25519' };
-	const payload = await createSIWxPayload(completeInfo, signer);
+	// The client binds the challenge to the origin it was served from, so the
+	// request URL is the challenge's own uri.
+	const payload = await createSIWxPayload(completeInfo, signer, info.uri);
 	return encodeSIWxHeader(payload);
 }
-
-describeIfDb('paidEndpoint() + siwx', () => {});
 
 function describeIfDb(name, fn) {
 	if (HAS_DB) return describe(name, fn);

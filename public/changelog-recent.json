@@ -1,14 +1,36 @@
 {
-	"generated_at": "2026-09-17T23:48:58.720Z",
+	"generated_at": "2026-09-18T07:13:35.035Z",
 	"generated_by": "scripts/build-page-index.mjs from data/pages.json + data/changelog.json",
 	"site": {
 		"name": "three.ws",
 		"url": "https://three.ws"
 	},
-	"total": 3701,
+	"total": 3703,
 	"complete": false,
 	"full_feed": "/changelog.json",
 	"entries": [
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "Granite Guardian now answers on three.ws, not just in the docs",
+			"summary": "The governance check that screens what an agent is asked to do, and vetoes it when the request is a jailbreak, harmful, or fraudulent, runs on IBM Granite Guardian. It was built to call IBM's hosted watsonx.ai service, so on our live site it answered with a not-configured error, and the new agent identity check quietly skipped itself for the same reason. IBM publishes Granite Guardian's weights openly, so we now run the model ourselves on a dedicated GPU as a second lane: watsonx still leads wherever it is set up, and our own copy answers whenever it is not. Every verdict now says which model and which lane produced it. The identity check also compares a new agent against existing ones using the site's regular embedding service when Granite embeddings are unavailable; it lists the look-alikes it finds but only scores them on Granite, because that is what its thresholds were tuned on.",
+			"link": "/docs/ibm",
+			"tags": [
+				"fix",
+				"infra"
+			]
+		},
+		{
+			"date": "2026-09-18",
+			"type": "update",
+			"title": "Paid x402 endpoints are answering again",
+			"summary": "For several hours on September 18, nearly every paid endpoint on three.ws, the x402 discovery document at /.well-known/x402, the payment facilitator and the MCP server answered with a server error instead of a price. A routine update to the library behind wallet sign-in changed what it needs at startup, and our code tripped over it the moment it loaded, before any request could be served. Agents and marketplace validators that probed us saw a broken seller. The sign-in code now supplies what the library expects, returning buyers can sign back in to what they already paid for exactly as before, and the deploy checks now refuse to ship when the tested dependencies differ from the ones the live site will run, which is how this got past us.",
+			"link": "/docs/x402",
+			"tags": [
+				"fix",
+				"infra"
+			]
+		},
 		{
 			"date": "2026-09-17",
 			"type": "launch",
@@ -1597,27 +1619,6 @@
 			"tags": [
 				"fix",
 				"docs"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The changelog page no longer downloads three and a half thousand entries to show you this week",
-			"summary": "Opening the changelog fetched the entire history, every entry since the site existed, and wrote all of it into the page in one go: 870 KB over the wire and, on a mid-range phone over a slow connection, eleven seconds where the page would not respond to anything. It now paints the newest 150 entries from a small feed and pages in the rest only when you filter or ask for older updates, so the thing you came for is on screen almost immediately and the full history is one tap away. Entry pages, the What's New strip on the features page and the Walk changelog read the small feed too. The complete feed at /changelog.json is unchanged and still the one to use if you are building on it.",
-			"link": "/changelog",
-			"tags": [
-				"improvement"
-			]
-		},
-		{
-			"date": "2026-09-08",
-			"type": "update",
-			"title": "The ChatGPT and AR docs now describe the AR launcher that actually runs",
-			"summary": "Three corrections to the documentation for the ChatGPT surfaces and augmented reality. The AR reference still said the one-tap launcher at /api/ar draws the model itself in Google's model-viewer, which stopped being true when the launcher became a pure router: it now sends Android straight into Scene Viewer and everyone else to a bundled page that builds a real USDZ on the device, which is what iPhone's Quick Look needs. The pages are named correctly throughout, including which one does the file conversion, so nobody debugging an iPhone handoff starts in the wrong file. The ChatGPT AR page also credited a single generation engine for every model, when the connector actually tries the free engines in turn and steps down to a slower one if the first is cold, which is why generation keeps working when one lane is down. And the paid studio server's page promised that anyone can browse its tool catalogue without credentials, without mentioning that a connector client is deliberately answered with a sign-in challenge instead, as the connector standard requires; both paths are now written down, with a command that works. That page's tool tables also describe nine tools that were previously only named in its price list, so no tool appears with a price and no explanation.",
-			"link": "/docs/ar",
-			"tags": [
-				"docs",
-				"fix"
 			]
 		}
 	]

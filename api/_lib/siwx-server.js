@@ -29,9 +29,30 @@ import { evmTransport } from './evm/rpc.js';
 import { env } from './env.js';
 import { siwxStorage, normalizeAddress } from './siwx-storage.js';
 
-const siwxResourceServerExtension = createSIWxResourceServerExtension({ storage: siwxStorage });
-
 export { SIGN_IN_WITH_X };
+
+// @x402/extensions >= 2.25 binds a resource-server extension to one configured
+// origin and throws at construction when none is given, so the extension can no
+// longer be a module-level singleton built from storage alone (that threw on
+// import and took every paidEndpoint() route down with it). The origin comes
+// from the resource URL, which the server builds from env.APP_ORIGIN and never
+// from a request header, so a caller cannot steer it. One extension per origin,
+// built on first use.
+const extensionsByOrigin = new Map();
+
+function siwxOriginOf(resourceUrl) {
+	return new URL(resourceUrl).origin;
+}
+
+function extensionFor(resourceUrl) {
+	const origin = siwxOriginOf(resourceUrl);
+	let extension = extensionsByOrigin.get(origin);
+	if (!extension) {
+		extension = createSIWxResourceServerExtension({ storage: siwxStorage, origin });
+		extensionsByOrigin.set(origin, extension);
+	}
+	return extension;
+}
 
 // Lazily build a viem PublicClient so verifySIWxSignature can verify
 // smart-contract wallets (EIP-1271) and counterfactual wallets (EIP-6492).
@@ -83,11 +104,35 @@ export async function declareSiwxExtensionFor({
 		expirationSeconds,
 	});
 	const declaration = stub[SIGN_IN_WITH_X];
-	const enriched = await siwxResourceServerExtension.enrichPaymentRequiredResponse(declaration, {
+	const enriched = await extensionFor(resourceUrl).enrichPaymentRequiredResponse(declaration, {
 		resourceInfo: { url: resourceUrl },
 		requirements: unique.map((network) => ({ network })),
 	});
 	return { [SIGN_IN_WITH_X]: enriched };
+}
+
+// Check a parsed SIWX payload: the message must belong to this origin, be
+// fresh, and carry an unused nonce, and the signature must verify (EOA,
+// EIP-1271, EIP-6492, or Solana ed25519). Shared by the paidEndpoint() re-entry
+// path below and the auth-hints path (api/_lib/x402/auth-hints.js) so both
+// track the library's result shape in one place. Returns
+// `{ ok: true, address }` with the address already normalized, or
+// `{ ok: false, stage: 'message' | 'signature', error }`.
+export async function verifySiwxProof({ payload, resourceUrl }) {
+	const validation = await validateSIWxMessage(payload, new URL(siwxOriginOf(resourceUrl)), {
+		maxAge: 5 * 60 * 1000,
+		checkNonce: async (n) => !(await siwxStorage.hasUsedNonce(n)),
+	});
+	if (!validation.isValid) {
+		return { ok: false, stage: 'message', error: validation.invalidMessage };
+	}
+
+	const verification = await verifySIWxSignature(payload, { evmVerifier: getEvmVerifier() });
+	if (!verification.isValid || !verification.payer) {
+		return { ok: false, stage: 'signature', error: verification.invalidMessage };
+	}
+
+	return { ok: true, address: normalizeAddress(payload.chainId, verification.payer) };
 }
 
 // Given an incoming Vercel request, attempt to authenticate via
@@ -111,20 +156,13 @@ export async function authenticateSiwx({ req, resourceUrl }) {
 		return { ok: false, status: 400, code: 'siwx_parse_failed', error: err.message };
 	}
 
-	const validation = await validateSIWxMessage(payload, resourceUrl, {
-		maxAge: 5 * 60 * 1000,
-		checkNonce: async (n) => !(await siwxStorage.hasUsedNonce(n)),
-	});
-	if (!validation.valid) {
-		return { ok: false, status: 401, code: 'siwx_message_invalid', error: validation.error };
+	const proof = await verifySiwxProof({ payload, resourceUrl });
+	if (!proof.ok) {
+		const code = proof.stage === 'message' ? 'siwx_message_invalid' : 'siwx_signature_invalid';
+		return { ok: false, status: 401, code, error: proof.error };
 	}
 
-	const verification = await verifySIWxSignature(payload, { evmVerifier: getEvmVerifier() });
-	if (!verification.valid || !verification.address) {
-		return { ok: false, status: 401, code: 'siwx_signature_invalid', error: verification.error };
-	}
-
-	const normalizedAddress = normalizeAddress(payload.chainId, verification.address);
+	const normalizedAddress = proof.address;
 	if (!(await siwxStorage.hasPaid(resourceUrl, normalizedAddress))) {
 		return {
 			ok: false,

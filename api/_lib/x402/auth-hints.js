@@ -25,18 +25,12 @@
 //   - auth-hints SIWX is a free alternative to payment — the wallet just
 //     needs to sign a fresh CAIP-122 challenge.
 
-import {
-	parseSIWxHeader,
-	validateSIWxMessage,
-	verifySIWxSignature,
-} from '@x402/extensions/sign-in-with-x';
-import { createPublicClient } from 'viem';
-import { base } from 'viem/chains';
-import { evmTransport } from '../evm/rpc.js';
+import { parseSIWxHeader } from '@x402/extensions/sign-in-with-x';
 
 import { env } from '../env.js';
 import { authenticateBearer, hasScope } from '../auth.js';
-import { siwxStorage, normalizeAddress } from '../siwx-storage.js';
+import { siwxStorage } from '../siwx-storage.js';
+import { verifySiwxProof } from '../siwx-server.js';
 
 export const AUTH_HINTS_EXTENSION_KEY = 'auth-hints';
 export const SIWX_HEADER = 'sign-in-with-x';
@@ -208,21 +202,6 @@ function readSiwxHeader(req) {
 	return typeof raw === 'string' && raw.length > 0 ? raw : null;
 }
 
-// Lazy viem client used to verify EIP-1271 / EIP-6492 smart-wallet signatures.
-// Mirrors siwx-server.js so both code paths share the same RPC.
-let _baseClient;
-function getEvmVerifier() {
-	if (!env.BASE_RPC_URL) return undefined;
-	if (!_baseClient) {
-		// BASE_RPC_URL stays primary (a private node, so buyer addresses are not
-		// broadcast to public RPCs on the happy path); the shared Base endpoints
-		// only take over when it fails, so a dead private node cannot block
-		// every smart-wallet sign-in.
-		_baseClient = createPublicClient({ chain: base, transport: evmTransport(base.id, { primaryUrl: env.BASE_RPC_URL }) });
-	}
-	return _baseClient.verifyMessage.bind(_baseClient);
-}
-
 /**
  * Verify a SIGN-IN-WITH-X header against the auth-hints contract:
  *   - parse the CAIP-122 envelope (delegated to @x402/extensions)
@@ -246,20 +225,12 @@ export async function verifyAuthHintsSiwx({ req, resourceUrl }) {
 		return { ok: false, reason: 'invalid_siwx_proof' };
 	}
 
-	const validation = await validateSIWxMessage(payload, resourceUrl, {
-		maxAge: 5 * 60 * 1000,
-		checkNonce: async (n) => !(await siwxStorage.hasUsedNonce(n)),
-	});
-	if (!validation.valid) {
-		return { ok: false, reason: 'invalid_siwx_message', detail: validation.error };
+	const proof = await verifySiwxProof({ payload, resourceUrl });
+	if (!proof.ok) {
+		const reason = proof.stage === 'message' ? 'invalid_siwx_message' : 'invalid_siwx_signature';
+		return { ok: false, reason, detail: proof.error };
 	}
-
-	const verification = await verifySIWxSignature(payload, { evmVerifier: getEvmVerifier() });
-	if (!verification.valid || !verification.address) {
-		return { ok: false, reason: 'invalid_siwx_signature', detail: verification.error };
-	}
-
-	const address = normalizeAddress(payload.chainId, verification.address);
+	const address = proof.address;
 
 	// Atomically claim the nonce so the proof can't be replayed against this
 	// endpoint. The claim is the authoritative gate, not the earlier
