@@ -111,7 +111,7 @@
 		},
 		{
 			"id": "rig-doctor",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"lane": "developer",
 			"pattern": "correction",
@@ -178,7 +178,7 @@
 		},
 		{
 			"id": "aws-authorization-spine",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"lane": "article",
 			"pattern": "number",
@@ -246,7 +246,7 @@
 		},
 		{
 			"id": "three-token-mcp",
-			"status": "review",
+			"status": "approved",
 			"kind": "post",
 			"lane": "token",
 			"pattern": "mechanism",
