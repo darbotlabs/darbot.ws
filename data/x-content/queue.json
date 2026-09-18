@@ -842,7 +842,7 @@
 		},
 		{
 			"id": "ai-3d-skills",
-			"status": "approved",
+			"status": "paused",
 			"kind": "post",
 			"tier": 2,
 			"lane": "creation",
