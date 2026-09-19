@@ -13,10 +13,14 @@
  * marketing/growth/proof/<campaign_id>/:
  *
  *   desktop@2x.png     1600x900 viewport at deviceScaleFactor 2 (3200x1800), for
+ *                      (desktop@1x.png for WebGL recipes with `scale: 1`: a 2x
+ *                      SwiftShader framebuffer plus the recorder can take the
+ *                      headless renderer down on a busy machine)
  *                      articles, partner pages and press
  *   x-1600x900.jpg     the same frame at exactly 1600x900, JPEG, under X's 5 MB
  *                      image limit, ready to attach to a post
- *   mobile@3x.png      390x844 viewport at deviceScaleFactor 3 (1170x2532)
+ *   mobile@3x.png      390x844 viewport at deviceScaleFactor 3 (1170x2532); WebGL
+ *                      recipes may set `mobileScale: 2` for the same reason
  *   motion-15s.mp4     (motion surfaces only) 15 seconds of the running page,
  *                      H.264 + faststart, kept under 8 MB
  *
@@ -104,6 +108,8 @@ const SITE_CHROME = [
  */
 const RECIPES = {
 	'MKT-2026-09-IBM-EVENT': {
+		scale: 1,
+		mobileScale: 2,
 		shows: 'The live 3D world at /play, the venue for the IBM Community user-group event',
 		motion: true,
 		canvas: true,
@@ -111,6 +117,8 @@ const RECIPES = {
 		clipActions: [{ type: 'orbit' }],
 	},
 	'MKT-2026-11-IBM-WORLD-2': {
+		scale: 1,
+		mobileScale: 2,
 		shows: 'The live 3D world at /play, where the second IBM session runs the tool-purchase demo',
 		motion: true,
 		canvas: true,
@@ -121,6 +129,8 @@ const RECIPES = {
 		shows: 'The OpenAI Select Partner page: 3D Studio inside ChatGPT, keyless',
 	},
 	'MKT-2026-10-NVIDIA-DH': {
+		scale: 1,
+		mobileScale: 2,
 		shows: 'The Audio2Face demo: audio driving a 3D face in the browser',
 		motion: true,
 		canvas: true,
@@ -136,6 +146,8 @@ const RECIPES = {
 		shows: 'The three.ws on AWS page: the AWS Partner software path and procurement story',
 	},
 	'MKT-2026-10-ELEVEN-BODY': {
+		scale: 1,
+		mobileScale: 2,
 		shows: 'The voice page: a voice agent with a speaking, expressive 3D body',
 		motion: true,
 		canvas: true,
@@ -146,7 +158,9 @@ const RECIPES = {
 		json: true,
 	},
 	'MKT-2026-11-QUICKNODE': {
-		shows: 'The Solana agents doc covering the production RPC failover path',
+		shows: 'The Solana agents doc, Networks section: the production RPC failover chain',
+		actions: [{ type: 'heading', text: 'Networks' }],
+		mobileActions: [{ type: 'heading', text: 'Networks', offset: 72 }],
 	},
 };
 
@@ -197,13 +211,13 @@ function targetUrl(proof) {
 	return BASE + url.pathname + url.search;
 }
 
-async function newContext(browser, kind, videoDir) {
+async function newContext(browser, kind, videoDir, scale = kind === 'mobile' ? 3 : 2) {
 	const context = await browser.newContext(
 		kind === 'mobile'
-			? { ...MOBILE, viewport: { width: 390, height: 844 }, colorScheme: 'dark' }
+			? { ...MOBILE, viewport: { width: 390, height: 844 }, deviceScaleFactor: scale, colorScheme: 'dark' }
 			: {
 					viewport: DESKTOP,
-					deviceScaleFactor: 2,
+					deviceScaleFactor: scale,
 					colorScheme: 'dark',
 					...(videoDir ? { recordVideo: { dir: videoDir, size: DESKTOP } } : {}),
 				},
@@ -251,8 +265,21 @@ async function applyActions(page, actions = []) {
 		else if (action.type === 'wait') await page.waitForTimeout(action.ms || 1000);
 		else if (action.type === 'scroll') await page.evaluate((top) => window.scrollTo({ top, behavior: 'smooth' }), action.top || 0);
 		else if (action.type === 'orbit') await orbit(page, action.ms || 9000);
+		else if (action.type === 'heading') await scrollToHeading(page, action.text, action.offset ?? 96);
 		else throw new Error(`unknown action type "${action.type}"`);
 	}
+}
+
+/** Put the first heading whose text starts with `text` near the top of the viewport. */
+async function scrollToHeading(page, text, offset) {
+	const found = await page.evaluate(({ text, offset }) => {
+		const heading = [...document.querySelectorAll('h1,h2,h3')].find((h) => h.textContent.trim().startsWith(text));
+		if (!heading) return false;
+		window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - offset);
+		return true;
+	}, { text, offset });
+	if (!found) throw new Error(`heading not found on page: ${text}`);
+	await page.waitForTimeout(1200);
 }
 
 /** Drag slowly across the largest canvas so a 3D scene visibly turns. */
@@ -429,7 +456,9 @@ async function captureCampaign(browser, row, recipe) {
 
 	try {
 		// Desktop: stills first, then the recorded clip window on the same visit.
-		const desktop = await newContext(browser, 'desktop', videoDir);
+		const scale = recipe.scale ?? 2;
+		const heroFile = `desktop@${scale}x.png`;
+		const desktop = await newContext(browser, 'desktop', videoDir, scale);
 		const recordingStarted = Date.now();
 		const page = await desktop.newPage();
 		const report = watch(page, origin);
@@ -441,16 +470,17 @@ async function captureCampaign(browser, row, recipe) {
 			const png = await shoot(page);
 			if (recipe.canvas) {
 				const box = await largestCanvasBox(page);
-				if (await canvasIsBlank(png, box, 2)) defects.push('no WebGL canvas painted within the settle window');
+				if (await canvasIsBlank(png, box, scale)) defects.push('no WebGL canvas painted within the settle window');
 			}
 			const terms = tokenMentions(seen);
 			terms.forEach((t) => gatedTerms.add(t));
 			const hero = await sharp(png).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
-			writeFileSync(path.join(dir, 'desktop@2x.png'), hero);
+			writeFileSync(path.join(dir, heroFile), hero);
+			for (const other of [1, 2]) if (other !== scale) rmSync(path.join(dir, `desktop@${other}x.png`), { force: true });
 			const heroMeta = await sharp(hero).metadata();
-			files.push(fileEntry(id, 'desktop@2x.png', {
+			files.push(fileEntry(id, heroFile, {
 				kind: 'desktop', width: heroMeta.width, height: heroMeta.height, gated: isGated(terms),
-				shows: `Desktop hero at 1600x900 (2x): ${recipe.shows}`,
+				shows: `Desktop hero at 1600x900 (${scale}x): ${recipe.shows}`,
 			}));
 
 			let quality = 90;
@@ -495,7 +525,9 @@ async function captureCampaign(browser, row, recipe) {
 		}
 
 		// Mobile: a separate visit with a phone viewport, touch and UA.
-		const mobile = await newContext(browser, 'mobile');
+		const mobileScale = recipe.mobileScale ?? 3;
+		const mobileFile = `mobile@${mobileScale}x.png`;
+		const mobile = await newContext(browser, 'mobile', null, mobileScale);
 		const mpage = await mobile.newPage();
 		const mreport = watch(mpage, origin);
 		try {
@@ -506,11 +538,12 @@ async function captureCampaign(browser, row, recipe) {
 			terms.forEach((t) => gatedTerms.add(t));
 			const png = await shoot(mpage);
 			const out = await sharp(png).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
-			writeFileSync(path.join(dir, 'mobile@3x.png'), out);
+			writeFileSync(path.join(dir, mobileFile), out);
+			for (const other of [2, 3]) if (other !== mobileScale) rmSync(path.join(dir, `mobile@${other}x.png`), { force: true });
 			const meta = await sharp(out).metadata();
-			files.push(fileEntry(id, 'mobile@3x.png', {
+			files.push(fileEntry(id, mobileFile, {
 				kind: 'mobile', width: meta.width, height: meta.height, gated: isGated(terms),
-				shows: `Mobile at 390x844 (3x): ${recipe.shows}`,
+				shows: `Mobile at 390x844 (${mobileScale}x): ${recipe.shows}`,
 			}));
 		} finally {
 			if (mreport.crashed) defects.push('mobile: the renderer crashed while loading the page');
