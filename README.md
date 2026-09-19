@@ -8802,6 +8802,15 @@ A map of every user-facing route. [`STRUCTURE.md`](STRUCTURE.md) maps each produ
     ```
     The application will be available at `http://localhost:3000`.
 
+6.  **Build and test** (Node 24.x required):
+    ```bash
+    npm run build        # frontend. Builds avatar-sdk/dist on first run if missing
+    npm run test:gate    # curated offline vitest subset
+    npm run test:core    # full vitest suite
+    ```
+
+A viewer-only session does not need secrets. Auth, uploads, and chat need values from `.env.example` copied to `.env.local`. Typical local names: `DATABASE_URL`, `JWT_SECRET`, and optionally `ANTHROPIC_API_KEY` plus S3/R2 keys. Do not invent those values.
+
 ---
 
 ## Examples
