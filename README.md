@@ -1,16 +1,20 @@
-# three.ws          
- 
-[**Website**](https://three.ws) · [**Docs**](https://three.ws/docs) · [**Changelog**](https://three.ws/changelog) · [**X / Twitter**](https://x.com/trythreews) · [**GitHub**](https://github.com/nirholas/three.ws) · [**$THREE on pump.fun**](https://pump.fun/FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump)
+# darbot.ws
 
-[![site](https://img.shields.io/website?url=https%3A%2F%2Fthree.ws&label=three.ws)](https://three.ws) [![npm](https://img.shields.io/npm/v/%40three-ws%2Fsdk?label=%40three-ws%2Fsdk)](https://www.npmjs.com/package/@three-ws/sdk) [![npm](https://img.shields.io/npm/v/%40three-ws%2Fmcp-server?label=%40three-ws%2Fmcp-server)](https://www.npmjs.com/package/@three-ws/mcp-server) [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.nirholas-blue)](https://registry.modelcontextprotocol.io/?q=io.github.nirholas) [![x402scan](https://img.shields.io/badge/x402scan-listed-green)](https://www.x402scan.com/server/17cbd874-52ac-4920-a020-b22ff2489a07) [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) [![good first issues](https://img.shields.io/github/issues/nirholas/three.ws/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/nirholas/three.ws/labels/good%20first%20issue)
+**This is a [DarbotLabs](https://github.com/darbotlabs) fork of [three.ws](https://github.com/nirholas/three.ws)** (Apache-2.0). Credit and copyright for the original work belong to the upstream project: [nirholas/three.ws](https://github.com/nirholas/three.ws). Published npm packages stay `@three-ws/*` so existing installs keep resolving.
+
+This fork does not introduce its own token or coin.
+
+[**Docs**](docs/start-here.md) · [**This repo**](https://github.com/darbotlabs/darbot.ws) · [**Upstream three.ws**](https://github.com/nirholas/three.ws) · [**Upstream site**](https://three.ws)
+
+[![npm](https://img.shields.io/npm/v/%40three-ws%2Fsdk?label=%40three-ws%2Fsdk)](https://www.npmjs.com/package/@three-ws/sdk) [![npm](https://img.shields.io/npm/v/%40three-ws%2Fmcp-server?label=%40three-ws%2Fmcp-server)](https://www.npmjs.com/package/@three-ws/mcp-server) [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 https://github.com/user-attachments/assets/d52515d1-cb04-4dd6-98bd-fef233312dc4
 
-**Give your AI a body.** three.ws is an open source (Apache-2.0), browser-native 3D AI agent platform. Type a prompt and [**Forge**](https://three.ws/forge) generates a textured 3D model, or drop a GLB you already have. Add an LLM brain, register on-chain, and embed anywhere: no plugins, no server uploads, no installs required.
+**Give your AI a body.** darbot.ws is an open source (Apache-2.0), browser-native 3D AI agent platform. Type a prompt and Forge generates a textured 3D model, or drop a GLB you already have. Add an LLM brain and embed anywhere: no plugins, no server uploads, no installs required.
 
-> **Try it in 60 seconds:** open [three.ws/forge](https://three.ws/forge), type *"a brass steampunk owl, full body"*, and download the GLB. Text→3D, image→3D, and sketch→3D — free draft tier, no account. [Jump to the Forge section ↓](#forge--text--image-to-3d)
+> **Run it locally:** clone this repo, then `npm install` and `npm run dev`. Open [http://localhost:3000](http://localhost:3000). The live public Forge at [three.ws/forge](https://three.ws/forge) is the upstream deployment. [Jump to the Forge section](#forge--text--image-to-3d)
 
-> **Want to build it with us?** [Your first contribution](docs/first-contribution.md) goes from clone to open pull request in about 15 minutes, with a full worked example. Every [`good first issue`](https://github.com/nirholas/three.ws/labels/good%20first%20issue) names the file to change and the command that proves it worked. Say hello in [Discussions](https://github.com/nirholas/three.ws/discussions) or [Telegram](https://t.me/three_ws_community).
+> **Want to contribute here?** [Your first contribution](docs/first-contribution.md) goes from clone to open pull request in about 15 minutes, with a full worked example. Issues and PRs belong on [darbotlabs/darbot.ws](https://github.com/darbotlabs/darbot.ws).
 
 ### Meet the avatar: a live 3D model, right here in markdown
 
@@ -8423,9 +8427,13 @@ endsolid threews_avatar
 
 <sub>Want your own? `npx readme-3d your-model.glb` converts any GLB into a paste-ready markdown block. [How it works →](packages/readme-3d)</sub>
 
+### Upstream token note
+
+darbot.ws does not introduce its own token. The section below documents the upstream three.ws project only.
+
 ### $THREE
 
-`$THREE` is the native token of the three.ws ecosystem — the one and only coin of the platform.
+`$THREE` is the native token of the upstream three.ws project. This fork does not promote a separate coin.
 
 | | |
 | --- | --- |
@@ -8771,8 +8779,8 @@ A map of every user-facing route. [`STRUCTURE.md`](STRUCTURE.md) maps each produ
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/nirholas/three.ws.git
-    cd three.ws
+    git clone https://github.com/darbotlabs/darbot.ws.git
+    cd darbot.ws
     ```
 2.  **Install dependencies**:
     ```bash

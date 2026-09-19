@@ -1,5 +1,5 @@
 <!--
-  Thanks for contributing to three.ws. Keep PRs focused and complete.
+  Thanks for contributing to darbot.ws (DarbotLabs fork of three.ws). Keep PRs focused and complete.
   Read CONTRIBUTING.md and CLAUDE.md (operating rules) before submitting.
 -->
 

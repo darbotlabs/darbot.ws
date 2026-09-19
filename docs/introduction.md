@@ -1,15 +1,17 @@
 # Introduction & Overview
 
-## What is three.ws?
+## What is darbot.ws?
 
-three.ws is an open-source, browser-native platform for creating, hosting, and embedding interactive AI agents that live inside 3D avatars. It combines a WebGL 3D viewer — built on [three.js](https://threejs.org) with full glTF 2.0 / GLB support — with an AI agent runtime that gives each avatar personality, memory, skills, and optionally an on-chain identity.
+darbot.ws is a [DarbotLabs](https://github.com/darbotlabs) fork of [three.ws](https://github.com/nirholas/three.ws): an open-source, browser-native platform for creating, hosting, and embedding interactive AI agents that live inside 3D avatars. It combines a WebGL 3D viewer built on [three.js](https://threejs.org) with full glTF 2.0 / GLB support, plus an AI agent runtime that gives each avatar personality, memory, skills, and optionally an on-chain identity.
 
 The result is an agent that doesn't just respond in a chat box. It occupies a three-dimensional body, plays animations, responds to voice, and can be embedded into any web page with a single script tag and a custom HTML element.
 
 **Key facts:**
 
-- **License:** open source, [Apache 2.0](https://github.com/nirholas/three.ws/blob/main/LICENSE)
-- **Hosted platform:** [https://three.ws](https://three.ws)
+- **License:** open source, [Apache 2.0](https://github.com/darbotlabs/darbot.ws/blob/main/LICENSE)
+- **This fork:** [https://github.com/darbotlabs/darbot.ws](https://github.com/darbotlabs/darbot.ws)
+- **Upstream project:** [https://github.com/nirholas/three.ws](https://github.com/nirholas/three.ws)
+- **Upstream hosted platform:** [https://three.ws](https://three.ws)
 - **CDN bundle:** `https://three.ws/agent-3d/latest/agent-3d.js` (also pinnable to a version, e.g. `/agent-3d/1.5.2/agent-3d.js`)
 - **npm packages:** [`@three-ws/sdk`](https://www.npmjs.com/package/@three-ws/sdk), [`@three-ws/agent-ui`](https://www.npmjs.com/package/@three-ws/agent-ui), [`@three-ws/avatar`](https://www.npmjs.com/package/@three-ws/avatar), [`@three-ws/solana-agent`](https://www.npmjs.com/package/@three-ws/solana-agent), [`@three-ws/mcp-server`](https://www.npmjs.com/package/@three-ws/mcp-server)
 - **No server required** for basic use — the viewer, agent runtime, and skill system all run in the browser via WebGL 2.0

@@ -1,6 +1,6 @@
 # Repository Structure
 
-three.ws ships all platform surfaces from a **single npm-workspaces monorepo**.
+darbot.ws (DarbotLabs fork of [three.ws](https://github.com/nirholas/three.ws)) ships all platform surfaces from a **single npm-workspaces monorepo**.
 This file maps each product surface to where it lives in this repository, so
 external developers can find what they need without reading 50 top-level
 directories.
@@ -10,7 +10,7 @@ release cadence, we promote it to its own published package (and optionally its
 own repo via `git subtree split`). See [Promotion path](#promotion-path) at the
 bottom.
 
-## three.ws surface map
+## darbot.ws surface map
 
 | Surface | Location | Status | Notes |
 |---|---|---|---|

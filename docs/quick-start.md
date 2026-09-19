@@ -1,6 +1,6 @@
-# Quick Start — three.ws
+# Quick Start: darbot.ws
 
-Get a live three.ws on your page in under 10 minutes.
+Get a live 3D agent on your page in under 10 minutes. This repo is the DarbotLabs fork of [three.ws](https://github.com/nirholas/three.ws). Published packages remain `@three-ws/*`.
 
 ---
 
@@ -21,7 +21,7 @@ The fastest path. No npm, no bundler, no build step.
 <html>
 <head>
   <meta charset="utf-8">
-  <title>My three.ws</title>
+  <title>My darbot.ws agent</title>
   <style>
     agent-3d { width: 400px; height: 500px; display: block; }
   </style>
@@ -190,8 +190,8 @@ For the full widget API including `postMessage` events, see the [Widget docs](./
 For contributors or self-hosters:
 
 ```bash
-git clone https://github.com/nirholas/three.ws.git
-cd three.ws
+git clone https://github.com/darbotlabs/darbot.ws.git
+cd darbot.ws
 npm install
 cp .env.example .env        # fill in your API keys (see below)
 npm run dev

@@ -1,4 +1,4 @@
-# Contributing to three.ws
+# Contributing to darbot.ws
 
 Thanks for your interest in contributing! This guide covers everything you need to get started.
 
@@ -23,8 +23,8 @@ Full list with guidance on which room fits which question: [docs/community.md](d
 ## Quick Start
 
 ```bash
-git clone https://github.com/nirholas/three.ws.git
-cd three.ws
+git clone https://github.com/darbotlabs/darbot.ws.git
+cd darbot.ws
 npm install
 npm run setup
 npm run dev
@@ -47,8 +47,8 @@ up to date.
 
 ### Report a Bug
 
-1. Check [existing issues](https://github.com/nirholas/three.ws/issues) to avoid duplicates
-2. Open a [new issue](https://github.com/nirholas/three.ws/issues/new) with:
+1. Check [existing issues](https://github.com/darbotlabs/darbot.ws/issues) to avoid duplicates
+2. Open a [new issue](https://github.com/darbotlabs/darbot.ws/issues/new) with:
     - Browser and OS
     - Steps to reproduce
     - Expected vs. actual behavior
@@ -188,13 +188,13 @@ Use the [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample
 
 Looking for something to work on? Here are areas that welcome contributions:
 
-**Start here:** [`good first issue`](https://github.com/nirholas/three.ws/labels/good%20first%20issue) is curated, not a dumping ground. Every issue on that list names the file to change and the command that proves the change worked. Comment on one to claim it.
+**Start here:** [`good first issue`](https://github.com/darbotlabs/darbot.ws/labels/good%20first%20issue) is curated, not a dumping ground. Every issue on that list names the file to change and the command that proves the change worked. Comment on one to claim it.
 
 The areas that most need help:
 
 - **Rig support**: teach [`src/glb-canonicalize.js`](src/glb-canonicalize.js) a bone-naming convention it does not know yet, so more uploaded avatars animate instead of falling back to a default body. The single highest-leverage self-contained change in the repo. Walked through step by step in [Your first contribution](docs/first-contribution.md).
 - **Animation quality**: new clips for the shared library, or better retargeting in [`src/animation-retarget.js`](src/animation-retarget.js)
-- **Bug fixes** — check the [issues page](https://github.com/nirholas/three.ws/issues)
+- **Bug fixes:** check the [issues page](https://github.com/darbotlabs/darbot.ws/issues)
 - **New environment maps** — add more HDR options
 - **Accessibility** — improve keyboard navigation and screen reader support
 - **Performance** — reduce re-renders, optimize disposal, add lazy loading
