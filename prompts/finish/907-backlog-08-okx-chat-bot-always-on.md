@@ -73,70 +73,69 @@ host. Build it:
    host detect an expired session and emit an actionable alert naming the exact
    command, rather than failing chat silently.
 
-## Owner actions (both, and nothing else, as of 2026-09-09)
+## State on 2026-09-18, and the one command left
 
-1. **Fund one AI lane.** Clearing the GCP billing hold on `aerial-vehicle-466722-p5` is
-   the one that also restores the platform's own Vertex anchor (`LLM providers DOWN`,
-   count 657). OpenRouter credit or an OpenAI reactivation each work too, because the
-   chain elects on a live probe.
-2. **Deploy the worker**, so the AI-lane chain from `ad723e87f` is actually running. The
-   live beat carries no `providerLane`/`providerChain` key, which is how you can tell
-   the serving revision predates it without `gcloud`: it is pinned to Vertex and cannot
-   pick up a funded lane even after step 1.
+The payment-free reply lane is built and proven, the rollout overlap is closed, and the deploy
+is one command. Full measurements: [okx-ai-PROGRESS.md](_context/okx-ai-PROGRESS.md), entry
+2026-09-18.
 
-   ```sh
-   gcloud builds submit --config workers/okx-chat-bot/cloudbuild.yaml \
-     --region us-central1 --project aerial-vehicle-466722-p5 \
-     --substitutions=SHORT_SHA=manual$(date +%s) .
-   ```
+- **Reply lane.** The bot's `anthropic-gateway` lane now points at three.ws's own proxy at the
+  agent-scoped base URL `https://three.ws/api/llm/anthropic/agents/<agent>` (the path the `claude`
+  CLI builds by appending `/v1/messages`), model `nvidia/nemotron-3-super-120b-a12b`, on the free
+  chain. The proxy changes that make the CLI's default request acceptable (`53687d994`,
+  `d3074c1c8`, plus `f7f7da9b6`) are committed and **not live yet**: live API `4291900c7`.
+  Proven on production: the bot's probe body answers `200` on the free NVIDIA rung, and the real
+  `claude -p` agentic request made a Bash tool call and answered through the live proxy (via a
+  shim applying exactly those server-side adaptations, until the API deploy lands).
+- **Metering.** A dedicated service account `marketplace-chat@agents.three.ws` owning one
+  unpublished agent, with a key minted straight into Secret Manager
+  (`okx-chat-bot-llm-gateway-token`). Never someone else's agent, and a leaked key is worth one
+  agent's AI budget. `npm run okx:bot:gateway` provisions and proves it; not run yet (Secret
+  Manager writes are the owner's).
+- **Single writer.** `max-instances` is per revision, so a rollout overlapped two daemons on one
+  identity. [workers/okx-chat-bot/lease.js](../../workers/okx-chat-bot/lease.js) sequences it: the
+  new instance waits for the old one's final snapshot and lease release (or, for the pre-lease
+  `00001-926`, for its heartbeat to go 90 s quiet) before restoring and starting its daemon.
 
-Order does not matter; whichever lands second is picked up by the next 15-minute election.
-An email OTP is **not** currently needed: the session has been `loggedIn: true` since
-2026-09-05.
+### Owner actions, in order (either deploy may go first)
 
-## A second route to the reply lane, found 2026-09-10 (owner's call, not taken)
+```sh
+# 0. This workspace's gcloud login has expired.
+gcloud auth login && gcloud auth application-default login
 
-Owner action 1 (clear the GCP billing hold) is still the clean fix, and it now unblocks four
-orders rather than two, so it is worth doing on its own merits. But it is no longer the ONLY
-route to a working reply lane, and the alternative needs no payment:
+# 1. Approve and commit the gated files still uncommitted (see the report), then ship the API,
+#    which carries the agent-scoped proxy path:
+npm run clean:worktrees -- --apply
+npm run prep:worktree -- --apply
+(cd /workspaces/.deploy-wt && npm run deploy:gcp:full)
+git worktree remove --force /workspaces/.deploy-wt
 
-`providerLanes()` in [config.js](../../workers/okx-chat-bot/config.js) already carries an
-`anthropic-gateway` lane that accepts any Anthropic-wire-format endpoint via
-`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`. **three.ws serves exactly that shape itself** at
-`/api/llm/anthropic`, the we-pay proxy the avatar embeds already use, and its free NVIDIA rungs
-were repaired on 2026-09-10 (`4dbe02cc7`); before that they were retired ids answering `410 Gone`,
-so this route would not have worked even if someone had tried it. Pointing the bot at our own
-proxy bills no third party and needs no Google lane.
+# 2. Ship the bot: provisions the gateway lane (agent, key, secret, IAM), builds a clean
+#    worktree of HEAD, submits cloudbuild.yaml, and waits for the new revision to take the lease.
+npm run okx:bot:deploy            # preview first with: npm run okx:bot:deploy -- --dry-run
 
-Three things gate it, and none is a code change:
+# 3. Verify.
+npm run okx:bot:gateway -- --verify --cli
+curl -s https://three.ws/api/healthz | jq '.subsystems.subsystems[]|select(.name=="okx_chat_bot")'
+```
 
-1. **The API deploy carrying `4dbe02cc7` has to land first**, or the proxy's NVIDIA rungs are
-   still the dead ids.
-2. **The proxy meters per agent.** It answers `400 agent query param required`, so this needs an
-   agent id owned by the platform user, and the i18n lane's own docs warn never to point it at
-   someone else's agent. Which agent to meter is an owner decision. Its embed-policy default is
-   10 requests/min, which is ample for chat but is a real ceiling.
-3. **Electing a lane respawns the daemon.** That is the documented mechanism (an env overlay plus
-   a respawn), and this bot's identity, the wallet keyring plus the XMTP client database, is a
-   single-writer state object whose corruption costs a human email OTP to recover. That risk is
-   why this was left for the owner rather than applied from a session.
-
-Not verified end to end from here, deliberately: proving it would mean metering a real agent and
-respawning the live daemon. What IS verified is that the gateway lane exists, that
-`/api/llm/anthropic` speaks the Anthropic wire format, and that its free chain answers again.
+Clearing the GCP billing hold is no longer required for replies, but it is still worth doing:
+Vertex leads the chain, so the next election moves the bot back to Claude on Vertex by itself.
 
 ## Definition of done
 
 - [ ] **Chat delivery verified end to end with a real inbound message.** The inbound half
       is proven (`activeClients: 1`, `agentCount: 1`, 0 daemon restarts since
-      2026-09-05). The reply half cannot pass until owner action 1. The original wording
+      2026-09-05). The reply lane is proven against production (2026-09-18: the real
+      `claude` agentic request, tool call included, answered through the free proxy
+      chain); a real buyer reply needs the two deploys above. The original wording
       of this line, "`npm run okx:bot` exits 0", is retired: that command is the
       codespace stopgap and must not run while the deployed host is up.
 - [x] **The daemon runs on an always-on host, not this codespace.** Cloud Run
       `okx-chat-bot-00001-926`, 4.8 days of continuous 30s beats.
 - [ ] **Its workspace carries real three.ws context.** The mechanical half is done and
       tested: `buildChatBriefing()` renders 10,069 bytes from the live catalog module and
-      is rebuilt on every boot. Asking the bot a platform question needs owner action 1.
+      is rebuilt on every boot. Asking the bot a platform question needs the deploys above.
 - [x] **A health endpoint exists and an offline session raises an alert.** `/readyz` is
       strict, `/api/healthz` carries the `okx_chat_bot` subsystem (now naming its
       `host` and `hostDurable` as fields), and `sendOpsAlert` fires on every

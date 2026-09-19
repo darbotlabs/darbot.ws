@@ -114,9 +114,10 @@ export function providerLanes(env = process.env, home = env.OKX_BOT_HOME || home
  * CLI the adapter already spawns. That keeps the task lifecycle intact, which a
  * one-shot completion responder would break.
  *
- * Deliberately opt-in: unlike Vertex it bills a third-party account per token, so
- * it must be a decision an operator made, never something the host picks up from
- * an unrelated key that happened to be on the service.
+ * Deliberately opt-in: whatever the base URL names meters or bills this host's
+ * calls (three.ws's own proxy against a dedicated agent's budget, a third-party
+ * gateway per token), so it must be a decision an operator made, never something
+ * the host picks up from an unrelated key that happened to be on the service.
  */
 function gatewayLane(env) {
 	const base = (env.OKX_BOT_ANTHROPIC_BASE_URL || '').trim().replace(/\/+$/, '');

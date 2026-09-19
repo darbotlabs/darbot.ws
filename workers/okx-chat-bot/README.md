@@ -53,6 +53,7 @@ testable without a daemon, a wallet, or a network.
 | `health-server.js` | The HTTP surface: strict `/readyz`, always-200 liveness, and the `remedy` payload. |
 | `state.js` | Tar the wallet/XMTP identity to GCS and restore it on boot (`snapshotState`, `restoreState`). |
 | `supervisor.js` | Owns the `okx-a2a run` child with capped exponential backoff restarts. |
+| `lease.js` | The single-writer lease: no two hosts restore, run or snapshot the bot identity at once, rollouts included (`createLease`, `sqlLeaseStore`). |
 | `workspace.js` | Rebuilds the AI subsession's briefing and skills from the image on every boot. |
 | `log.js` | Structured JSON lines for Cloud Logging. |
 
@@ -107,9 +108,13 @@ locally with no code change. Defaults are the production posture.
 | `ANTHROPIC_VERTEX_PROJECT_ID` | unset | The GCP project Vertex bills. Required alongside the flag above. |
 | `CLOUD_ML_REGION` | `global` | Vertex region for both the subsession and the credential probe. |
 | `OKX_A2A_AI_PERMISSION_PRESET` | unset | `bypass` on a headless host. Without it the subsession stalls on a tool-approval prompt nobody is there to answer, which the buyer experiences as an unresponsive bot. |
-| `OKX_BOT_ANTHROPIC_BASE_URL` | unset | Base URL of an Anthropic-wire-format gateway. The CLI appends `/v1/messages`, so OpenRouter's is `https://openrouter.ai/api`, **not** `.../api/v1`. |
-| `OKX_BOT_ANTHROPIC_AUTH_TOKEN` | unset | That gateway's credential. Both it and the base URL are required, or no gateway lane exists. |
-| `OKX_BOT_ANTHROPIC_MODEL` | unset | Model id in the gateway's catalog, e.g. `anthropic/claude-sonnet-4.6`. |
+| `OKX_BOT_ANTHROPIC_BASE_URL` | unset | Base URL of an Anthropic-wire-format gateway. The CLI appends `/v1/messages`. The deploy sets three.ws's own proxy, `https://three.ws/api/llm/anthropic/agents/<metering agent>`; OpenRouter's would be `https://openrouter.ai/api`, **not** `.../api/v1`. |
+| `OKX_BOT_ANTHROPIC_AUTH_TOKEN` | unset | That gateway's credential. Both it and the base URL are required, or no gateway lane exists. On three.ws's proxy it is an API key of the service account that owns the metering agent, from the `okx-chat-bot-llm-gateway-token` secret. |
+| `OKX_BOT_ANTHROPIC_MODEL` | unset | Model id in the gateway's catalog. The deploy sets `nvidia/nemotron-3-super-120b-a12b`, a free model on the proxy's chain. |
+| `OKX_BOT_LEASE_TTL_MS` | `120000` | How long an unrenewed single-writer lease stays taken. Bounds how long a host that died holding it blocks its successor. |
+| `OKX_BOT_LEASE_RENEW_MS` | `20000` | Lease renewal cadence. Must be under half the TTL. |
+| `OKX_BOT_LEASE_POLL_MS` | `5000` | How often a waiting host asks for the lease again. |
+| `OKX_BOT_LEGACY_BEAT_STALE_MS` | 3 x heartbeat | How old the heartbeat of a host built before the lease must be before a new host stops waiting for it. |
 | `OKX_BOT_PROVIDER_PROBE_MS` | `900000` | How often every lane's own API is asked whether it will still serve. Also how quickly a recovered lane is picked up. |
 | `OKX_BOT_HOST_LABEL` | auto | Name this host on every beat. Cloud Run names itself from `K_SERVICE`. |
 | `OKX_BOT_HOST_DURABLE` | unset | Set to `1` to claim a non-Cloud-Run host stays up on its own. |
@@ -141,7 +146,7 @@ carries the new credentials.
 |---|---|---|---|
 | 1 | `vertex` | `CLAUDE_CODE_USE_VERTEX=1` + a project | GCP credits, authenticated by the runtime service account. Nothing to mint, rotate or forget, and the spend lands on the pool the platform prefers over any paid third-party API. |
 | 2 | `anthropic-key` | `ANTHROPIC_API_KEY` | A first-party key. |
-| 3 | `anthropic-gateway` | `OKX_BOT_ANTHROPIC_BASE_URL` + `..._AUTH_TOKEN` | Any service that speaks the Anthropic wire format (OpenRouter serves one). Opt-in, and last, because it bills a third-party account per token. |
+| 3 | `anthropic-gateway` | `OKX_BOT_ANTHROPIC_BASE_URL` + `..._AUTH_TOKEN` | Any service that speaks the Anthropic wire format. The deploy points it at three.ws's own we-pay proxy on the free model chain, so it needs no payment anywhere: see **The payment-free lane** below. Behind Vertex, so Claude on GCP credits leads again the moment the billing hold clears. |
 | 4 | `anthropic-login` | `$OKX_BOT_HOME/.claude/.credentials.json` | A developer host, whose `claude` CLI a human logged in. |
 | 5 | `openai-key` | `OPENAI_API_KEY` | The codex CLI. |
 
@@ -194,6 +199,49 @@ real reply. Measured 2026-09-09, `https://openrouter.ai/api/v1` makes the CLI
 request `/api/v1/v1/messages` and answers 404 forever, which is why the base URL
 in [cloudbuild.yaml](cloudbuild.yaml) ends at `/api`.
 
+### The payment-free lane: three.ws's own proxy
+
+The gateway lane does not need a third party. three.ws serves the Anthropic
+Messages format itself at `/api/llm/anthropic` (the proxy every avatar embed
+talks to, on the free model chain), and an SDK client reaches it at the
+agent-scoped base URL `/api/llm/anthropic/agents/<agent>/v1/messages`, the path
+the `claude` CLI builds from `ANTHROPIC_BASE_URL`. So the deploy sets:
+
+```
+OKX_BOT_ANTHROPIC_BASE_URL=https://three.ws/api/llm/anthropic/agents/<metering agent>
+OKX_BOT_ANTHROPIC_MODEL=nvidia/nemotron-3-super-120b-a12b
+OKX_BOT_ANTHROPIC_AUTH_TOKEN=okx-chat-bot-llm-gateway-token:latest   (secret)
+```
+
+Measured 2026-09-18 against production: the CLI's real request (the full
+agentic system prompt, 22 tools, streaming, `max_tokens` 32000, and an
+environment block sent as a `system` turn inside `messages`) ran through the
+proxy on `nvidia/nemotron-3-super-120b-a12b`, made a real Bash tool call, read the
+output back, and answered in 14 seconds. Two proxy changes made that possible
+and ship with the API: the agent-scoped path, and accepting the request shape
+the CLI sends by default (block-array `system`, in-thread `system` turns, a
+clamped rather than rejected `max_tokens`).
+
+The proxy meters per agent, so the lane meters against a **dedicated**,
+unpublished agent owned by a platform service account
+(`marketplace-chat@agents.three.ws`), never anyone else's.
+[scripts/okx-bot-llm-gateway.mjs](../../scripts/okx-bot-llm-gateway.mjs)
+(`npm run okx:bot:gateway`) provisions all of it idempotently and proves it with
+this worker's own `probeLane`:
+
+- **Why a service account, not the platform's main account.** The reply
+  subsession runs with tool access on buyer-supplied text and can read its own
+  environment, token included. A key for the main account would expose every
+  agent and wallet the platform owns; a key for an account that owns one
+  unpublished agent is worth that agent's AI budget and nothing else.
+- **Why its own embed policy.** A Claude Code turn is a 25k to 35k token prompt
+  and several calls per reply. The embed default (10 calls/min, 1M tokens a
+  month) would starve it within a few conversations, so the agent gets 30
+  calls/min, 20,000 calls and 30M tokens a month. On the free chain that ceiling
+  is a runaway guard rather than a spend.
+- **The key** is minted straight into Secret Manager and never printed or
+  written to disk; `--rotate` mints a new one before revoking the old.
+
 **One thing about Vertex that could not be tested here.** The billing hold denies
 every Vertex call on this project, so the credential probe was verified against
 the real endpoint (it returns the 403 above, and `classifyProbeStatus` calls that
@@ -235,9 +283,35 @@ curl -s localhost:8080/readyz | jq '{ready: .health.ready, reason: .health.reaso
 To stage the same workspace on a developer machine without running the worker,
 use [scripts/okx-bot-revive.mjs](../../scripts/okx-bot-revive.mjs), which keeps
 the identical skill list. It refuses to start a daemon while any other host is
-serving agent 2632: see **One writer, enforced** below.
+serving agent 2632: see **One writer, enforced, across rollouts too** below.
 
-### One writer, enforced
+### One writer, enforced, across rollouts too
+
+`--max-instances=1` is **per revision**. A Cloud Run rollout starts the new
+revision's instance, waits for its startup probe, moves traffic, and only then
+stops the old one, so for that window two instances run. Before the lease below,
+both would have restored the identity and run a daemon against it, and the old
+instance's SIGTERM snapshot would then have overwritten the new one's state.
+
+[lease.js](lease.js) closes it. A host must hold a single-writer lease (a row in
+the `bot_heartbeat` table, `worker = 'okx-chat-bot:lease'`, driven by one
+conditional upsert per transition, all on the database's clock) before it
+restores state, starts the daemon or writes a snapshot:
+
+| Moment | What happens |
+|---|---|
+| New instance boots | Health server first (so the startup probe passes and the rollout can move traffic), then waits, reporting `lease_wait` on `/readyz` with `lease.waitingOn` naming what it waits for. It writes no heartbeat while waiting, so `/api/healthz` keeps describing the host that is actually serving. |
+| Old instance gets SIGTERM | Stops its daemon, writes the final snapshot while it still holds the lease, then releases it. |
+| Lease released | The new instance takes it, restores exactly that snapshot, starts its daemon. |
+| A holder dies without releasing | Waited out for `OKX_BOT_LEASE_TTL_MS` (2 minutes). |
+| A holder cannot renew (database unreachable) | Fences itself before the TTL can lapse: stops the daemon and exits **without** a snapshot, since another host may by then be writing. Cloud Run restarts it into the wait. |
+| Old revision predates the lease | Its heartbeat carries no `leaseHolder`, so the new instance waits until that heartbeat is `OKX_BOT_LEGACY_BEAT_STALE_MS` (90 s) old. This is what makes the first rollout onto this code safe; the live revision on 2026-09-18, `okx-chat-bot-00001-926`, is such a host. |
+
+The SQL was verified against the production database on a throwaway key
+(acquire, refuse a second holder, renew, release, hand over, expire, lose), and
+the state machine is covered in `tests/okx-chat-bot.test.js`.
+
+#### A second machine
 
 The wallet keyring and the XMTP client database are one state object with exactly
 one writer, which is what `--max-instances=1` protects on Cloud Run. Nothing
@@ -306,6 +380,8 @@ Everything the deploy depends on:
 | `okx-chat-bot-database-url` secret | created 2026-09-02 from the project's own `DATABASE_URL`, `three-ws@` holds `secretAccessor` |
 | AI credential | **no secret needed.** `three-ws@` already holds `roles/aiplatform.user`, so `CLAUDE_CODE_USE_VERTEX=1` in the deploy authenticates through ADC |
 | Seeded session | seeded 2026-09-04 and proven: the first revision restored it and needed no OTP |
+| Payment-free AI lane | `npm run okx:bot:deploy` provisions it (metering agent, service-account key, `okx-chat-bot-llm-gateway-token` secret with `three-ws@` as `secretAccessor`) through `scripts/okx-bot-llm-gateway.mjs --apply`. Not yet run as of 2026-09-18: Secret Manager writes are the owner's |
+| API carrying the agent-scoped proxy path | commits `53687d994` and `d3074c1c8`. Not live as of 2026-09-18 (live API `4291900c7`); `npm run deploy:gcp:full` ships it |
 
 The AI-provider secret used to be the one blocker, and the deploy was written to
 fail loudly without it on the reasoning that a bot receiving chat it can never
@@ -324,19 +400,33 @@ cannot survive on its own reads as **degraded**, never `ok`, with the deploy
 command as its hint. Calling a codespace green would rebuild, one level up, the
 false-green this worker exists to kill.
 
-### Re-shipping it (one command, after the two steps below)
+### Re-shipping it (one command)
 
 ```bash
-# 1. Refresh the seeded session from the host that holds it, daemon stopped:
-npm run okx:bot:seed-state -- --apply
+npm run okx:bot:deploy -- --dry-run   # the whole plan, writes and submits nothing
+npm run okx:bot:deploy                # provision the gateway lane, build, deploy, verify
+```
 
-# 2. Stop that host. The GCS object has exactly one writer; a codespace stopgap
-#    and the Cloud Run service running at once interleave snapshots.
+[scripts/okx-bot-deploy.mjs](../../scripts/okx-bot-deploy.mjs) checks gcloud
+auth; builds from a clean worktree of HEAD (the image copies all of `api/`, so
+the shared working tree would ship other people's in-flight edits) and refuses
+while `workers/okx-chat-bot/` has uncommitted changes; runs
+`okx-bot-llm-gateway.mjs --apply` and passes its metering agent to the build as
+`_GATEWAY_AGENT`; reports whether the live API already serves the agent-scoped
+proxy path; submits [cloudbuild.yaml](cloudbuild.yaml); and polls `/api/healthz`
+until the `okx_chat_bot` subsystem names the new revision as its host. Expect
+that last step to take a few minutes: the new instance waits for the
+single-writer lease while the old one drains.
 
-# 3. Deploy.
-gcloud builds submit --config workers/okx-chat-bot/cloudbuild.yaml \
-  --region us-central1 --project aerial-vehicle-466722-p5 \
-  --substitutions=SHORT_SHA=manual$(date +%s) .
+The worker and the API can land in either order. The gateway lane is elected on
+a live probe every 15 minutes, so a worker deployed before the API simply stays
+on its current lane until the proxy answers, then moves by itself.
+
+The seeded session only needs refreshing if the GCS snapshot is lost; the
+running service keeps it current:
+
+```bash
+npm run okx:bot:seed-state -- --apply   # from a host holding a live session, daemon stopped
 ```
 
 The build pins `three-ws-build@` and the service runs as `three-ws@`; the
@@ -442,5 +532,7 @@ Daemon stdout and stderr are forwarded into the worker's own log stream under a
 - [scripts/okx-bot-revive.mjs](../../scripts/okx-bot-revive.mjs) stages the same workspace locally, and refuses while another host is serving.
 - [scripts/lib/okx-bot-host-guard.mjs](../../scripts/lib/okx-bot-host-guard.mjs) is the one-writer check that script runs first.
 - [scripts/okx-bot-seed-state.mjs](../../scripts/okx-bot-seed-state.mjs) seeds the GCS session snapshot (`npm run okx:bot:seed-state`).
+- [scripts/okx-bot-llm-gateway.mjs](../../scripts/okx-bot-llm-gateway.mjs) provisions and proves the payment-free AI lane (`npm run okx:bot:gateway`).
+- [scripts/okx-bot-deploy.mjs](../../scripts/okx-bot-deploy.mjs) ships the worker in one command (`npm run okx:bot:deploy`).
 - [api/_lib/okx-chat-briefing.js](../../api/_lib/okx-chat-briefing.js) generates the subsession briefing.
 - [workers/README.md](../README.md) is the worker index.

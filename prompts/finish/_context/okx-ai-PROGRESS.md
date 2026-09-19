@@ -4200,3 +4200,91 @@ scan of the file reports a false negative). README coverage under `packages/`, `
 
 **Left open:** Part 1 items 2 and 3 (a real paid call and the replay spot check, both needing a
 funded buyer wallet) and all of Part 3 (OTP). The order stays on disk.
+
+## 2026-09-18 | backlog order 08 (907) | payment-free reply lane proven, single-writer lease built, deploy reduced to one command
+
+**Measured first.** Cloud Run `okx-chat-bot-00001-926` is Ready and beating (`hostDurable: true`),
+chat is delivered, and `/api/healthz` reports `okx_chat_bot` degraded: Vertex answers 403
+`Lightning dunning decision is deny`. Live API `4291900c7` (`three-ws-api-00448-hst`) contains
+`4dbe02cc7` (the NVIDIA re-pin). Live worker contains no lane election (no `providerLane` on its
+beat), no lease.
+
+**The reply lane, proven against production.** The `anthropic-gateway` lane pointed at three.ws's own
+we-pay proxy needs no payment anywhere, but three things stood between it and working, none visible
+until the real CLI was driven through it:
+
+1. The CLI appends `/v1/messages` to `ANTHROPIC_BASE_URL` and cannot add `?agent=`; production
+   answered `404 No API route matches /api/llm/anthropic/v1/messages`. Fixed: an agent-scoped base URL,
+   `/api/llm/anthropic/agents/<agent>/v1/messages`, the same handler with the agent bound from the
+   path (`53687d994`).
+2. The CLI's default request was refused by the proxy schema: `system` as a block array, `max_tokens`
+   32000, and an environment block sent as a `role: system` turn inside `messages` (captured from
+   `claude` 2.1.273 against a local echo server). Fixed: block-array system accepted (flattened only for
+   OpenAI-shape lanes), `max_tokens` clamped to 16000, in-thread system turns passed to Anthropic lanes
+   and folded into the system prompt for OpenAI-shape ones (`f7f7da9b6`, `53687d994`, `d3074c1c8`).
+   Committed: these name no marketplace.
+3. The proxy meters per agent and admits a header-less caller only with a platform identity.
+
+Proof, all against production:
+- The bot's own probe body (`provider.js probeGateway`: model, `max_tokens: 1`) on the canonical path:
+  `200`, model `nvidia/nemotron-3-super-120b-a12b`, 657 ms (the free NVIDIA rung `4dbe02cc7` repaired).
+- **The full CLI request.** `claude -p` with the exact env overlay `config.js gatewayLane` builds (the
+  22-tool agentic prompt, streaming) ran through production's proxy on
+  `nvidia/nemotron-3-super-120b-a12b`, made a real Bash tool call, read the output back and answered
+  the marker (`is_error: false`, 2 turns, 14 s; three proxy calls, all `200`). Because the SDK path is
+  not deployed yet, the CLI reached production through a local shim that applies exactly the request
+  adaptations commits `53687d994`/`d3074c1c8` make server-side and forwards to the live canonical path,
+  authenticated as the QA account's own agent (`f8841960-...`, per the i18n lane's rule). The
+  adaptations themselves are unit-tested in `tests/api/llm-anthropic.test.js` (65 pass).
+
+**Metering agent: a dedicated one, not an existing agent.** No agent represents the listing (searched
+names, meta, and every agent of the platform account `three-ws@users.three.ws.local`). The reply
+subsession runs with tool access on buyer text and can read its own environment, so its bearer key
+must be worth as little as possible: `scripts/okx-bot-llm-gateway.mjs` provisions a service-account
+user `marketplace-chat@agents.three.ws` (`service_account = true`) owning ONE unpublished agent
+"three.ws 3D Studio (marketplace chat)" (`meta.purpose = llm-gateway-meter`) whose embed policy fits
+a Claude Code loop (30 calls/min, 20,000 calls and 30M tokens a month; the embed default of 10/min
+and 1M tokens would starve it), mints an `sk_live_` key for it straight into Secret Manager
+(`okx-chat-bot-llm-gateway-token`, `three-ws@` as `secretAccessor`, never printed), and proves the
+lane with the worker's own `probeLane`. **Not run yet:** the session's Secret Manager write was
+refused by the permission layer, and gcloud auth then expired. It runs as step 3 of the deploy.
+
+**Single-writer safety: the gap was real.** `--max-instances=1` is a revision annotation
+(`autoscaling.knative.dev/maxScale: 1` on the template; the service-level `maxScale` is 100), and a
+rollout runs the new revision's instance beside the old until it is Ready. Nothing in the worker
+guarded that window: both would restore the identity and run a daemon, and the old one's SIGTERM
+snapshot would then overwrite the new one's. Built `workers/okx-chat-bot/lease.js`: a lease row in
+`bot_heartbeat` (`worker = 'okx-chat-bot:lease'`, no migration), one conditional upsert per
+transition on the database clock. The new instance serves `/healthz` first (so the rollout proceeds),
+waits (`lease_wait`, `lease.waitingOn` on `/readyz`, no heartbeat while waiting), and only restores
+and starts the daemon once the old instance has snapshotted and released; a dead holder is waited out
+for 120 s; a holder that cannot renew fences itself (stops the daemon, exits without a snapshot).
+A revision built before the lease is recognised by a heartbeat without `leaseHolder` and waited out
+until that beat is 90 s stale: that is what makes the first rollout off `00001-926` safe. The SQL was
+exercised on the production DB under a throwaway key (acquire, refuse a second holder, renew, release,
+hand over, expire, lose; row removed after), and the live beat read back as
+`cloudrun:okx-chat-bot (okx-chat-bot-00001-926), leaseAware: false`. 11 lease tests added.
+
+**Checked:** `ad723e87f` (lane election) is in HEAD; `cloudbuild.yaml` pins `three-ws-build@` (build)
+and `three-ws@` (runtime). `tests/okx-chat-bot.test.js`: 95 pass. `cloudbuild.yaml` now points the
+gateway lane at `https://three.ws/api/llm/anthropic/agents/${_GATEWAY_AGENT}` with model
+`${_GATEWAY_MODEL}` and the new secret (the unfunded OpenRouter rung is replaced). Vertex still leads,
+so clearing the billing hold moves the bot back to Claude on Vertex by itself.
+
+**Commit gate breach, not by this session.** A concurrent agent's sweep committed this order's
+marketplace-naming files as `8fc06331d` (gateway script, already on `threews/main`) and `a71cc4425`
+(lease, deploy script, worker, tests, package.json; local only). The owner decides whether those stand.
+
+**The owner's sequence** (either deploy may land first; the lane is elected on a live probe every 15 min):
+
+```sh
+gcloud auth login && gcloud auth application-default login
+# approve and commit the still-uncommitted files named in the order file, then:
+npm run clean:worktrees -- --apply
+npm run prep:worktree -- --apply
+(cd /workspaces/.deploy-wt && npm run deploy:gcp:full)   # API: ships 53687d994 + d3074c1c8
+git worktree remove --force /workspaces/.deploy-wt
+npm run okx:bot:deploy                                    # bot: provision lane, clean build, deploy, verify
+npm run okx:bot:gateway -- --verify --cli                 # prove the real CLI through the lane on production
+curl -s https://three.ws/api/healthz | jq '.subsystems.subsystems[]|select(.name=="okx_chat_bot")'
+```
