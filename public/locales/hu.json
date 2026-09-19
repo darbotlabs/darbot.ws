@@ -2038,6 +2038,7 @@
 		"three_ws_2": "three.ws",
 		"three_ws_implements_the_full_aws_marketplace": "A three.ws teljes mértékben implementálja az AWS Marketplace SaaS szerződést — regisztráció, mérés, jogosultságok és aláírt SNS előfizetés életciklus webhookok.",
 		"three_ws_is_an_independent_aws_partner": "A three.ws független AWS Partner, amely az AWS Partner Network Szoftverútvonal programjában vesz részt. Ez az oldal leírja, hogyan szerezhetik be az AWS ügyfelek a three.ws-et, amikor az AWS Marketplace ajánlat nyilvánosan elérhetővé válik. Az AWS, AWS Marketplace, AWS Partner Network és AWS Activate az Amazon.com, Inc. vagy leányvállalatainak védjegyei.",
+		"three_ws_is_an_open_source_3d2": "three.ws egy nyílt forráskódú 3D AI agent platform: WebGL viewer, Claude-alapú runtime, on-chain identitás, beágyazható bárhova egyetlen taggel. <strong>Most már AWS Partner.</strong> Marketplace listázás hamarosan: az előfizetés ingyenes, a használat pedig hívásonként fizetős USDC-ben x402 felett.",
 		"three_ws_on_aws": "three.ws az <span class=\"gradient\">AWS</span>-en.",
 		"three_ws_subscribes_under_the_aws_standard": "A three.ws az AWS Standard Marketplace Szerződés keretében fizet elő. Beszerzésre kész, azonnal használható.",
 		"try_three_ws_community_edition_with_no": "Próbálja ki a three.ws Community Edition-t kötelezettség nélkül. Az előfizetés csak a próbaidőszak lejárta után aktiválódik.",

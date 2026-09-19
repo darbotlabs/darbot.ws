@@ -11226,7 +11226,12 @@
 		"why": "Why",
 		"you_can_see_export_and_delete_everything": "You can see, export and delete everything this feature holds at any time, and set your own retention window for the action log. See <a href=\"/docs/home-privacy\">Home privacy and retention</a> for the complete inventory and the API.",
 		"you_have_the_right_to_lodge_a": "You have the right to lodge a complaint with your local supervisory authority. You may also contact us first at <a href=\"mailto:privacy@three.ws\">privacy@three.ws</a>; we would welcome the chance to resolve your concern directly.",
-		"you_have_the_rights_to_know_access": "You have the rights to know, access, correct, delete, and port your personal information, and to not be discriminated against for exercising them. Exercise them via <a href=\"mailto:privacy@three.ws\">privacy@three.ws</a> (Section 6). We verify requests using your signed-in session, your account email, or a message signed by your wallet. An authorized agent may act for you with written permission."
+		"you_have_the_rights_to_know_access": "You have the rights to know, access, correct, delete, and port your personal information, and to not be discriminated against for exercising them. Exercise them via <a href=\"mailto:privacy@three.ws\">privacy@three.ws</a> (Section 6). We verify requests using your signed-in session, your account email, or a message signed by your wallet. An authorized agent may act for you with written permission.",
+		"photos_you_capture_or_upload": "Photos you capture or upload",
+		"one_frontal_photo_and_up_to_two_optional_sid": "One frontal photo and up to two optional side angles, if you use the selfie flow",
+		"building_your_3d_avatar_and_reproducing_re_r": "Building your 3D avatar, and reproducing, re-rigging or re-scoring that result",
+		"1a_photos_you_capture_or_upload": "1a. Photos You Capture or Upload",
+		"if_you_use_the_selfie_flow_the_photos_you": "If you use the selfie flow, the photos you capture (one frontal image and up to two optional side angles) are uploaded to our reconstruction service and used to build your 3D avatar. They are stored with the generation record so the result can be reproduced, re-rigged and re-scored for quality, and they are visible only to your account. They are deleted when you delete the generation or your account, subject to the retention windows in Section 5. We do <strong>not</strong> use them to train models, we do <strong>not</strong> share them with advertisers, and we do <strong>not</strong> derive or store a face template or any other biometric identifier from them. Using the selfie flow is optional: you can upload a photo from your gallery instead, or describe a character in words and never provide a photo at all."
 	},
 	"legal_risk": {
 		"10_contact": "10. Contact",
@@ -21089,10 +21094,5 @@
 		"total_tvl": "Total TVL",
 		"tvl": "TVL",
 		"yield_data_from_defillama_apy_figures_are": "Yield data from <a href=\"https://defillama.com/yields\" rel=\"noopener noreferrer\" target=\"_blank\">DeFiLlama</a>. APY figures are protocol-reported and vary with pool conditions. Not financial advice."
-	},
-	"legal_privacy.photos_you_capture_or_upload": "Photos you capture or upload",
-	"legal_privacy.one_frontal_photo_and_up_to_two_optional_sid": "One frontal photo and up to two optional side angles, if you use the selfie flow",
-	"legal_privacy.building_your_3d_avatar_and_reproducing_re_r": "Building your 3D avatar, and reproducing, re-rigging or re-scoring that result",
-	"legal_privacy.1a_photos_you_capture_or_upload": "1a. Photos You Capture or Upload",
-	"legal_privacy.if_you_use_the_selfie_flow_the_photos_you": "If you use the selfie flow, the photos you capture (one frontal image and up to two optional side angles) are uploaded to our reconstruction service and used to build your 3D avatar. They are stored with the generation record so the result can be reproduced, re-rigged and re-scored for quality, and they are visible only to your account. They are deleted when you delete the generation or your account, subject to the retention windows in Section 5. We do <strong>not</strong> use them to train models, we do <strong>not</strong> share them with advertisers, and we do <strong>not</strong> derive or store a face template or any other biometric identifier from them. Using the selfie flow is optional: you can upload a photo from your gallery instead, or describe a character in words and never provide a photo at all."
+	}
 }

@@ -2038,6 +2038,7 @@
 		"three_ws_2": "three.ws",
 		"three_ws_implements_the_full_aws_marketplace": "Ipinapatupad ng three.ws ang buong AWS Marketplace SaaS contract — pagpaparehistro, metering, entitlements, at signed SNS subscription lifecycle webhooks.",
 		"three_ws_is_an_independent_aws_partner": "Ang three.ws ay isang independenteng AWS Partner na nakatala sa AWS Partner Network Software Path. Inilalarawan ng pahinang ito kung paano makukuha ng mga customer ng AWS ang three.ws kapag naging available na sa publiko ang listing sa AWS Marketplace. Ang AWS, AWS Marketplace, AWS Partner Network, at AWS Activate ay mga trademark ng Amazon.com, Inc. o ng mga kaakibat nito.",
+		"three_ws_is_an_open_source_3d2": "Ang three.ws ay isang open-source na platform para sa 3D AI agent: WebGL viewer, runtime na pinapatakbo ni Claude, on-chain identity, i-embed kahit saan gamit ang isang tag. <strong>Ngayon ay AWS Partner na.</strong> Listing sa Marketplace darating soon: libre ang subscription, at bayad per call ang usage sa USDC gamit ang x402.",
 		"three_ws_on_aws": "three.ws sa <span class=\"gradient\">AWS</span>.",
 		"three_ws_subscribes_under_the_aws_standard": "Ang three.ws ay nagsu-subscribe sa ilalim ng AWS Standard Contract for Marketplace. Handa na para sa procurement agad-agad.",
 		"try_three_ws_community_edition_with_no": "Subukan ang three.ws Community Edition nang walang commitment. Magiging aktibo lang ang subscription pagkatapos ng trial.",
