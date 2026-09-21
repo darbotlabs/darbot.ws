@@ -1,5 +1,5 @@
 /**
- * three.ws — universal top-left brand mark.
+ * darbot.ws: universal top-left brand mark.
  *
  * Guarantees a single, consistent top-left logo on every standalone page.
  * The site grew a dozen different header treatments (wordmark lockups, dashboard
@@ -119,9 +119,9 @@
 		var a = document.createElement('a');
 		a.className = 'brand-mark-chip';
 		a.href = '/';
-		a.setAttribute('aria-label', 'three.ws home');
+		a.setAttribute('aria-label', 'darbot.ws home');
 		a.innerHTML =
-			'<img class="brand-mark" src="/three.svg" alt="three.ws" width="24" height="24" />';
+			'<img class="brand-mark" src="/three.svg" alt="darbot.ws" width="24" height="24" />';
 		document.body.appendChild(a);
 		requestAnimationFrame(function () {
 			a.classList.add('is-in');

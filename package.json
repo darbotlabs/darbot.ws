@@ -3,16 +3,16 @@
 	"type": "module",
 	"version": "1.5.2",
 	"name": "3d-agent",
-	"description": "three.ws — build, animate, rig, and monetize 3D AI agents on-chain. Three.js web app, SDKs, MCP servers, and x402 payment rails.",
-	"author": "nirholas",
+	"description": "darbot.ws: DarbotLabs fork of three.ws. Build, animate, and rig 3D AI agents. Three.js web app, SDKs, MCP servers, and x402 payment rails.",
+	"author": "DarbotLabs",
 	"license": "Apache-2.0",
-	"homepage": "https://three.ws",
+	"homepage": "https://github.com/darbotlabs/darbot.ws",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/nirholas/three.ws.git"
+		"url": "git+https://github.com/darbotlabs/darbot.ws.git"
 	},
 	"bugs": {
-		"url": "https://github.com/nirholas/three.ws/issues"
+		"url": "https://github.com/darbotlabs/darbot.ws/issues"
 	},
 	"overrides": {
 		"serialize-javascript": ">=7.0.5",
@@ -295,7 +295,7 @@
 		"build:news": "node scripts/build-news.mjs",
 		"prebuild": "node scripts/copy-three-decoders.mjs && node scripts/copy-voice-models.mjs && (node scripts/build-news.mjs & node scripts/build-skill-metadata.mjs & node scripts/build-local-skill-packs.mjs & node scripts/build-discovery-cards.mjs & node scripts/build-guards.mjs & node scripts/build-atlas-index.mjs & node scripts/build-mcp-catalog.mjs & node scripts/build-awesome.mjs & npm run build:examples & npm run build:docs-search & npm run build:club-assets & npm run build:walk-environments & wait) && node scripts/inject-blog-seo.mjs --write && node scripts/inject-hidden-guard.mjs --write && node scripts/i18n-annotate.mjs --apply --pages=\"public/news/*.html\" && (node scripts/build-page-index.mjs && node scripts/audit-page-index.mjs --strict && node scripts/audit-empty-handlers.mjs && node scripts/audit-hidden-guard.mjs) && node scripts/inject-seo-meta.mjs --write && node scripts/inject-theme-boot.mjs --write",
 		"seo:meta": "node scripts/inject-blog-seo.mjs --write && node scripts/build-page-index.mjs && node scripts/inject-seo-meta.mjs --write",
-		"build": "NODE_OPTIONS='--no-deprecation --max-old-space-size=6144' vite build && node scripts/strip-sw-from-embeds.mjs && node scripts/inject-tour-boot.mjs && node scripts/inject-atlas.mjs && node scripts/inject-inline-behaviors.mjs",
+		"build": "npm run ensure:avatar-sdk && NODE_OPTIONS='--no-deprecation --max-old-space-size=6144' vite build && node scripts/strip-sw-from-embeds.mjs && node scripts/inject-tour-boot.mjs && node scripts/inject-atlas.mjs && node scripts/inject-inline-behaviors.mjs",
 		"build:wasm": "node scripts/build-wasm.mjs",
 		"build:animations": "node scripts/build-original-animations.mjs && node scripts/build-animations.mjs && node scripts/sync-animation-registry.mjs && node scripts/build-motion-signatures.mjs",
 		"sync:animation-registry": "node scripts/sync-animation-registry.mjs",
@@ -415,6 +415,7 @@
 		"build:info:snapshot": "node scripts/write-build-info.mjs --snapshot",
 		"build:gcp": "npm run check:conflicts && npm run check:browser-graph && npm run check:tdz-bootstrap && npm run ensure:avatar-studio && npm run build:info:snapshot && npm run docs:freshness && npm run build:lib:full && npm run build:avatar-sdk && npm run build:chat && npm run build && npm run publish:lib && npm run build:info && npm run check:dist && npm run check:pages",
 		"ensure:avatar-studio": "test -f character-studio/build/index.html || npm run build:avatar-studio",
+		"ensure:avatar-sdk": "test -f avatar-sdk/dist/index.mjs || (NODE_OPTIONS='--no-deprecation --max-old-space-size=6144' npm run build:lib && npm run build:avatar-sdk)",
 		"deploy:gcp": "npm run check:dist && npm run check:pages && npm run deploy:gcp:submit && npm run deploy:gcp:purge-cdn && npm run smoke:prod",
 		"deploy:gcp:full": "npm run build:gcp && npm run deploy:gcp",
 		"deploy:gcp:submit": "npm run db:check && npm run check:gcloudignore && npm run audit:deploy && npm run check:api-imports && gcloud builds submit --config server/cloudbuild.yaml --region us-central1 --project aerial-vehicle-466722-p5",

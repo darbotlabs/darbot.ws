@@ -2,6 +2,12 @@
 	"$comment": "Curated changelog entries for three.ws, the editorial layer of the public changelog. New PAGE launches are tracked automatically via the `added` field in data/pages.json; this file is for everything else holders care about: improvements, fixes, SDK releases, trading/payments capabilities, security work. scripts/build-page-index.mjs merges both sources into CHANGELOG.md, public/changelog.json, and public/changelog.xml. Newest first. Allowed tags: feature, improvement, fix, sdk, infra, docs, security. `link` is optional and must be a live three.ws path.",
 	"entries": [
 		{
+			"date": "2026-09-19",
+			"title": "This tree is now the DarbotLabs darbot.ws fork",
+			"summary": "User-facing names and docs identify this repository as darbot.ws, a DarbotLabs fork of the Apache-2.0 three.ws project, with credit and a link back to upstream. Published npm package names stay @three-ws so existing installs keep working. This fork does not introduce its own token. A fresh clone can run npm run build: the frontend now builds the avatar SDK bundle when avatar-sdk/dist is missing.",
+			"tags": ["docs", "improvement", "fix"]
+		},
+		{
 			"date": "2026-09-18",
 			"title": "Standard Anthropic SDK clients can now use a three.ws agent's AI budget",
 			"summary": "The AI proxy behind every embedded three.ws agent now answers at the address an Anthropic SDK or command-line tool builds for itself. Point a client at /api/llm/anthropic/agents/<your agent id> with one of your API keys and it runs on that agent's model, limits, and monthly budget. The proxy also stopped turning such clients away over their defaults: a system prompt sent as a list of text blocks is accepted, and an output limit above 16,000 tokens is lowered to 16,000 instead of rejected.",

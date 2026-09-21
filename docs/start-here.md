@@ -1,12 +1,12 @@
 # Start here
 
-Welcome to three.ws. If you're new, this is the right place to begin — no prior experience with 3D, AI, or crypto required.
+Welcome to darbot.ws, a [DarbotLabs](https://github.com/darbotlabs) fork of [three.ws](https://github.com/nirholas/three.ws). If you're new, this is the right place to begin. No prior experience with 3D, AI, or crypto required.
 
 ---
 
-## What is three.ws?
+## What is darbot.ws?
 
-three.ws lets you create AI agents that live inside a 3D avatar — a character that speaks, reacts, and can be embedded anywhere on the web.
+darbot.ws lets you create AI agents that live inside a 3D avatar: a character that speaks, reacts, and can be embedded anywhere on the web.
 
 Think of it as giving your AI a body and a face. Instead of a plain text chatbox, your agent appears as a 3D character that talks, waves, and expresses emotion. It still uses the same AI models (Claude, GPT, etc.) under the hood — it just has a presence.
 
@@ -26,7 +26,7 @@ Think of it as giving your AI a body and a face. Instead of a plain text chatbox
 
 ---
 
-## Two kinds of people use three.ws
+## Two kinds of people use darbot.ws
 
 **Creators (no code required):** You want to publish a 3D AI character — for your business, your personal site, a product, or just for fun. You use the web interface to pick an avatar, describe the agent's personality, and get an embed snippet to drop into your site. Start with [Make your first agent →](./make-your-agent.md)
 
@@ -34,7 +34,7 @@ Think of it as giving your AI a body and a face. Instead of a plain text chatbox
 
 ---
 
-## The four things on three.ws
+## The four things on darbot.ws
 
 Every page on the platform is one of four things. Knowing these will orient you:
 

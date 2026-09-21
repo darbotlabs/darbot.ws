@@ -7,6 +7,14 @@
 		<description>What's new on three.ws: features, improvements, and releases, newest first.</description>
 		<language>en</language>
 		<item>
+			<title>This tree is now the DarbotLabs darbot.ws fork</title>
+			<link>https://three.ws/changelog</link>
+			<guid isPermaLink="false">2026-09-19:This tree is now the DarbotLabs darbot.ws fork</guid>
+			<pubDate>Sat, 19 Sep 2026 12:00:00 GMT</pubDate>
+			<category>docs</category>
+			<description>User-facing names and docs identify this repository as darbot.ws, a DarbotLabs fork of the Apache-2.0 three.ws project, with credit and a link back to upstream. Published npm package names stay @three-ws so existing installs keep working. This fork does not introduce its own token. A fresh clone can run npm run build: the frontend now builds the avatar SDK bundle when avatar-sdk/dist is missing.</description>
+		</item>
+		<item>
 			<title>469 generated animations in the library, and for sale as rigged GLBs</title>
 			<link>https://three.ws/animations</link>
 			<guid isPermaLink="false">2026-09-18:469 generated animations in the library, and for sale as rigged GLBs</guid>

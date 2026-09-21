@@ -215,7 +215,7 @@ export const NAV_GROUPS = [
 						desc: 'Top agents by real activity + top Oracle conviction coins',
 					},
 					{
-						title: 'What is three.ws?',
+						title: 'What is darbot.ws?',
 						href: '/what-is',
 						desc: 'Plain-English intro + real use-cases — start here',
 					},
